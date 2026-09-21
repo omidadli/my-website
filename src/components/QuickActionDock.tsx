@@ -55,10 +55,10 @@ export const QuickActionDock: React.FC<QuickActionDockProps> = () => {
                 rel="noreferrer"
                 title={a.label}
                 aria-label={a.label}
-                className="group relative w-11 h-11 rounded-full grid place-items-center transition-colors hover:bg-black/[0.05]"
+                className="group relative w-11 h-11 rounded-full grid place-items-center transition-colors hover:bg-[color:var(--nd-line)]"
               >
                 <a.icon className="w-5 h-5" style={{ color: a.color }} />
-                <span className="absolute -top-9 right-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity nd-chip bg-[color:var(--nd-ink)] text-white border-transparent whitespace-nowrap pointer-events-none">
+                <span className="absolute -top-9 right-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity nd-chip bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] border-transparent whitespace-nowrap pointer-events-none">
                   {a.label}
                 </span>
               </a>
@@ -73,7 +73,7 @@ export const QuickActionDock: React.FC<QuickActionDockProps> = () => {
                   onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                   title="بازگشت به بالا"
                   aria-label="بازگشت به بالا"
-                  className="h-11 rounded-full grid place-items-center overflow-hidden hover:bg-black/[0.05] cursor-pointer"
+                  className="h-11 rounded-full grid place-items-center overflow-hidden hover:bg-[color:var(--nd-line)] cursor-pointer"
                 >
                   <ArrowUp className="w-5 h-5 text-[color:var(--nd-ink-2)]" />
                 </motion.button>

@@ -30,7 +30,7 @@ import {
   Send,
   Search,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { MaskLines, Magnetic } from '../components/motion/Cinematic';
 
 interface HomePageProps {
@@ -114,6 +114,25 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
   const [activeServiceTab, setActiveServiceTab] = useState<'start' | 'sell' | 'grow'>('sell');
   const [promptValue, setPromptValue] = useState('');
   const [openFaq, setOpenFaq] = useState<number>(-1);
+
+  // Cinematic pointer parallax for the hero stage
+  const px = useMotionValue(0);
+  const py = useMotionValue(0);
+  const sx = useSpring(px, { stiffness: 90, damping: 20 });
+  const sy = useSpring(py, { stiffness: 90, damping: 20 });
+  const orbX = useTransform(sx, (v) => v * 18);
+  const orbY = useTransform(sy, (v) => v * 14);
+  const orb2X = useTransform(sx, (v) => v * -12);
+  const dashX = useTransform(sx, (v) => v * -9);
+  const dashY = useTransform(sy, (v) => v * -7);
+  const spotX = useTransform(sx, (v) => `${50 + v * 38}%`);
+  const spotY = useTransform(sy, (v) => `${42 + v * 34}%`);
+
+  const handleStageMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    px.set(((e.clientX - r.left) / r.width - 0.5) * 2);
+    py.set(((e.clientY - r.top) / r.height - 0.5) * 2);
+  };
   const servicesSectionRef = useRef<HTMLDivElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
 
@@ -218,10 +237,35 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
         return (
           <section id="hero-section" className="relative">
             {/* ---------- Cinematic dark stage (full-bleed) ---------- */}
-            <div className="nd-stage nd-hairline-top relative left-1/2 -translate-x-1/2 w-screen rounded-b-[44px] -mt-28 sm:-mt-32">
-              {/* aurora orbs */}
-              <div className="absolute w-[36rem] h-[36rem] -top-40 -left-32 rounded-full blur-3xl opacity-40 nd-float-slow" style={{ background: 'radial-gradient(circle, rgba(99,91,255,0.5), transparent 65%)' }} aria-hidden />
-              <div className="absolute w-[28rem] h-[28rem] top-1/2 -right-24 rounded-full blur-3xl opacity-30 nd-float" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.4), transparent 65%)' }} aria-hidden />
+            <div
+              onMouseMove={handleStageMove}
+              className="nd-stage nd-hairline-top relative left-1/2 -translate-x-1/2 w-screen rounded-b-[44px] -mt-28 sm:-mt-32"
+            >
+              {/* oversized outline watermark */}
+              <span className="nd-watermark" aria-hidden>رشد</span>
+
+              {/* pointer spotlight */}
+              <motion.div
+                aria-hidden
+                style={{ left: spotX, top: spotY }}
+                className="absolute w-[42rem] h-[42rem] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+              >
+                <div className="w-full h-full rounded-full" style={{ background: 'radial-gradient(circle, rgba(148,163,255,0.14), transparent 62%)' }} />
+              </motion.div>
+
+              {/* aurora orbs — parallax layers */}
+              <motion.div style={{ x: orbX, y: orbY }} className="absolute -top-40 -left-32 pointer-events-none">
+                <div className="w-[36rem] h-[36rem] rounded-full blur-3xl opacity-40 nd-float-slow" style={{ background: 'radial-gradient(circle, rgba(99,91,255,0.5), transparent 65%)' }} />
+              </motion.div>
+              <motion.div style={{ x: orb2X }} className="absolute top-1/2 -right-24 pointer-events-none">
+                <div className="w-[28rem] h-[28rem] rounded-full blur-3xl opacity-30 nd-float" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.4), transparent 65%)' }} />
+              </motion.div>
+
+              {/* floating particles */}
+              <span className="nd-particle" style={{ top: '22%', right: '14%', animationDelay: '0s' }} aria-hidden />
+              <span className="nd-particle" style={{ top: '38%', right: '82%', animationDelay: '-2.4s' }} aria-hidden />
+              <span className="nd-particle" style={{ top: '64%', right: '24%', animationDelay: '-4.8s' }} aria-hidden />
+              <span className="nd-particle" style={{ top: '74%', right: '68%', animationDelay: '-6.2s' }} aria-hidden />
 
               <div className="relative max-w-5xl mx-auto px-4 sm:px-8 pt-36 sm:pt-40 pb-16 sm:pb-20 text-center space-y-8">
                 {/* Trust pill */}
@@ -253,7 +297,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     lines={[
                       <span key="1">فروشگاهتان را آنلاین شروع کنید،</span>,
                       <span key="2">
-                        <span className="nd-text-glow">بهتر بفروشید</span> و رشد کنید.
+                        <span className="nd-text-glow nd-shine">بهتر بفروشید</span> و رشد کنید.
                       </span>,
                     ]}
                   />
@@ -341,8 +385,10 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ duration: 1, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
                   className="relative max-w-4xl mx-auto"
+                  style={{ x: dashX, y: dashY }}
                 >
-                  <div className="nd-glass-dark rounded-[28px] sm:rounded-[32px] p-3 sm:p-4">
+                  <div className="nd-conic-ring" aria-hidden />
+                  <div className="relative nd-glass-dark rounded-[28px] sm:rounded-[32px] p-3 sm:p-4">
                     <div className="flex items-center gap-2 px-2 pb-3">
                       <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80" />
                       <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80" />
@@ -398,23 +444,35 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
 
       /* ============ 1.5 TRUST BAR (brand marquee) ============ */
       case 'TRUST_BAR': {
-        const brands = [
-          ...new Set([
-            ...caseStudies.map((c: any) => String(c.client || '').split(' (')[0]).filter(Boolean),
-            ...otherCollaborations.map((c: any) => c.company),
-          ]),
+        const brandLogos = [
+          { name: 'دایان', mono: 'د', shape: 'rounded-[14px]', tint: 0 },
+          { name: 'ایران بروکر', mono: 'IB', ltr: true, shape: 'rounded-full', tint: 1 },
+          { name: 'اقامت ۲۴', mono: '۲۴', shape: 'rounded-[10px] rotate-6', tint: 2 },
+          { name: 'ای ادز', mono: 'e', ltr: true, shape: 'rounded-[18px]', tint: 3 },
+          { name: 'فست‌کلیک', mono: 'ف', shape: 'rounded-full', tint: 0 },
+          { name: 'آهن آنلاین', mono: 'آ', shape: 'rounded-[10px]', tint: 1 },
+          { name: 'بیتستان', mono: 'ب', shape: 'rounded-[16px] -rotate-6', tint: 2 },
+          { name: 'ورسلند', mono: 'و', shape: 'rounded-full', tint: 3 },
         ];
         return (
-          <section className="py-10 sm:py-12 space-y-5">
+          <section className="py-10 sm:py-14 space-y-6">
             <p className="text-center text-[11px] sm:text-xs font-black tracking-wide text-[color:var(--nd-faint)]">
-              مورد اعتماد برندها و تیم‌های رشد
+              برندهایی که به داده اعتماد کردن، نه به شعار
             </p>
-            <div className="nd-marquee overflow-hidden [mask-image:linear-gradient(to_left,transparent,black_15%,black_85%,transparent)]">
-              <div className="nd-marquee-track items-center gap-10">
-                {[...brands, ...brands].map((b, i) => (
-                  <span key={i} className="flex items-center gap-10 whitespace-nowrap">
-                    <span className="text-base sm:text-lg font-black text-[color:var(--nd-faint)]/80 hover:text-[color:var(--nd-ink)] transition-colors">{b}</span>
-                    <span className="w-1.5 h-1.5 rotate-45 rounded-[2px] bg-[color:var(--nd-line-strong)]" aria-hidden />
+            <div className="nd-marquee overflow-hidden [mask-image:linear-gradient(to_left,transparent,black_12%,black_88%,transparent)]">
+              <div className="nd-marquee-track items-center gap-12">
+                {[...brandLogos, ...brandLogos].map((b, i) => (
+                  <span key={i} className="group flex items-center gap-3 whitespace-nowrap opacity-70 saturate-50 transition-all duration-300 hover:opacity-100 hover:saturate-100">
+                    <span
+                      className={`w-10 h-10 grid place-items-center text-sm font-black shrink-0 ${b.shape}`}
+                      style={{ background: TINTS[b.tint].bg, color: TINTS[b.tint].fg }}
+                    >
+                      <span className={b.ltr ? 'dir-ltr' : ''}>{b.mono}</span>
+                    </span>
+                    <span className="text-sm sm:text-base font-black tracking-tight text-[color:var(--nd-ink-2)] group-hover:text-[color:var(--nd-accent)] transition-colors">
+                      {b.name}
+                    </span>
+                    <span className="w-1 h-1 rotate-45 rounded-[1px] bg-[color:var(--nd-line-strong)] ms-6" aria-hidden />
                   </span>
                 ))}
               </div>
@@ -627,7 +685,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                         key={tabKey}
                         onClick={() => setActiveServiceTab(tabKey)}
                         className={`px-4 sm:px-6 py-2.5 rounded-full text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
-                          isActive ? 'bg-[color:var(--nd-ink)] text-white shadow-sm' : 'text-[color:var(--nd-muted)] hover:text-[color:var(--nd-ink)]'
+                          isActive ? 'bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] shadow-sm' : 'text-[color:var(--nd-muted)] hover:text-[color:var(--nd-ink)]'
                         }`}
                       >
                         <Icon className="w-4 h-4" />
@@ -840,7 +898,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: '-60px' }}
                     transition={{ duration: 0.55, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
-                    className="bg-white/70 backdrop-blur rounded-[24px] border border-white/80 p-7 space-y-4 h-full"
+                    className="nd-panel-card rounded-[24px] p-7 space-y-4 h-full"
                   >
                     <IconTile name={item.icon} tint={TINTS[idx % TINTS.length]} />
                     <h3 className="nd-h2 text-base sm:text-lg">{item.title}</h3>
@@ -851,7 +909,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
 
               {/* Testimonial */}
               {testimonials[0] && (
-                <div className="bg-white rounded-[28px] border border-[color:var(--nd-line)] shadow-sm p-7 sm:p-9 flex flex-col sm:flex-row gap-6 items-start max-w-4xl mx-auto">
+                <div className="nd-surface-bg rounded-[28px] border border-[color:var(--nd-line)] shadow-sm p-7 sm:p-9 flex flex-col sm:flex-row gap-6 items-start max-w-4xl mx-auto">
                   <Quote className="w-8 h-8 text-[color:var(--nd-accent)] opacity-40 shrink-0 rotate-180" />
                   <div className="space-y-4">
                     <p className="text-sm sm:text-base leading-relaxed font-medium text-[color:var(--nd-ink-2)]">{testimonials[0].quote}</p>
@@ -896,7 +954,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     transition={{ duration: 0.55, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
                     className="relative pr-14"
                   >
-                    <span className="absolute right-2.5 top-7 w-3.5 h-3.5 rounded-full bg-white border-[3px] border-[color:var(--nd-accent)]" aria-hidden />
+                    <span className="absolute right-2.5 top-7 w-3.5 h-3.5 rounded-full bg-[color:var(--nd-surface)] border-[3px] border-[color:var(--nd-accent)]" aria-hidden />
                     <div className="nd-card p-6 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="nd-chip bg-[color:var(--nd-accent-soft)] text-[color:var(--nd-accent)] border-transparent">{item.year}</span>
@@ -1042,7 +1100,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     className="w-full flex items-center justify-between gap-4 p-5 sm:p-6 text-right cursor-pointer"
                   >
                     <span className="text-sm font-extrabold text-[color:var(--nd-ink)]">{f.q}</span>
-                    <span className={`w-8 h-8 rounded-full border border-[color:var(--nd-line-strong)] grid place-items-center shrink-0 transition-transform duration-300 ${openFaq === idx ? 'rotate-45 bg-[color:var(--nd-ink)] text-white border-transparent' : 'text-[color:var(--nd-muted)]'}`}>
+                    <span className={`w-8 h-8 rounded-full border border-[color:var(--nd-line-strong)] grid place-items-center shrink-0 transition-transform duration-300 ${openFaq === idx ? 'rotate-45 bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] border-transparent' : 'text-[color:var(--nd-muted)]'}`}>
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden><path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
                     </span>
                   </button>

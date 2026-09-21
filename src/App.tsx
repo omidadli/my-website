@@ -7,7 +7,6 @@ import { Footer } from './components/Footer';
 import { BackgroundBlobs } from './components/BackgroundBlobs';
 import { QuickActionDock } from './components/QuickActionDock';
 import { CustomCursor } from './components/CustomCursor';
-import { SplashScreen } from './components/SplashScreen';
 import { AdminFloatingBar } from './components/cms/AdminFloatingBar';
 import { AdminLoginModal } from './components/cms/AdminLoginModal';
 import { ScrollProgress, Grain } from './components/motion/Cinematic';
@@ -23,21 +22,30 @@ import { ProductsPage } from './pages/ProductsPage';
 import { AdminPage } from './pages/AdminPage';
 
 function MainLayout() {
-  const [theme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      return (localStorage.getItem('nd-theme') as Theme) || 'light';
+    } catch {
+      return 'light';
+    }
+  });
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<CaseStudy | null>(null);
   const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(null);
-  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
 
   const { isAdmin, setIsAdmin } = useContent();
 
-  const handleSplashComplete = useCallback(() => {
-    setShowSplash(false);
-  }, []);
-
-  const handleReplaySplash = useCallback(() => {
-    setShowSplash(true);
+  const handleToggleTheme = useCallback(() => {
+    setTheme((t) => {
+      const next: Theme = t === 'light' ? 'dark' : 'light';
+      try {
+        localStorage.setItem('nd-theme', next);
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
   }, []);
 
   // Read initial page & admin trigger from URL hash or pathname on load
@@ -78,12 +86,15 @@ function MainLayout() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Lock document root to the new light design system
+  // Theme root attributes — drives the ND token system + legacy branches
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.add('light');
-    root.classList.remove('dark');
-  }, []);
+    root.dataset.theme = theme;
+    root.classList.remove('dark', 'light');
+    root.classList.add(theme);
+    document.body.style.backgroundColor = theme === 'dark' ? '#0b0b12' : '#f6f6f4';
+    document.body.style.color = theme === 'dark' ? '#f2f1fa' : '#17171c';
+  }, [theme]);
 
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
@@ -112,11 +123,6 @@ function MainLayout() {
 
   return (
     <div className="min-h-screen relative flex flex-col transition-colors duration-500 font-['Vazirmatn',sans-serif] nd-bg overflow-x-hidden">
-      {/* Animated Motion Graphic Preloader Splash Screen */}
-      {showSplash && (
-        <SplashScreen onComplete={handleSplashComplete} />
-      )}
-
       {/* Cinematic reading progress + filmic grain */}
       <ScrollProgress />
       <Grain />
@@ -125,14 +131,14 @@ function MainLayout() {
       <CustomCursor />
 
       {/* Background Interactive Beam & Grid */}
-      <BackgroundBlobs theme="light" />
+      <BackgroundBlobs theme={theme} />
 
       {/* Glassmorphic Navigation Header */}
       <Navbar
-        theme="light"
+        theme={theme}
         currentPage={currentPage}
         onNavigate={handleNavigate}
-        onReplaySplash={handleReplaySplash}
+        onToggleTheme={handleToggleTheme}
         onOpenAdminModal={() => setIsAdminModalOpen(true)}
       />
 
@@ -235,11 +241,11 @@ function MainLayout() {
       />
 
       {/* Bottom Floating Quick Action Dock */}
-      <QuickActionDock theme="light" currentPage={currentPage} onNavigate={handleNavigate} />
+      <QuickActionDock theme={theme} currentPage={currentPage} onNavigate={handleNavigate} />
 
       {/* Footer */}
       <Footer
-        theme="light"
+        theme={theme}
         onNavigate={handleNavigate}
         onOpenAdminModal={() => setIsAdminModalOpen(true)}
       />

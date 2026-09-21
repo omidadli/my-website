@@ -57,10 +57,10 @@ export const CustomCursor: React.FC = () => {
   if (!enabled) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] pointer-events-none mix-blend-multiply" aria-hidden>
+    <div className="fixed inset-0 z-[90] pointer-events-none" aria-hidden>
       <div
         ref={dotRef}
-        className="absolute top-0 left-0 rounded-full transition-[width,height,opacity] duration-200"
+        className="nd-cursor-dot absolute top-0 left-0 rounded-full transition-[width,height,opacity] duration-200"
         style={{
           width: isHovered ? 10 : 7,
           height: isHovered ? 10 : 7,
@@ -70,7 +70,7 @@ export const CustomCursor: React.FC = () => {
       />
       <div
         ref={ringRef}
-        className="absolute top-0 left-0 rounded-full border transition-[width,height,border-color,opacity] duration-300"
+        className="nd-cursor-ring absolute top-0 left-0 rounded-full border transition-[width,height,border-color,opacity] duration-300"
         style={{
           width: isHovered ? 46 : 30,
           height: isHovered ? 46 : 30,

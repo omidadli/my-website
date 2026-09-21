@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Page, Theme } from '../types';
 import { useContent } from '../context/ContentContext';
-import { Menu, X, ArrowUpLeft } from 'lucide-react';
+import { Menu, X, ArrowUpLeft, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface NavbarProps {
@@ -9,12 +9,49 @@ interface NavbarProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
   onReplaySplash?: () => void;
+  onToggleTheme?: () => void;
   onOpenAdminModal?: () => void;
 }
 
+/* Luxe day/night switch — glossy track, glowing knob (per brand reference) */
+const ThemeSwitch: React.FC<{ theme: Theme; onToggle?: () => void }> = ({ theme, onToggle }) => {
+  const isDark = theme === 'dark';
+  return (
+    <button
+      role="switch"
+      aria-checked={isDark}
+      aria-label="تغییر تم روز/شب"
+      title={isDark ? 'حالت روز' : 'حالت شب'}
+      onClick={onToggle}
+      className="relative w-[58px] h-[30px] rounded-full nd-glass shrink-0 cursor-pointer overflow-hidden"
+    >
+      {/* edge glow per state */}
+      <span
+        className="absolute inset-0 rounded-full pointer-events-none transition-shadow duration-500"
+        style={{ boxShadow: isDark ? 'inset 0 0 12px rgba(99,102,241,0.45)' : 'inset 0 0 12px rgba(245,158,11,0.35)' }}
+      />
+      <Sun className="absolute w-3.5 h-3.5 left-[9px] top-1/2 -translate-y-1/2 text-amber-500 transition-opacity duration-300" style={{ opacity: isDark ? 0.45 : 0 }} />
+      <Moon className="absolute w-3.5 h-3.5 right-[9px] top-1/2 -translate-y-1/2 text-indigo-300 transition-opacity duration-300" style={{ opacity: isDark ? 0 : 0.5 }} />
+      <motion.span
+        animate={{ left: isDark ? 29 : 3 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+        className="absolute top-[3px] w-6 h-6 rounded-full grid place-items-center"
+        style={{
+          background: isDark ? 'linear-gradient(135deg,#312e81,#0ea5e9)' : 'linear-gradient(135deg,#fbbf24,#f59e0b)',
+          boxShadow: isDark ? '0 0 14px rgba(99,102,241,0.8)' : '0 0 14px rgba(245,158,11,0.7)',
+        }}
+      >
+        {isDark ? <Moon className="w-3 h-3 text-sky-100" /> : <Sun className="w-3 h-3 text-amber-50" />}
+      </motion.span>
+    </button>
+  );
+};
+
 export const Navbar: React.FC<NavbarProps> = ({
+  theme,
   currentPage,
   onNavigate,
+  onToggleTheme,
 }) => {
   const { data } = useContent();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -68,8 +105,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onClick={() => go(item.pageSlug)}
                   className={`px-3.5 xl:px-4 py-2 rounded-full text-[12px] font-extrabold transition-all cursor-pointer ${
                     active
-                      ? 'bg-[color:var(--nd-ink)] text-white shadow-sm'
-                      : 'text-[color:var(--nd-muted)] hover:text-[color:var(--nd-ink)] hover:bg-black/[0.04]'
+                      ? 'bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] shadow-sm'
+                      : 'text-[color:var(--nd-muted)] hover:text-[color:var(--nd-ink)] hover:bg-[color:var(--nd-line)]'
                   }`}
                 >
                   {item.label}
@@ -79,6 +116,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           <span className="flex-1 lg:hidden" />
+
+          {/* Theme switch */}
+          {onToggleTheme && <ThemeSwitch theme={theme} onToggle={onToggleTheme} />}
 
           {/* CTA */}
           <button
@@ -117,7 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   key={item.id}
                   onClick={() => go(item.pageSlug)}
                   className={`w-full text-right px-4 py-3 rounded-2xl text-sm font-extrabold transition-colors cursor-pointer ${
-                    active ? 'bg-[color:var(--nd-ink)] text-white' : 'text-[color:var(--nd-ink-2)] hover:bg-black/[0.04]'
+                    active ? 'bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)]' : 'text-[color:var(--nd-ink-2)] hover:bg-[color:var(--nd-line)]'
                   }`}
                 >
                   {item.label}
