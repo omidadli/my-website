@@ -40,6 +40,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const user = await requireAuth(request, env);
   if (!user) return unauthorized();
+  if (!env.MEDIA) {
+    return json({ ok: false, error: 'فضای ذخیره‌سازی R2 هنوز فعال نشده است. ابتدا R2 را در داشبورد Cloudflare فعال کرده و binding را اضافه کنید (راهنما: CMS-DEPLOY.md).' }, { status: 503 });
+  }
 
   let form: FormData;
   try {
@@ -85,6 +88,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
   const user = await requireAuth(request, env);
   if (!user) return unauthorized();
+  if (!env.MEDIA) {
+    return json({ ok: false, error: 'فضای ذخیره‌سازی R2 فعال نیست.' }, { status: 503 });
+  }
 
   const key = new URL(request.url).searchParams.get('key');
   if (!key || !key.startsWith('uploads/')) {

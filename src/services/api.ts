@@ -163,6 +163,40 @@ export const api = {
     }
   },
 
+  /** Public comment submission (held for moderation server-side). */
+  async postComment(comment: { postId: string; authorName: string; authorEmail: string; content: string }): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const r = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(comment),
+      });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok ? { ok: true } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+    } catch {
+      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Admin moderation of cloud comments. */
+  async patchComment(id: string, patch: { isApproved?: boolean; reply?: string }): Promise<boolean> {
+    try {
+      const r = await fetch('/api/comments', { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...headers() }, body: JSON.stringify({ id, ...patch }) });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  async deleteComment(id: string): Promise<boolean> {
+    try {
+      const r = await fetch(`/api/comments?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: headers() });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  },
+
   /** English slug for a Persian title — Gemini translation on the server, transliteration fallback. */
   async makeSlug(title: string): Promise<string | null> {
     try {

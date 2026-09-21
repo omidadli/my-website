@@ -2,6 +2,9 @@ import { Env, json } from '../../_shared';
 
 /** GET /api/media/file/<key…> — streams a file from R2 (public read, write stays admin-only). */
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
+  if (!env.MEDIA) {
+    return json({ ok: false, error: 'فضای ذخیره‌سازی R2 فعال نیست.' }, { status: 503 });
+  }
   const parts = Array.isArray(params.key) ? params.key : [params.key];
   const key = parts.map(decodeURIComponent).join('/');
   if (!key || !key.startsWith('uploads/') || key.includes('..')) {

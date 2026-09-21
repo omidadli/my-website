@@ -25,3 +25,17 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts (ip, attempted_at);
+
+CREATE TABLE IF NOT EXISTS comments (
+  id TEXT PRIMARY KEY,
+  post_id TEXT NOT NULL,
+  author_name TEXT NOT NULL,
+  author_email TEXT NOT NULL,
+  content TEXT NOT NULL,
+  date TEXT NOT NULL,
+  is_approved INTEGER NOT NULL DEFAULT 0,
+  reply TEXT DEFAULT '',
+  ip TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_post ON comments (post_id);

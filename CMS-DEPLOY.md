@@ -13,16 +13,22 @@
 | `DELETE /api/media?key=…` | حذف فایل از R2 | فقط ادمین |
 | `GET /api/media/file/<key>` | دریافت فایل از R2 | عمومی (کش طولانی) |
 | `POST /api/slug` | ساخت اسلاگ انگلیسی از عنوان فارسی | فقط ادمین |
+| `GET/POST /api/comments` | دیدگاه‌های بازدیدکنندگان (صف تایید) | POST عمومی / GET فقط تاییدشده‌ها |
+| `PATCH/DELETE /api/comments` | تایید، پاسخ و حذف دیدگاه | فقط ادمین |
 
-## قدم ۱ — پر کردن wrangler.toml
+## قدم ۱ — wrangler.toml (انجام شد ✅)
 
-نام و آیدی دیتابیس D1 و نام باکت R2 را در فایل `wrangler.toml` بگذارید:
+دیتابیس D1 در فایل `wrangler.toml` وارد شده است:
+- نام: `omidadli01-site-db`
+- شناسه: `89b0d5f8-7ded-4dc8-9f52-79befd0abbec`
 
-```bash
-npx wrangler login
-npx wrangler d1 list        # → database_name و database_id
-npx wrangler r2 bucket list # → نام باکت (اگر ندارید: npx wrangler r2 bucket create omid-adli-media)
-```
+**R2 هنوز روی حساب شما فعال نیست (خطای 403).** بخش R2 در `wrangler.toml` فعلاً کامنت شده تا دیپلوی بدون مشکل کار کند — آپلود رسانه تا فعال‌سازی R2 با پیام خطای واضح پاسخ می‌دهد و بقیه‌ی CMS کاملاً کار می‌کند.
+
+برای فعال‌سازی R2:
+1. داشبورد Cloudflare → منوی **R2 Object Storage** → دکمه **Activate R2** (ممکن است نیاز به افزودن روش پرداخت داشته باشد؛ فضای رایگان: ۱۰GB).
+2. باکت بسازید: `npx wrangler r2 bucket create omidadli01-media`
+3. سه خط کامنت‌شده‌ی `[[r2_buckets]]` را در `wrangler.toml` از کامنت خارج کنید.
+4. اگر با Git دیپلوی می‌کنید، در داشبورد Pages → Settings → Functions → Bindings یک R2 binding با نام `MEDIA` اضافه کنید.
 
 ## قدم ۲ — ساخت جدول‌های دیتابیس
 
@@ -74,4 +80,5 @@ npm run dev                               # ترمینال ۲ (Vite — درخو
 - مقایسه‌ی رمز به‌صورت timing-safe.
 - آپلود رسانه: فقط ادمین، حداکثر ۱۰MB، فقط فرمت‌های مجاز (تصویر/PDF)، کلید تصادفی‌سازی‌شده در R2.
 - فایل‌های SVG با هدر CSP خنثی‌سازی می‌شوند.
+- دیدگاه‌های بازدیدکنندگان: ذخیره مستقیم در جدول `comments` در D1 (نه مرورگر)، با محدودیت ۵ دیدگاه در ساعت برای هر IP، بررسی اعتبار ایمیل و honeypot ضدربات؛ انتشار فقط پس از تایید شما؛ ایمیل بازدیدکننده هرگز در پاسخ عمومی ارسال نمی‌شود.
 - هدرهای امنیتی سراسری در `public/_headers` (nosniff, frame-options, referrer-policy).

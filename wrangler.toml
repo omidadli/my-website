@@ -1,14 +1,17 @@
 # Cloudflare Pages configuration for the personal-site CMS.
-# Fill in your real D1 database_id (from: npx wrangler d1 list) and R2 bucket name.
 
 name = "my-website"
 pages_build_output_dir = "dist"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "REPLACE_WITH_YOUR_D1_NAME"
-database_id = "REPLACE_WITH_YOUR_D1_ID"
+database_name = "omidadli01-site-db"
+database_id = "89b0d5f8-7ded-4dc8-9f52-79befd0abbec"
 
-[[r2_buckets]]
-binding = "MEDIA"
-bucket_name = "REPLACE_WITH_YOUR_R2_BUCKET"
+# ⚠️ R2 هنوز روی حساب فعال نشده (خطای 403).
+# پس از فعال‌سازی R2 در داشبورد و ساخت باکت، سه خط زیر را از کامنت خارج کنید
+# و همان binding را در داشبورد Pages → Settings → Functions → Bindings هم اضافه کنید:
+#
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "omidadli01-media"

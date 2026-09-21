@@ -267,7 +267,7 @@ interface ContentContextType {
   updateNavMenu: (menu: NavigationMenuItem[]) => void;
   generateSitemapXml: () => string;
   generateRobotsTxt: () => string;
-  addBlogComment: (comment: { postId: string; authorName: string; authorEmail: string; content: string }) => void;
+  addBlogComment: (comment: { postId: string; authorName: string; authorEmail: string; content: string }) => Promise<{ ok: boolean; error?: string }>;
   toggleCommentApproval: (commentId: string) => void;
   deleteBlogComment: (commentId: string) => void;
   replyBlogComment: (commentId: string, reply: string) => void;
@@ -810,38 +810,38 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return data.GLOBAL_SEO.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: https://omidadli.com/sitemap.xml';
   };
 
-  const addBlogComment = (comment: { postId: string; authorName: string; authorEmail: string; content: string }) => {
+  const addBlogComment = async (comment: { postId: string; authorName: string; authorEmail: string; content: string }): Promise<{ ok: boolean; error?: string }> => {
+    if (persistence === 'cloud') {
+      // Cloudflare mode: comments live in their own D1 table and wait for moderation.
+      const res = await api.postComment(comment);
+      if (res.ok) logActivity('دیدگاه جدید (ابری)', `دیدگاه از طرف ${comment.authorName} برای مقاله ${comment.postId} ثبت و در صف تایید قرار گرفت.`);
+      return res;
+    }
     const newComment: BlogComment = {
-      id: 'comm-' + Date.now(),
+      id: 'comment-' + Date.now(),
       postId: comment.postId,
       authorName: comment.authorName,
       authorEmail: comment.authorEmail,
       content: comment.content,
-      date: 'هم‌اکنون',
-      isApproved: true,
-      likes: 0
+      date: new Date().toLocaleString('fa-IR'),
+      isApproved: false,
+      reply: ''
     };
     setData((prev) => {
       const updatedComments = [newComment, ...(prev.BLOG_COMMENTS || [])];
-      // update commentsCount in post
-      const updatedPosts = prev.BLOG_POSTS.map((p) => {
-        if (p.id === comment.postId) {
-          return { ...p, commentsCount: (p.commentsCount || 0) + 1 };
-        }
-        return p;
-      });
-      const updated = {
-        ...prev,
-        BLOG_COMMENTS: updatedComments,
-        BLOG_POSTS: updatedPosts
-      };
+      const updated = { ...prev, BLOG_COMMENTS: updatedComments };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
-    logActivity('دیدگاه جدید', `دیدگاه جدید توسط ${comment.authorName} برای مقاله ${comment.postId} ثبت شد.`);
+    logActivity('دیدگاه جدید', `دیدگاه از طرف ${comment.authorName} ثبت و در صف تایید قرار گرفت.`);
+    return { ok: true };
   };
 
   const toggleCommentApproval = (commentId: string) => {
+    const target = (data.BLOG_COMMENTS || []).find((c) => c.id === commentId);
+    if (persistence === 'cloud' && commentId.startsWith('c-') && target) {
+      api.patchComment(commentId, { isApproved: !target.isApproved });
+    }
     setData((prev) => {
       const updatedComments = (prev.BLOG_COMMENTS || []).map((c) => {
         if (c.id === commentId) {
@@ -853,19 +853,26 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
+    logActivity('تغییر وضعیت دیدگاه', `وضعیت تایید دیدگاه ${commentId} تغییر کرد.`);
   };
 
   const deleteBlogComment = (commentId: string) => {
+    if (persistence === 'cloud' && commentId.startsWith('c-')) {
+      api.deleteComment(commentId);
+    }
     setData((prev) => {
       const updatedComments = (prev.BLOG_COMMENTS || []).filter((c) => c.id !== commentId);
       const updated = { ...prev, BLOG_COMMENTS: updatedComments };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
-    logActivity('حذف دیدگاه', `دیدگاه ${commentId} حذف شد.`);
+    logActivity('حذف دیدگاه', `دیدگاه ${commentId} به‌طور کامل حذف شد.`);
   };
 
   const replyBlogComment = (commentId: string, reply: string) => {
+    if (persistence === 'cloud' && commentId.startsWith('c-')) {
+      api.patchComment(commentId, { reply });
+    }
     setData((prev) => {
       const updatedComments = (prev.BLOG_COMMENTS || []).map((c) => {
         if (c.id === commentId) {

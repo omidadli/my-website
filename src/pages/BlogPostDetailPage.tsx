@@ -35,7 +35,7 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleCommentSubmit = (e: React.FormEvent) => {
+  const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentName.trim() || !commentEmail.trim() || !commentText.trim()) {
       setCommentError('لطفاً تمام فیلدهای نام، ایمیل و متن دیدگاه را تکمیل کنید.');
@@ -46,12 +46,16 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
       return;
     }
     if (!post) return;
-    addBlogComment({
+    const res = await addBlogComment({
       postId: post.id,
       authorName: commentName.trim(),
       authorEmail: commentEmail.trim(),
       content: commentText.trim(),
     });
+    if (!res.ok) {
+      setCommentError(res.error || 'ثبت دیدگاه ناموفق بود.');
+      return;
+    }
     setCommentSuccess(true);
     setCommentError('');
     setCommentName('');

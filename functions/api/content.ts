@@ -1,19 +1,48 @@
 import { Env, requireAuth, json, unauthorized, MAX_CONTENT_BYTES } from './_shared';
 
+/** Cloud comments (D1 `comments` table) are the source of truth for visitor submissions. */
+const fetchCloudComments = async (env: Env, forAdmin: boolean) => {
+  try {
+    const q = forAdmin
+      ? `SELECT * FROM comments ORDER BY date DESC LIMIT 1000`
+      : `SELECT * FROM comments WHERE is_approved = 1 ORDER BY date DESC LIMIT 1000`;
+    const rows = await env.DB.prepare(q).all();
+    return (rows.results || []).map((r: any) => ({
+      id: r.id,
+      postId: r.post_id,
+      authorName: r.author_name,
+      authorEmail: forAdmin ? r.author_email : '',
+      content: r.content,
+      date: r.date,
+      isApproved: !!r.is_approved,
+      reply: r.reply || '',
+    }));
+  } catch {
+    return [];
+  }
+};
+
 /**
  * GET /api/content  → public read of the whole content state (cached 30s at edge).
  * PUT /api/content  → admin-only full save ({ data: ContentState }).
  */
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    const admin = await requireAuth(request, env);
     const row = await env.DB.prepare(`SELECT data, updated_at FROM content WHERE id = 1`).first<{ data: string; updated_at: string }>();
     if (!row) {
       return json({ ok: true, data: null, updatedAt: null }, { headers: { 'Cache-Control': 'public, max-age=30' } });
     }
-    return new Response(JSON.stringify({ ok: true, data: JSON.parse(row.data), updatedAt: row.updated_at }), {
+    const data = JSON.parse(row.data);
+    // Merge cloud comments (canonical source) into the content payload.
+    const cloudComments = await fetchCloudComments(env, !!admin);
+    const localComments = (data.BLOG_COMMENTS || []).filter((c: any) => !String(c.id || '').startsWith('c-'));
+    data.BLOG_COMMENTS = [...cloudComments, ...localComments];
+    return new Response(JSON.stringify({ ok: true, data, updatedAt: row.updated_at }), {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'public, max-age=30',
+        // Admin responses contain pending comments + emails → never cache them.
+        'Cache-Control': admin ? 'no-store' : 'public, max-age=30',
       },
     });
   } catch (e) {
@@ -38,6 +67,11 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   const data = payload?.data;
   if (!data || typeof data !== 'object') {
     return json({ ok: false, error: 'ساختار داده نامعتبر است.' }, { status: 400 });
+  }
+
+  // Cloud comments live in their own table — never persist them inside the content blob.
+  if (Array.isArray(data.BLOG_COMMENTS)) {
+    data.BLOG_COMMENTS = data.BLOG_COMMENTS.filter((c: any) => !String(c?.id || '').startsWith('c-'));
   }
 
   const now = new Date().toISOString();
