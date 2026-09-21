@@ -7,6 +7,8 @@
  *  - Auth token is kept in localStorage and sent as `Authorization: Bearer …`.
  */
 
+import { compressImage } from '../utils/image';
+
 const TOKEN_KEY = 'nd_admin_token';
 
 let cloudAvailable: boolean | null = null;
@@ -142,8 +144,10 @@ export const api = {
 
   async uploadMedia(file: File, title?: string, alt?: string): Promise<CloudMediaItem | null> {
     try {
+      // Compress images client-side (fits the free D1 storage path + faster site).
+      const prepared = await compressImage(file);
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', prepared);
       if (title) form.append('title', title);
       if (alt) form.append('alt', alt);
       const r = await fetch('/api/media', { method: 'POST', headers: headers(), body: form });
@@ -194,6 +198,33 @@ export const api = {
       return r.ok;
     } catch {
       return false;
+    }
+  },
+
+  /** AI consultant conversation. */
+  async sendChat(messages: { role: 'user' | 'model'; content: string }[]): Promise<{ ok: boolean; answer?: string; mode?: 'ai' | 'local'; error?: string }> {
+    try {
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages }),
+      });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok ? { ok: true, answer: j.answer, mode: j.mode } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+    } catch {
+      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Admin: conversation history (behavior monitoring). */
+  async listChats(): Promise<{ id: string; question: string; answer: string; mode: string; created_at: string; ip: string }[]> {
+    try {
+      const r = await fetch('/api/chat', { headers: headers() });
+      if (!r.ok) return [];
+      const j = await r.json();
+      return j?.ok ? j.items : [];
+    } catch {
+      return [];
     }
   },
 

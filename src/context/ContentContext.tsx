@@ -124,6 +124,7 @@ export interface ContentState {
   PRODUCTS: typeof initialData.PRODUCTS;
   PROJECTS_PAGE_DATA: typeof initialData.PROJECTS_PAGE_DATA;
   PRODUCTS_PAGE_DATA: typeof initialData.PRODUCTS_PAGE_DATA;
+  CHAT_CONFIG: typeof initialData.CHAT_CONFIG;
   BLOG_PAGE_DATA: typeof initialData.BLOG_PAGE_DATA;
   ONGOING_PROJECTS: typeof initialData.ONGOING_PROJECTS;
   BUSINESS_ANALYSIS_DATA: typeof initialData.BUSINESS_ANALYSIS_DATA;
@@ -158,6 +159,7 @@ const defaultContentState: ContentState = {
   PRODUCTS: initialData.PRODUCTS,
   PROJECTS_PAGE_DATA: initialData.PROJECTS_PAGE_DATA,
   PRODUCTS_PAGE_DATA: initialData.PRODUCTS_PAGE_DATA,
+  CHAT_CONFIG: initialData.CHAT_CONFIG,
   BLOG_PAGE_DATA: initialData.BLOG_PAGE_DATA,
   ONGOING_PROJECTS: initialData.ONGOING_PROJECTS,
   BUSINESS_ANALYSIS_DATA: initialData.BUSINESS_ANALYSIS_DATA,
@@ -309,6 +311,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
           WHY_OMID_POINTS: initialData.WHY_OMID_POINTS,
           PROJECTS_PAGE_DATA: { ...initialData.PROJECTS_PAGE_DATA, ...(parsed.PROJECTS_PAGE_DATA || {}) },
           PRODUCTS_PAGE_DATA: { ...initialData.PRODUCTS_PAGE_DATA, ...(parsed.PRODUCTS_PAGE_DATA || {}) },
+          CHAT_CONFIG: { ...initialData.CHAT_CONFIG, ...(parsed.CHAT_CONFIG || {}) },
           BLOG_PAGE_DATA: { ...initialData.BLOG_PAGE_DATA, ...(parsed.BLOG_PAGE_DATA || {}) },
           BLOG_POSTS: parsed.BLOG_POSTS || initialData.BLOG_POSTS,
           ONGOING_PROJECTS: parsed.ONGOING_PROJECTS || initialData.ONGOING_PROJECTS,

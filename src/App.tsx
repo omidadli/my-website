@@ -22,6 +22,7 @@ import { ProductsPage } from './pages/ProductsPage';
 import { AdminPage } from './pages/AdminPage';
 import { CustomPageView } from './pages/CustomPageView';
 import { SEOHead } from './components/SEOHead';
+import { ChatWidget } from './components/ChatWidget';
 
 function MainLayout() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -254,6 +255,7 @@ function MainLayout() {
 
       {/* Admin Floating Toolbar */}
       <AdminFloatingBar />
+      <ChatWidget theme={theme} />
 
       {/* Admin PIN Login Modal */}
       <AdminLoginModal

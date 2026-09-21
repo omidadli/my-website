@@ -39,3 +39,25 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments (post_id);
+
+-- Media stored inside D1 (free fallback when R2 is not available)
+CREATE TABLE IF NOT EXISTS media_files (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  size_kb INTEGER DEFAULT 0,
+  data_b64 TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- AI assistant conversation history (behavior monitoring)
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id TEXT PRIMARY KEY,
+  ip TEXT DEFAULT '',
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  mode TEXT DEFAULT 'local',
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_ip_time ON chat_messages (ip, created_at);

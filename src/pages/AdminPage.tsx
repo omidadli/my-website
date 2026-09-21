@@ -9,7 +9,7 @@ import { ACard, ASectionTitle, AInput, ATextarea, ASelect, ALabel, ABadge, AConf
 import {
   LayoutDashboard, BookOpen, MessageSquare, Sparkles, Briefcase, ShoppingBag,
   FolderKanban, UserRound, Home, FileText, Image as ImageIcon, Search, Palette,
-  Settings, Lock, ShieldCheck, Cloud, HardDrive, ExternalLink, LogOut, Plus,
+  Settings, Lock, ShieldCheck, Cloud, HardDrive, ExternalLink, LogOut, Plus, Bot,
   Trash2, ChevronUp, ChevronDown, Download, Copy, CheckCircle2, XCircle, RotateCcw,
   History, Eye, EyeOff, Wand2, Link2, Upload, Reply, Menu,
 } from 'lucide-react';
@@ -168,7 +168,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
     toggleCommentApproval, deleteBlogComment, replyBlogComment,
   } = useContent();
 
-  type TabId = 'dashboard' | 'posts' | 'comments' | 'services' | 'portfolio' | 'products' | 'projects' | 'about' | 'home' | 'pages' | 'media' | 'seo' | 'appearance' | 'settings';
+  type TabId = 'dashboard' | 'posts' | 'comments' | 'services' | 'portfolio' | 'products' | 'projects' | 'about' | 'home' | 'pages' | 'media' | 'seo' | 'chat' | 'appearance' | 'settings';
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -180,6 +180,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   const [robotsOut, setRobotsOut] = useState('');
   const [importText, setImportText] = useState('');
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [chatLog, setChatLog] = useState<{ id: string; question: string; answer: string; mode: string; created_at: string; ip: string }[] | null>(null);
   const mediaFileRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
 
@@ -1044,6 +1045,60 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                 </div>
                 {sitemapOut && <ATextarea rows={8} dir="ltr" readOnly value={sitemapOut} className="font-mono text-[10px]! text-left" />}
                 {robotsOut && <ATextarea rows={4} dir="ltr" readOnly value={robotsOut} className="font-mono text-[10px]! text-left mt-3" />}
+              </ACard>
+            </div>
+          )}
+
+          {/* ---------------- CHAT / AI ASSISTANT ---------------- */}
+          {activeTab === 'chat' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle
+                  title="رفتار دستیار هوشمند"
+                  desc="شخصیت، لحن و قوانین پاسخ‌دهی AI مشاور — ответы همیشه از داده‌های خود سایت ساخته می‌شوند"
+                  action={
+                    <button
+                      onClick={async () => { setChatLog(await api.listChats()); showToast('تاریخچه گفتگوها دریافت شد.'); }}
+                      className="nd-btn nd-btn-ghost px-4 py-2 text-[11px] cursor-pointer"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>دریافت تاریخچه گفتگوها</span>
+                    </button>
+                  }
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="CHAT_CONFIG" item={data.CHAT_CONFIG} fields={[
+                    { key: 'enabled', label: 'دستیار در سایت فعال باشد', type: 'toggle', hint: 'خاموش = ویجت چت به بازدیدکنندگان نمایش داده نمی‌شود' },
+                    { key: 'title', label: 'نام دستیار (در هدر چت)' },
+                    { key: 'greeting', label: 'پیام خوش‌آمدگویی', type: 'textarea', rows: 3 },
+                    { key: 'persona', label: 'شخصیت و قوانین پاسخ‌دهی (System Prompt)', type: 'textarea', rows: 8, hint: 'لحن، مرزها و CTA را اینجا تعریف کنید' },
+                    { key: 'quickQuestions', label: 'سوال‌های پیشنهادی (چیپ‌های سریع)', type: 'tags' },
+                    { key: 'ctaText', label: 'متن دعوت به اقدام (انتهای پاسخ‌ها)', type: 'textarea', rows: 2 },
+                    { key: 'fallbackMessage', label: 'پاسخ پیش‌فرض (وقتی جوابی پیدا نشد)', type: 'textarea', rows: 2 },
+                  ]} />
+                </div>
+              </ACard>
+
+              <ACard>
+                <ASectionTitle title="تاریخچه گفتگوها (پایش رفتار)" desc="۲۰۰ گفتگوی آخر بازدیدکنندگان — ببینید چه چیزی می‌پرسند" />
+                {chatLog === null ? (
+                  <p className="text-xs nd-muted">برای دیدن تاریخچه، دکمه «دریافت تاریخچه گفتگوها» را بزنید.</p>
+                ) : chatLog.length === 0 ? (
+                  <p className="text-xs nd-muted">گفتگویی ثبت نشده است.</p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {chatLog.map((c) => (
+                      <div key={c.id} className="rounded-xl border border-[color:var(--nd-line)] p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-extrabold text-[color:var(--nd-accent)]">سوال: <span className="text-[color:var(--nd-ink)]">{c.question}</span></span>
+                          <span className="text-[9px] nd-faint dir-ltr shrink-0">{new Date(c.created_at).toLocaleString('fa-IR')}</span>
+                        </div>
+                        <p className="text-[11px] nd-muted leading-relaxed whitespace-pre-wrap line-clamp-4">{c.answer}</p>
+                        <span className="nd-chip text-[9px]">{c.mode === 'ai' ? '🤖 پاسخ Gemini' : '📚 پاسخ از داده سایت'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </ACard>
             </div>
           )}
