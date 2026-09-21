@@ -10,6 +10,7 @@ import { CustomCursor } from './components/CustomCursor';
 import { SplashScreen } from './components/SplashScreen';
 import { AdminFloatingBar } from './components/cms/AdminFloatingBar';
 import { AdminLoginModal } from './components/cms/AdminLoginModal';
+import { ScrollProgress, Grain } from './components/motion/Cinematic';
 import { HomePage } from './pages/HomePage';
 import { ServicesPage } from './pages/ServicesPage';
 import { PortfolioPage } from './pages/PortfolioPage';
@@ -116,6 +117,10 @@ function MainLayout() {
         <SplashScreen onComplete={handleSplashComplete} />
       )}
 
+      {/* Cinematic reading progress + filmic grain */}
+      <ScrollProgress />
+      <Grain />
+
       {/* Custom Interactive Floating Cursor */}
       <CustomCursor />
 
@@ -146,6 +151,7 @@ function MainLayout() {
                 theme={theme}
                 onNavigate={handleNavigate}
                 onSelectCaseStudy={handleSelectCaseStudy}
+                onSelectPost={handleSelectBlogPost}
               />
             )}
 

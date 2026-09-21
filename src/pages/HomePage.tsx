@@ -31,11 +31,13 @@ import {
   Search,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { MaskLines, Magnetic } from '../components/motion/Cinematic';
 
 interface HomePageProps {
   theme: Theme;
   onNavigate: (page: Page) => void;
   onSelectCaseStudy: (caseStudy: CaseStudy) => void;
+  onSelectPost?: (postId: string) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -106,11 +108,12 @@ const IconTile: React.FC<{ name: string; tint: { bg: string; fg: string }; size?
 /* ------------------------------------------------------------------ */
 /*  HomePage                                                           */
 /* ------------------------------------------------------------------ */
-export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectCaseStudy }) => {
+export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectCaseStudy, onSelectPost }) => {
   const { data } = useContent();
 
   const [activeServiceTab, setActiveServiceTab] = useState<'start' | 'sell' | 'grow'>('sell');
   const [promptValue, setPromptValue] = useState('');
+  const [openFaq, setOpenFaq] = useState<number>(-1);
   const servicesSectionRef = useRef<HTMLDivElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
 
@@ -213,170 +216,176 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       /* ============ 1. HERO ============ */
       case 'HERO':
         return (
-          <section id="hero-section" className="relative pt-2 sm:pt-6 pb-8">
-            <div className="text-center max-w-4xl mx-auto space-y-7">
-              {/* Trust pill */}
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                className="nd-glass inline-flex items-center gap-3 rounded-full ps-2 pe-4 py-1.5"
-              >
-                <span className="flex">
-                  <img
-                    src={personal.avatar}
-                    alt={personal.name}
-                    className="w-7 h-7 rounded-full object-cover ring-2 ring-white"
-                  />
-                  <span className="-ms-2 w-7 h-7 rounded-full ring-2 ring-white grid place-items-center text-[10px] font-black text-white" style={{ background: 'var(--nd-accent)' }}>
-                    ۵+
+          <section id="hero-section" className="relative">
+            {/* ---------- Cinematic dark stage (full-bleed) ---------- */}
+            <div className="nd-stage nd-hairline-top relative left-1/2 -translate-x-1/2 w-screen rounded-b-[44px] -mt-28 sm:-mt-32">
+              {/* aurora orbs */}
+              <div className="absolute w-[36rem] h-[36rem] -top-40 -left-32 rounded-full blur-3xl opacity-40 nd-float-slow" style={{ background: 'radial-gradient(circle, rgba(99,91,255,0.5), transparent 65%)' }} aria-hidden />
+              <div className="absolute w-[28rem] h-[28rem] top-1/2 -right-24 rounded-full blur-3xl opacity-30 nd-float" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.4), transparent 65%)' }} aria-hidden />
+
+              <div className="relative max-w-5xl mx-auto px-4 sm:px-8 pt-36 sm:pt-40 pb-16 sm:pb-20 text-center space-y-8">
+                {/* Trust pill */}
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  className="nd-glass-dark inline-flex items-center gap-3 rounded-full ps-2 pe-4 py-1.5"
+                >
+                  <span className="flex">
+                    <img src={personal.avatar} alt={personal.name} className="w-7 h-7 rounded-full object-cover ring-2 ring-white/30" />
+                    <span className="-ms-2 w-7 h-7 rounded-full ring-2 ring-white/30 grid place-items-center text-[10px] font-black text-white" style={{ background: 'linear-gradient(135deg,#4f46e5,#38bdf8)' }}>
+                      ۵+
+                    </span>
                   </span>
-                </span>
-                <span className="text-xs font-extrabold text-[color:var(--nd-ink-2)]">
-                  مورد اعتماد برندها و تیم‌های رشد · {personal.experienceYears} تجربه
-                </span>
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-[color:var(--nd-success)]">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  {personal.availability}
-                </span>
-              </motion.div>
+                  <span className="text-xs font-extrabold text-slate-200">
+                    همراه برندهای فروش‌محور · {personal.experienceYears} تجربه
+                  </span>
+                  <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {personal.availability}
+                  </span>
+                </motion.div>
 
-              {/* Headline */}
-              <motion.h1
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-                className="nd-h1 text-[2.1rem] leading-[1.25] sm:text-5xl sm:leading-[1.2] lg:text-[3.6rem] lg:leading-[1.16]"
-              >
-                فروشگاهتان را آنلاین شروع کنید،{' '}
-                <span className="relative inline-block text-[color:var(--nd-accent)]">
-                  بهتر بفروشید
-                  <svg viewBox="0 0 200 12" className="absolute -bottom-1 right-0 w-full h-2.5 text-[color:var(--nd-accent)] opacity-30" preserveAspectRatio="none" aria-hidden>
-                    <path d="M2 9 C 60 2, 140 2, 198 8" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round" />
-                  </svg>
-                </span>{' '}
-                و رشد کنید.
-              </motion.h1>
-
-              {/* Sub headline */}
-              <motion.p
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                className="nd-muted text-sm sm:text-lg leading-relaxed max-w-2xl mx-auto"
-              >
-                فرقی نمی‌کنه تازه می‌خواید وارد دنیای آنلاین بشید یا همین حالا فروشگاه و سایت دارید؛ از طراحی سایت و راه‌اندازی پیج و محتوا تا تبلیغات، تحلیل و افزایش فروش، کمکتون می‌کنم مسیر درست رشدتون رو پیدا کنید و اجراش کنید.
-              </motion.p>
-
-              {/* Prompt box — Webild-style interactive entry point */}
-              <motion.form
-                onSubmit={handlePromptSubmit}
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className="nd-glass rounded-[26px] p-3 sm:p-4 max-w-2xl mx-auto text-right"
-              >
-                <div className="flex items-center gap-3 px-2 sm:px-3 pt-2 pb-3">
-                  <Search className="w-5 h-5 shrink-0 text-[color:var(--nd-faint)]" />
-                  <input
-                    value={promptValue}
-                    onChange={(e) => setPromptValue(e.target.value)}
-                    placeholder="نیازت رو بنویس؛ مثلاً: بازدید میاد ولی فروش نه…"
-                    className="w-full bg-transparent text-sm sm:text-base font-medium text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)] focus:outline-none"
+                {/* Headline — cinematic mask reveal */}
+                <h1 className="nd-h1 text-white text-[2.2rem] leading-[1.28] sm:text-5xl sm:leading-[1.22] lg:text-[3.7rem] lg:leading-[1.18]">
+                  <MaskLines
+                    delay={0.1}
+                    lines={[
+                      <span key="1">فروشگاهتان را آنلاین شروع کنید،</span>,
+                      <span key="2">
+                        <span className="nd-text-glow">بهتر بفروشید</span> و رشد کنید.
+                      </span>,
+                    ]}
                   />
-                </div>
-                <div className="flex flex-wrap items-center gap-2 border-t border-[color:var(--nd-line)] pt-3 px-1">
-                  {promptSuggestions.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setPromptValue(s)}
-                      className="nd-chip hover:border-[rgba(79,70,229,0.35)] hover:text-[color:var(--nd-accent)] transition-colors cursor-pointer"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                  <button type="submit" className="nd-btn nd-btn-accent ms-auto px-5 py-2.5 text-xs sm:text-sm">
-                    <span>تحلیل رایگان نیازت</span>
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.form>
+                </h1>
 
-              {/* Secondary CTAs + proof micro-list */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.7, delay: 0.32 }}
-                className="space-y-4"
-              >
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  <button onClick={() => onNavigate('portfolio')} className="nd-btn nd-btn-ghost px-6 py-3 text-xs sm:text-sm">
+                {/* Sub */}
+                <motion.p
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="text-slate-400 text-sm sm:text-lg leading-relaxed max-w-2xl mx-auto"
+                >
+                  فرقی نمی‌کنه تازه می‌خواید وارد دنیای آنلاین بشید یا همین حالا فروشگاه و سایت دارید؛ از طراحی سایت و راه‌اندازی پیج و محتوا تا تبلیغات، تحلیل و افزایش فروش، کمکتون می‌کنم مسیر درست رشدتون رو پیدا کنید و اجراش کنید.
+                </motion.p>
+
+                {/* Prompt box — dark glass */}
+                <motion.form
+                  onSubmit={handlePromptSubmit}
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  className="nd-glass-dark rounded-[26px] p-3 sm:p-4 max-w-2xl mx-auto text-right"
+                >
+                  <div className="flex items-center gap-3 px-2 sm:px-3 pt-2 pb-3">
+                    <Search className="w-5 h-5 shrink-0 text-slate-500" />
+                    <input
+                      value={promptValue}
+                      onChange={(e) => setPromptValue(e.target.value)}
+                      placeholder="نیازت رو بنویس؛ مثلاً: بازدید میاد ولی فروش نه…"
+                      className="w-full bg-transparent text-sm sm:text-base font-medium text-white placeholder:text-slate-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-3 px-1">
+                    {promptSuggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setPromptValue(s)}
+                        className="nd-chip bg-white/5 border-white/10 text-slate-300 hover:text-white hover:border-indigo-400/50 transition-colors cursor-pointer"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                    <button type="submit" className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 ms-auto px-5 py-2.5 text-xs sm:text-sm">
+                      <span>تحلیل رایگان نیازت</span>
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
+                </motion.form>
+
+                {/* CTAs */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.7, delay: 0.62 }}
+                  className="flex flex-wrap items-center justify-center gap-3"
+                >
+                  <Magnetic>
+                    <button onClick={() => onNavigate('contact')} className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 px-7 py-4 text-xs sm:text-sm">
+                      <span>ببینیم کسب‌وکارتان به چی نیاز دارد</span>
+                      <ArrowUpLeft className="w-4 h-4" />
+                    </button>
+                  </Magnetic>
+                  <button onClick={() => onNavigate('portfolio')} className="nd-btn nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10 px-6 py-4 text-xs sm:text-sm">
                     <span>پروژه‌هایی که انجام دادم</span>
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <button onClick={() => onNavigate('services')} className="nd-btn nd-btn-ghost px-6 py-3 text-xs sm:text-sm">
-                    <span>خدمات و پکیج‌ها</span>
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] sm:text-xs font-bold text-[color:var(--nd-faint)]">
-                  <span>طراحی سایت</span>
-                  <span>·</span>
-                  <span>محتوا و شبکه‌های اجتماعی</span>
-                  <span>·</span>
-                  <span>تبلیغات</span>
-                  <span>·</span>
-                  <span>تحلیل و بهینه‌سازی فروش</span>
-                </div>
-              </motion.div>
-            </div>
+                </motion.div>
 
-            {/* Product showcase — framed dashboard with floating proof chips */}
-            <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.9, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="relative max-w-5xl mx-auto mt-14 sm:mt-20"
-            >
-              <div className="nd-card overflow-hidden rounded-[28px] sm:rounded-[36px] p-3 sm:p-5">
-                {/* Browser chrome */}
-                <div className="flex items-center gap-2 px-3 pb-4">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
-                  <span className="ms-3 flex-1 h-7 rounded-full bg-[color:var(--nd-bg)] border border-[color:var(--nd-line)] grid place-items-center text-[10px] font-bold text-[color:var(--nd-faint)] dir-ltr">
-                    {personal.website}
-                  </span>
-                </div>
-                <div className="rounded-[20px] sm:rounded-[26px] bg-gradient-to-b from-[#f4f3ff] to-[#eef4ff] border border-[color:var(--nd-line)] overflow-hidden">
-                  <IsometricDashboard theme="light" />
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.7, delay: 0.72 }}
+                  className="flex flex-wrap items-center justify-center gap-2 text-[11px] sm:text-xs font-bold text-slate-500"
+                >
+                  <span>طراحی سایت</span><span>·</span>
+                  <span>محتوا و شبکه‌های اجتماعی</span><span>·</span>
+                  <span>تبلیغات</span><span>·</span>
+                  <span>تحلیل و بهینه‌سازی فروش</span>
+                </motion.div>
+
+                {/* Dashboard showcase — dark glass frame */}
+                <motion.div
+                  initial={{ opacity: 0, y: 44, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 1, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative max-w-4xl mx-auto"
+                >
+                  <div className="nd-glass-dark rounded-[28px] sm:rounded-[32px] p-3 sm:p-4">
+                    <div className="flex items-center gap-2 px-2 pb-3">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/80" />
+                      <span className="ms-3 flex-1 h-7 rounded-full bg-white/5 border border-white/10 grid place-items-center text-[10px] font-bold text-slate-500 dir-ltr">
+                        {personal.website}
+                      </span>
+                    </div>
+                    <div className="rounded-[18px] sm:rounded-[22px] overflow-hidden border border-white/10" style={{ background: 'linear-gradient(180deg,#141428,#0d0d1a)' }}>
+                      <IsometricDashboard theme="dark" />
+                    </div>
+                  </div>
+
+                  {stats.slice(0, 2).map((s, i) => (
+                    <div
+                      key={i}
+                      className={`nd-glass-dark absolute hidden lg:flex items-center gap-2.5 rounded-2xl px-4 py-3 ${i === 0 ? '-right-10 top-8 nd-float' : '-left-12 bottom-10 nd-float-slow'}`}
+                    >
+                      <span className="w-9 h-9 rounded-xl grid place-items-center" style={{ background: 'rgba(255,255,255,0.08)', color: '#a5b4fc' }}>
+                        {React.createElement(iconFor(s.icon), { className: 'w-4 h-4' })}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-black text-white dir-ltr text-right">{s.value}</span>
+                        <span className="block text-[10px] font-bold text-slate-400">{s.label}</span>
+                      </span>
+                    </div>
+                  ))}
+                </motion.div>
+
+                {/* Scroll cue */}
+                <div className="flex justify-center pt-2">
+                  <ChevronLeft className="w-5 h-5 text-slate-500 nd-scroll-cue rotate-[-90deg]" />
                 </div>
               </div>
+            </div>
 
-              {/* Floating metric chips */}
-              {stats.slice(0, 3).map((s, i) => (
-                <div
-                  key={i}
-                  className={`nd-glass absolute hidden lg:flex items-center gap-2.5 rounded-2xl px-4 py-3 ${i === 0 ? '-right-8 top-10 nd-float' : i === 1 ? '-left-10 top-1/3 nd-float-slow' : '-right-4 bottom-12 nd-float-slow'}`}
-                  style={{ animationDelay: `${i * 1.3}s` }}
-                >
-                  <IconTile name={s.icon} tint={TINTS[i % TINTS.length]} size="sm" />
-                  <span>
-                    <span className="block text-sm font-black text-[color:var(--nd-ink)] dir-ltr text-right">{s.value}</span>
-                    <span className="block text-[10px] font-bold text-[color:var(--nd-muted)]">{s.label}</span>
-                  </span>
-                </div>
-              ))}
-            </motion.div>
-
-            {/* Intro statement */}
+            {/* ---------- Intro statement — overlapping the stage edge ---------- */}
             <motion.div
-              initial={{ opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-80px' }}
+              viewport={{ once: true, margin: '-60px' }}
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="nd-card max-w-3xl mx-auto mt-12 sm:mt-16 p-6 sm:p-8 flex flex-col sm:flex-row items-start gap-5"
+              className="relative z-10 nd-card max-w-3xl mx-auto -mt-10 sm:-mt-12 p-6 sm:p-8 flex flex-col sm:flex-row items-start gap-5"
             >
               <img src={personal.avatar} alt={personal.name} className="w-16 h-16 rounded-2xl object-cover shadow-sm shrink-0" />
               <p className="text-sm sm:text-base leading-relaxed text-[color:var(--nd-ink-2)]">
@@ -387,6 +396,114 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
           </section>
         );
 
+      /* ============ 1.5 TRUST BAR (brand marquee) ============ */
+      case 'TRUST_BAR': {
+        const brands = [
+          ...new Set([
+            ...caseStudies.map((c: any) => String(c.client || '').split(' (')[0]).filter(Boolean),
+            ...otherCollaborations.map((c: any) => c.company),
+          ]),
+        ];
+        return (
+          <section className="py-10 sm:py-12 space-y-5">
+            <p className="text-center text-[11px] sm:text-xs font-black tracking-wide text-[color:var(--nd-faint)]">
+              مورد اعتماد برندها و تیم‌های رشد
+            </p>
+            <div className="nd-marquee overflow-hidden [mask-image:linear-gradient(to_left,transparent,black_15%,black_85%,transparent)]">
+              <div className="nd-marquee-track items-center gap-10">
+                {[...brands, ...brands].map((b, i) => (
+                  <span key={i} className="flex items-center gap-10 whitespace-nowrap">
+                    <span className="text-base sm:text-lg font-black text-[color:var(--nd-faint)]/80 hover:text-[color:var(--nd-ink)] transition-colors">{b}</span>
+                    <span className="w-1.5 h-1.5 rotate-45 rounded-[2px] bg-[color:var(--nd-line-strong)]" aria-hidden />
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      /* ============ 1.7 PROOF — cinematic dark evidence scene ============ */
+      case 'PROOF':
+        return (
+          <section className="py-6 sm:py-10">
+            <div className="nd-stage nd-hairline-top rounded-[36px] sm:rounded-[44px] p-7 sm:p-14 space-y-10">
+              <div className="text-center space-y-4 max-w-2xl mx-auto">
+                <span className="nd-glass-dark inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold text-indigo-200">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>اثبات با داده، نه شعار</span>
+                </span>
+                <h2 className="nd-h2 text-white text-2xl sm:text-3xl lg:text-[2.6rem]">نتیجه‌هایی که تا الان گرفتم</h2>
+                <p className="text-slate-400 text-sm sm:text-base leading-relaxed">این‌ها فقط عدد نیستن؛ نتیجه‌ی کار روی کسب‌وکارهای واقعیه.</p>
+              </div>
+
+              {/* Stats row */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-4">
+                {stats.map((stat, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 18 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-60px' }}
+                    transition={{ duration: 0.55, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                    className="relative text-center space-y-1.5"
+                  >
+                    <RepeaterControls arrayPath="STATS" index={idx} totalCount={stats.length} className="absolute top-0 left-0" />
+                    <div className="text-3xl sm:text-4xl font-black nd-text-glow dir-ltr text-center">
+                      <EditableText path={`STATS.${idx}.value`}>{stat.value}</EditableText>
+                    </div>
+                    <div className="font-extrabold text-xs sm:text-sm text-slate-200">
+                      <EditableText path={`STATS.${idx}.label`}>{stat.label}</EditableText>
+                    </div>
+                    <div className="text-[11px] font-medium text-slate-500">
+                      <EditableText path={`STATS.${idx}.subtext`}>{stat.subtext}</EditableText>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Two featured case studies */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {homepageStudies.slice(0, 2).map((study, idx) => (
+                  <motion.button
+                    key={study.id || idx}
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-60px' }}
+                    transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                    onClick={() => onSelectCaseStudy(study)}
+                    className="nd-glass-dark rounded-[28px] p-6 sm:p-7 text-right flex flex-col gap-4 cursor-pointer hover:bg-white/10 transition-colors group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="nd-chip bg-white/8 border-white/12 text-slate-300">{study.industryFa}</span>
+                      <span className="text-[11px] font-bold text-slate-500">{study.client}</span>
+                    </div>
+                    <h3 className="nd-h2 text-white text-base sm:text-lg leading-snug">{study.title}</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(study.metricsComparison || []).slice(0, 3).map((m: any, mi: number) => (
+                        <div key={mi} className="rounded-2xl bg-white/5 border border-white/10 px-2 py-2.5 text-center">
+                          <span className="block text-sm font-black nd-text-glow dir-ltr">{m.growth}</span>
+                          <span className="block text-[9px] font-bold text-slate-500 leading-tight mt-1 line-clamp-1">{m.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <span className="flex items-center justify-between pt-3 border-t border-white/10 text-xs font-extrabold text-indigo-300">
+                      <span>دیدن کامل این پروژه</span>
+                      <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                    </span>
+                  </motion.button>
+                ))}
+              </div>
+
+              <div className="text-center">
+                <button onClick={() => onNavigate('portfolio')} className="nd-btn nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10 px-7 py-3.5 text-xs sm:text-sm">
+                  <span>همه‌ی نمونه‌کارها</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </section>
+        );
       /* ============ 2. PATH NAV ============ */
       case 'PATH_NAV':
         return (
@@ -819,29 +936,162 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
         );
 
       /* ============ 9. FINAL CTA ============ */
+      /* ============ 8.5 INSIGHTS — lead magnet + latest writing ============ */
+      case 'INSIGHTS': {
+        const posts = (data.BLOG_POSTS || []).slice(0, 3);
+        return (
+          <section className="py-14 sm:py-20">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+              {/* Lead magnet — free mini audit */}
+              <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className="lg:col-span-2"
+              >
+                <div className="nd-stage nd-hairline-top rounded-[32px] p-7 sm:p-9 h-full flex flex-col gap-5">
+                  <span className="nd-glass-dark inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold text-indigo-200 w-fit">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>بدون هزینه، بدون تعهد</span>
+                  </span>
+                  <h3 className="nd-h2 text-white text-xl sm:text-2xl leading-snug">آنالیز سریع و رایگان سایتت</h3>
+                  <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+                    آدرس سایتت رو بنویس؛ تا ۴۸ ساعت یه بررسی اولیه از مسیر خرید، سرعت و نقاط ریزشت برات می‌فرستم — همین‌طوری، برای آشنایی.
+                  </p>
+                  <form onSubmit={handlePromptSubmit} className="mt-auto space-y-3">
+                    <input
+                      value={promptValue}
+                      onChange={(e) => setPromptValue(e.target.value)}
+                      placeholder="example.com"
+                      className="w-full nd-glass-dark rounded-2xl px-4 py-3.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-400/60 dir-ltr text-left"
+                    />
+                    <button type="submit" className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 w-full py-3.5 text-sm">
+                      <span>درخواست آنالیز رایگان</span>
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                  <p className="text-[10px] font-bold text-slate-500">بدون اسپم؛ فقط یه نقشه‌ی راه قابل اجرا.</p>
+                </div>
+              </motion.div>
+
+              {/* Latest writing */}
+              <div className="lg:col-span-3 flex flex-col gap-4">
+                <div className="flex items-end justify-between gap-4">
+                  <div className="space-y-2">
+                    <span className="nd-eyebrow">
+                      <LineChart className="w-3.5 h-3.5" />
+                      <span>نوشت‌های تازه</span>
+                    </span>
+                    <h3 className="nd-h2 text-xl sm:text-2xl">چیزهایی که اخیراً از داده‌ها یاد گرفتم</h3>
+                  </div>
+                  <button onClick={() => (onSelectPost ? onSelectPost('') : onNavigate('blog'))} className="nd-btn nd-btn-ghost px-5 py-2.5 text-xs font-extrabold shrink-0">
+                    <span>همه‌ی نوشت‌ها</span>
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {posts.map((post: any, idx: number) => (
+                  <motion.button
+                    key={post.id || idx}
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-40px' }}
+                    transition={{ duration: 0.5, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                    onClick={() => (onSelectPost ? onSelectPost(post.id) : onNavigate('blog'))}
+                    className="nd-card nd-card-hover p-5 flex items-center gap-4 text-right cursor-pointer group"
+                  >
+                    <IconTile name={post.imageIcon} tint={TINTS[idx % TINTS.length]} size="sm" />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-extrabold text-[color:var(--nd-ink)] leading-snug line-clamp-1 group-hover:text-[color:var(--nd-accent)] transition-colors">{post.title}</span>
+                      <span className="block nd-muted text-[11px] font-medium mt-1 line-clamp-1">{post.excerpt}</span>
+                    </span>
+                    <span className="hidden sm:flex flex-col items-end gap-1 shrink-0">
+                      <span className="nd-chip">{post.date}</span>
+                      <span className="text-[10px] font-bold text-[color:var(--nd-faint)]">{post.readTime}</span>
+                    </span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      /* ============ 8.7 FAQ — objection handling ============ */
+      case 'FAQ': {
+        const faqs = [
+          { q: 'قیمت‌ها چطور محاسبه می‌شه؟', a: 'هر خدمت یه بازه قیمت مشخص داره که در صفحه خدمات شفاف نوشته شده. قیمت نهایی بعد از گفتگوی اولیه رایگان و بر اساس بریف واقعی پروژه تعیین می‌شه — بدون هزینه پنهان.' },
+          { q: 'نتیجه رو تضمین می‌کنی؟', a: 'هیچ متخصص صادقی نمی‌تونه عدد دقیق تضمین کنه؛ چون بازار و محصول شما متغیره. تعهد من فرآیند داده‌محور، تست مستمر و گزارش‌دهی شفافه — و نمونه نتایج واقعی در نمونه‌کارها قابل بررسیه.' },
+          { q: 'ریموت کار می‌کنی یا حضوری؟', a: 'هر دو. پایه کار ریموته (مشهد/تهران/هر جای ایران) با جلسات منظم ویدیویی و گزارش‌های هفتگی؛ جلسات حضوری موردی هم در مشهد و تهران امکان‌پذیره.' },
+          { q: 'تفاوتت با آژانس‌های تبلیغاتی چیه؟', a: 'مستقیم با خودم کار می‌کنی، نه یه تیم junior که بعد از قرارداد می‌بینی. هزینه سربار کمتر یعنی قیمت منصفانه‌تر، و تمام توجه روی داده‌های کسب‌وکار شماست.' },
+          { q: 'چقدر طول می‌کشه تا نتیجه ببینم؟', a: 'بسته به کانال: تبلیغات و CRO معمولاً اولین سیگنال‌ها رو در ۴ تا ۸ هفته نشون می‌دن؛ SEO بازه ۳ تا ۶ ماهه داره. از روز اول با نقشه راه می‌دونید هر مرحله چه انتظاری داشته باشید.' },
+        ];
+        return (
+          <section className="py-14 sm:py-20 space-y-10">
+            <SectionHead
+              eyebrow="پرسش‌های پرتکرار"
+              icon={<ClipboardCheck className="w-3.5 h-3.5" />}
+              title="هر سوالی داری، رک جواب می‌دم"
+              desc="چیزهایی که مشتری‌ها قبل از شروع همکاری معمولاً می‌پرسن."
+            />
+            <div className="max-w-3xl mx-auto space-y-3">
+              {faqs.map((f, idx) => (
+                <div key={idx} className="nd-card rounded-[22px] overflow-hidden">
+                  <button
+                    onClick={() => setOpenFaq(openFaq === idx ? -1 : idx)}
+                    className="w-full flex items-center justify-between gap-4 p-5 sm:p-6 text-right cursor-pointer"
+                  >
+                    <span className="text-sm font-extrabold text-[color:var(--nd-ink)]">{f.q}</span>
+                    <span className={`w-8 h-8 rounded-full border border-[color:var(--nd-line-strong)] grid place-items-center shrink-0 transition-transform duration-300 ${openFaq === idx ? 'rotate-45 bg-[color:var(--nd-ink)] text-white border-transparent' : 'text-[color:var(--nd-muted)]'}`}>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden><path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                    </span>
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {openFaq === idx && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <p className="px-5 sm:px-6 pb-6 nd-muted text-xs sm:text-sm leading-relaxed">{f.a}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      /* ============ 9. FINAL CTA — dark cinematic close ============ */
       case 'FINAL_CTA':
       case 'CTA':
         return (
-          <section id="final-cta" className="py-14 sm:py-20">
-            <div className="nd-panel relative overflow-hidden rounded-[32px] sm:rounded-[44px] p-9 sm:p-16 text-center space-y-6">
-              <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-white/50 blur-3xl pointer-events-none" aria-hidden />
-              <div className="absolute -bottom-28 -right-20 w-72 h-72 rounded-full bg-white/40 blur-3xl pointer-events-none" aria-hidden />
-              <h2 className="nd-h1 relative text-2xl sm:text-4xl lg:text-[3rem] max-w-2xl mx-auto">آماده‌ای مسیر رشد کسب‌وکارتو پیدا کنی؟</h2>
-              <p className="relative nd-muted text-sm sm:text-base max-w-xl mx-auto">یه گفتگوی کوتاه کافیه تا دقیقاً بفهمیم از کجا باید شروع کنیم.</p>
+          <section id="final-cta" className="py-10 sm:py-16">
+            <div className="nd-stage nd-hairline-top rounded-[36px] sm:rounded-[44px] p-9 sm:p-16 text-center space-y-6">
+              <div className="absolute w-[30rem] h-[30rem] -top-32 -right-24 rounded-full blur-3xl opacity-40 nd-float-slow" style={{ background: 'radial-gradient(circle, rgba(99,91,255,0.5), transparent 65%)' }} aria-hidden />
+              <div className="absolute w-[26rem] h-[26rem] -bottom-28 -left-20 rounded-full blur-3xl opacity-30 nd-float" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.4), transparent 65%)' }} aria-hidden />
+              <h2 className="nd-h1 relative text-white text-2xl sm:text-4xl lg:text-[3rem] max-w-2xl mx-auto">
+                <MaskLines lines={[<span key="1">آماده‌ای مسیر رشد کسب‌وکارتو پیدا کنی؟</span>]} />
+              </h2>
+              <p className="relative text-slate-400 text-sm sm:text-base max-w-xl mx-auto">یه گفتگوی کوتاه کافیه تا دقیقاً بفهمیم از کجا باید شروع کنیم.</p>
               <div className="relative flex flex-wrap items-center justify-center gap-3 pt-2">
-                <button onClick={() => onNavigate('contact')} className="nd-btn nd-btn-accent px-8 py-4 text-xs sm:text-sm">
-                  <span>ببینیم کسب‌وکارتان به چی نیاز دارد</span>
-                  <ArrowUpLeft className="w-4 h-4" />
-                </button>
-                <a href={personal.whatsappUrl} target="_blank" rel="noreferrer" className="nd-btn nd-btn-ghost px-6 py-4 text-xs sm:text-sm">
-                  <MessageCircle className="w-4 h-4 text-[color:var(--nd-success)]" />
+                <Magnetic>
+                  <button onClick={() => onNavigate('contact')} className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 px-8 py-4 text-xs sm:text-sm">
+                    <span>ببینیم کسب‌وکارتان به چی نیاز دارد</span>
+                    <ArrowUpLeft className="w-4 h-4" />
+                  </button>
+                </Magnetic>
+                <a href={personal.whatsappUrl} target="_blank" rel="noreferrer" className="nd-btn nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10 px-6 py-4 text-xs sm:text-sm">
+                  <MessageCircle className="w-4 h-4 text-emerald-300" />
                   <span>گفتگو در واتساپ</span>
                 </a>
               </div>
             </div>
           </section>
         );
-
       default:
         return null;
     }

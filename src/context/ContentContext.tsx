@@ -42,14 +42,15 @@ export const defaultNavigationMenu: NavigationMenuItem[] = [
 
 export const defaultPageSections: Record<string, PageSectionItem[]> = {
   home: [
-    { id: 'sec-hero', name: 'HERO', label: 'بنر اصلی (Hero)', isHidden: false },
+    { id: 'sec-hero', name: 'HERO', label: 'صحنه سینمایی اصلی (Hero)', isHidden: false },
+    { id: 'sec-trust-bar', name: 'TRUST_BAR', label: 'نوار اعتماد (برندها)', isHidden: false },
     { id: 'sec-path-nav', name: 'PATH_NAV', label: 'مسیریابی سه‌گانه (الان کجای مسیره؟)', isHidden: false },
-    { id: 'sec-stats', name: 'STATS', label: 'آمار و شاخص‌های کلیدی (Stats / Proof)', isHidden: false },
+    { id: 'sec-proof', name: 'PROOF', label: 'صحنه اثبات با داده (آمار + کیس‌های منتخب)', isHidden: false },
     { id: 'sec-services', name: 'SERVICES_TABS', label: 'خدمات سه‌مرحله‌ای (تب‌بندی شده)', isHidden: false },
-    { id: 'sec-case-studies', name: 'CASE_STUDIES', label: 'نمونه‌کارها و کیس‌استادی‌ها', isHidden: false },
     { id: 'sec-how-i-work', name: 'HOW_I_WORK', label: 'فرآیند همکاری (How I Work)', isHidden: false },
-    { id: 'sec-why-omid', name: 'WHY_OMID', label: 'چرا با من کار کنید؟ (Why Omid)', isHidden: false },
-    { id: 'sec-experience', name: 'EXPERIENCE', label: 'تجربه و سوابق کاری', isHidden: false },
+    { id: 'sec-why-omid', name: 'WHY_OMID', label: 'چرا با من کار کنید؟ + نقل‌قول مشتری', isHidden: false },
+    { id: 'sec-insights', name: 'INSIGHTS', label: 'آنالیز رایگان + نوشت‌های تازه', isHidden: false },
+    { id: 'sec-faq', name: 'FAQ', label: 'پرسش‌های پرتکرار', isHidden: false },
     { id: 'sec-final-cta', name: 'FINAL_CTA', label: 'فراخوان نهایی اقدام', isHidden: false },
   ],
   services: [
