@@ -64,14 +64,14 @@ export const AdminFloatingBar: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-[#0e072b]/95 backdrop-blur-xl border-2 border-[#8b5cf6] text-white rounded-2xl px-4 py-3 shadow-[0_0_50px_rgba(139,92,246,0.35)] flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[color:var(--nd-surface)] backdrop-blur-xl border-2 border-[color:var(--nd-accent)] text-[color:var(--nd-ink)] rounded-2xl px-4 py-3 shadow-xl flex flex-wrap items-center justify-between gap-3">
         {/* Status Badge */}
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[color:var(--nd-accent)] opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-[color:var(--nd-accent)]"></span>
           </span>
-          <div className="flex items-center gap-1.5 font-black text-xs sm:text-sm text-amber-400">
+          <div className="flex items-center gap-1.5 font-black text-xs sm:text-sm text-[color:var(--nd-accent)]">
             <Edit3 className="w-4 h-4" />
             <span>حالت ویرایش زنده فعال است</span>
           </div>
@@ -85,8 +85,8 @@ export const AdminFloatingBar: React.FC = () => {
             onClick={handleSave}
             className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all shadow-lg cursor-pointer ${
               hasUnsavedChanges
-                ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 scale-105 animate-pulse'
-                : 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed]'
+                ? 'bg-[color:var(--nd-accent)] text-white hover:opacity-90 scale-105 animate-pulse'
+                : 'bg-[color:var(--nd-accent)] text-white hover:opacity-90'
             }`}
           >
             <Save className="w-4 h-4" />
@@ -100,7 +100,7 @@ export const AdminFloatingBar: React.FC = () => {
             title="دانلود نسخه پشتیبان از داده‌های ادیت‌شده"
             className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 border border-white/10 flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5 text-[#5ce1e6]" />
+            <Download className="w-3.5 h-3.5 text-[color:var(--nd-accent)]" />
             <span className="hidden sm:inline">خروجی JSON</span>
           </button>
 
@@ -111,7 +111,7 @@ export const AdminFloatingBar: React.FC = () => {
             title="بارگذاری داده‌ها از فایل JSON"
             className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 border border-white/10 flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Upload className="w-3.5 h-3.5 text-[#8b5cf6]" />
+            <Upload className="w-3.5 h-3.5 text-[color:var(--nd-accent)]" />
             <span className="hidden sm:inline">ورود JSON</span>
           </button>
           <input

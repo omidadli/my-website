@@ -4,43 +4,65 @@ import { Page } from '../types';
 
 interface SEOHeadProps {
   currentPage: Page;
+  /** When a blog post is open, its own SEO overrides the page-level config. */
+  blogPostId?: string | null;
 }
 
-export const SEOHead: React.FC<SEOHeadProps> = ({ currentPage }) => {
-  const { data } = useContent();
+/** Applies CMS SEO settings (global → page → post) to the document head. */
+export const SEOHead: React.FC<SEOHeadProps> = ({ currentPage, blogPostId }) => {
+  const { data, isAdmin } = useContent();
   const globalSeo = data.GLOBAL_SEO;
   const pageSeo = data.PAGE_SEO[currentPage] || {};
+  const post =
+    currentPage === 'blog' && blogPostId
+      ? (data.BLOG_POSTS || []).find((p) => p.id === blogPostId || (!!p.slug && p.slug === blogPostId))
+      : null;
 
   useEffect(() => {
-    // 1. Title
-    const baseTitle = pageSeo.title || getPageDefaultTitle(currentPage);
+    const isPost = !!post;
+    const baseTitle = isPost
+      ? post!.seo?.title || post!.title
+      : pageSeo.title || getPageDefaultTitle(currentPage);
     const finalTitle = globalSeo.titleTemplate
       ? globalSeo.titleTemplate.replace('%s', baseTitle)
       : `${baseTitle} | ${globalSeo.siteTitle}`;
     document.title = finalTitle;
 
-    // 2. Meta Description
-    const metaDesc = pageSeo.metaDescription || globalSeo.defaultMetaDesc;
+    const metaDesc = isPost
+      ? post!.seo?.metaDescription || post!.excerpt
+      : pageSeo.metaDescription || globalSeo.defaultMetaDesc;
     setMetaTag('description', metaDesc);
 
-    // 3. Meta Keywords
-    const keywords = pageSeo.keywords || globalSeo.defaultKeywords;
+    const keywords = isPost
+      ? post!.seo?.keywords || (post!.tags || []).join(', ')
+      : pageSeo.keywords || globalSeo.defaultKeywords;
     setMetaTag('keywords', keywords);
 
-    // 4. Open Graph
-    setMetaProperty('og:title', pageSeo.ogTitle || finalTitle);
-    setMetaProperty('og:description', pageSeo.ogDescription || metaDesc);
-    setMetaProperty('og:image', pageSeo.ogImage || globalSeo.ogImage);
+    // Open Graph
+    setMetaProperty('og:title', isPost ? post!.seo?.ogTitle || finalTitle : pageSeo.ogTitle || finalTitle);
+    setMetaProperty('og:description', isPost ? post!.seo?.ogDescription || metaDesc : pageSeo.ogDescription || metaDesc);
+    setMetaProperty('og:image', (isPost ? post!.seo?.ogImage || post!.coverImage : pageSeo.ogImage) || globalSeo.ogImage);
+    setMetaProperty('og:type', isPost ? 'article' : 'website');
+    setMetaProperty('og:locale', 'fa_IR');
 
-    // 5. Canonical
-    const canonical = pageSeo.canonicalUrl || `${globalSeo.canonicalBaseUrl}/${currentPage === 'home' ? '' : currentPage}`;
+    // Canonical
+    const base = (globalSeo.canonicalBaseUrl || '').replace(/\/$/, '');
+    const canonical = isPost
+      ? post!.seo?.canonicalUrl || `${base}/blog/${post!.slug || post!.id}`
+      : pageSeo.canonicalUrl || `${base}/${currentPage === 'home' ? '' : currentPage}`;
     setLinkRel('canonical', canonical);
 
-    // 6. Favicon
+    // Robots / noindex — drafts are always hidden from crawlers (admin still previews them).
+    const noIndex = isPost
+      ? (!isAdmin && post!.status === 'draft') || post!.seo?.noIndex === true
+      : pageSeo.noIndex === true;
+    setMetaTag('robots', noIndex ? 'noindex, nofollow' : 'index, follow');
+
+    // Favicon
     if (globalSeo.faviconUrl) {
       setLinkRel('icon', globalSeo.faviconUrl);
     }
-  }, [currentPage, pageSeo, globalSeo]);
+  }, [currentPage, blogPostId, post, pageSeo, globalSeo, isAdmin]);
 
   return null;
 };

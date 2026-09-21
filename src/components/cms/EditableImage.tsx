@@ -18,12 +18,15 @@ export const EditableImage: React.FC<EditableImageProps> = ({
   path,
   className = '',
   alt = 'Image',
-  fallbackSrc = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'
+  fallbackSrc = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+  defaultSrc = '',
+  src = '',
+  aspectRatio
 }) => {
   const { data, isAdmin, updateField } = useContent();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const currentValue = getByPath(data, path) || fallbackSrc;
+  const currentValue = getByPath(data, path) || defaultSrc || src || fallbackSrc;
 
   if (!isAdmin) {
     return <img src={currentValue} alt={alt} className={className} referrerPolicy="no-referrer" />;
@@ -45,7 +48,7 @@ export const EditableImage: React.FC<EditableImageProps> = ({
           setIsModalOpen(true);
         }}
         title="تغییر عکس (کتابخانه رسانه)"
-        className="absolute top-2 right-2 z-40 bg-amber-400 text-slate-950 p-2 rounded-full shadow-xl opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all cursor-pointer flex items-center justify-center border border-slate-900"
+        className="absolute top-2 right-2 z-40 bg-[color:var(--nd-accent)] text-white p-2 rounded-full shadow-xl opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all cursor-pointer flex items-center justify-center "
       >
         <Pencil className="w-4 h-4" />
       </button>

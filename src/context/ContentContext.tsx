@@ -26,8 +26,8 @@ export const defaultGlobalSeo: GlobalSeoConfig = {
   defaultKeywords: 'پرفورمنس مارکتینگ, CRO, دیجیتال مارکتینگ, گوگل ادز, امید عدلی, بهینه‌سازی نرخ تبدیل',
   faviconUrl: '/favicon.ico',
   ogImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80',
-  canonicalBaseUrl: 'https://omidadli.com',
-  robotsTxt: 'User-agent: *\nAllow: /\nSitemap: https://omidadli.com/sitemap.xml',
+  canonicalBaseUrl: 'https://omidadli01.site',
+  robotsTxt: 'User-agent: *\nAllow: /\nSitemap: https://omidadli01.site/sitemap.xml',
 };
 
 export const defaultNavigationMenu: NavigationMenuItem[] = [
@@ -350,7 +350,14 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setPersistence('cloud');
       const remote = await api.getContent();
       if (!cancelled && remote?.data) {
-        setData({ ...defaultContentState, ...remote.data });
+        const r = remote.data;
+        setData({
+          ...defaultContentState,
+          ...r,
+          // Deep-merge critical objects so partial/older cloud payloads can't blank out fields.
+          PERSONAL_INFO: { ...defaultContentState.PERSONAL_INFO, ...(r.PERSONAL_INFO || {}) },
+          GLOBAL_SEO: { ...defaultGlobalSeo, ...(r.GLOBAL_SEO || {}) },
+        });
       }
       if (!cancelled && api.getToken()) {
         const ok = await api.verify();
@@ -476,6 +483,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const res = await api.login(username, password || '');
       if (res.ok) {
         setIsAdmin(true);
+        // Seed/backup: push the current (remote-merged) state once after login.
+        api.saveContent(data).catch(() => {});
         logActivity('ورود موفق', `کاربر «${username}» از طریق سرویس ابری وارد پیشخوان شد.`);
         return true;
       }
@@ -790,11 +799,17 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const generateSitemapXml = () => {
-    const baseUrl = data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli.com';
+    const baseUrl = data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli01.site';
     const pages = ['/', '/services', '/portfolio', '/about', '/projects', '/blog', '/products', '/contact'];
     
     (data.CUSTOM_PAGES || []).forEach((cp) => {
       pages.push(`/${cp.slug}`);
+    });
+
+    (data.BLOG_POSTS || []).forEach((post: any) => {
+      if (post?.status !== 'draft') {
+        pages.push(`/blog/${post.slug || post.id}`);
+      }
     });
 
     const urlsXml = pages
@@ -807,7 +822,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const generateRobotsTxt = () => {
-    return data.GLOBAL_SEO.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: https://omidadli.com/sitemap.xml';
+    return data.GLOBAL_SEO.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: https://omidadli01.site/sitemap.xml';
   };
 
   const addBlogComment = async (comment: { postId: string; authorName: string; authorEmail: string; content: string }): Promise<{ ok: boolean; error?: string }> => {

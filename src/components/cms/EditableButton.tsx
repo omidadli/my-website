@@ -68,16 +68,16 @@ export const EditableButton: React.FC<EditableButtonProps> = ({
           setIsOpen(true);
         }}
         title="ویرایش دکمه و لینک"
-        className="absolute -top-2 -right-2 z-40 bg-amber-400 text-slate-950 p-1.5 rounded-full shadow-lg opacity-0 group-hover/btn:opacity-100 hover:scale-110 transition-all cursor-pointer border border-slate-900"
+        className="absolute -top-2 -right-2 z-40 bg-[color:var(--nd-accent)] text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover/btn:opacity-100 hover:scale-110 transition-all cursor-pointer "
       >
         <Pencil className="w-3.5 h-3.5" />
       </button>
 
       {isOpen && (
         <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 text-right dir-rtl">
-          <div className="bg-[#120a38] border-2 border-[#8b5cf6] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white">
+          <div className="bg-[color:var(--nd-surface)] border-2 border-[color:var(--nd-accent)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-bold text-lg flex items-center gap-2 text-amber-400">
+              <h3 className="font-bold text-lg flex items-center gap-2 text-[color:var(--nd-accent)]">
                 <Link className="w-5 h-5" />
                 <span>ویرایش دکمه و لینک</span>
               </h3>
@@ -100,7 +100,7 @@ export const EditableButton: React.FC<EditableButtonProps> = ({
                     type="text"
                     value={tempLabel}
                     onChange={(e) => setTempLabel(e.target.value)}
-                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-xs dir-rtl text-white focus:outline-none focus:border-[#5ce1e6]"
+                    className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-xl px-3 py-2 text-xs dir-rtl text-white focus:outline-none focus:border-[color:var(--nd-accent)]"
                   />
                 </div>
               )}
@@ -115,7 +115,7 @@ export const EditableButton: React.FC<EditableButtonProps> = ({
                     value={tempLink}
                     onChange={(e) => setTempLink(e.target.value)}
                     placeholder="https://... یا contact / services"
-                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-xs dir-ltr text-white focus:outline-none focus:border-[#5ce1e6]"
+                    className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-xl px-3 py-2 text-xs dir-ltr text-white focus:outline-none focus:border-[color:var(--nd-accent)]"
                   />
                 </div>
               )}
@@ -132,7 +132,7 @@ export const EditableButton: React.FC<EditableButtonProps> = ({
               <button
                 type="button"
                 onClick={handleSave}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#8b5cf6] to-[#4c8dff] hover:opacity-90 text-xs font-bold text-white shadow-lg flex items-center gap-1.5"
+                className="px-5 py-2 rounded-xl bg-[color:var(--nd-accent)] hover:opacity-90 text-xs font-bold text-white shadow-lg flex items-center gap-1.5"
               >
                 <Check className="w-4 h-4" />
                 <span>ثبت تغییرات</span>

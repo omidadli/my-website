@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Theme, Page, CaseStudy } from '../types';
 import { useContent } from '../context/ContentContext';
 import { SectionEditHeader } from '../components/cms/SectionEditHeader';
@@ -23,6 +23,21 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
   const isDark = theme === 'dark';
   const { data } = useContent();
   const caseStudiesList = data.CASE_STUDIES || [];
+  // Modal UX: Escape to close + background scroll lock
+  useEffect(() => {
+    if (!selectedCaseStudy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onSelectCaseStudy(null);
+    };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [selectedCaseStudy, onSelectCaseStudy]);
+
   const [selectedPath, setSelectedPath] = useState<string>('all');
   const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
 
@@ -215,7 +230,7 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
                 <div className="my-8 space-y-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <h3 className={`nd-h2 text-base flex items-center gap-2 ${isDark ? 'text-white' : ''}`}>
-                      <Globe className="w-4.5 h-4.5 w-5 h-5 text-[color:var(--nd-accent)]" />
+                      <Globe className="w-5 h-5 text-[color:var(--nd-accent)]" />
                       پیش‌نمایش زنده وب‌سایت
                     </h3>
                     <a
@@ -258,7 +273,7 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
                     style={isDark ? undefined : { background: b.tint, borderColor: 'transparent' }}
                   >
                     <div className="flex items-center gap-2 font-extrabold text-sm" style={{ color: isDark ? b.fg : b.fg }}>
-                      <b.icon className="w-4.5 h-4.5 w-5 h-5" />
+                      <b.icon className="w-5 h-5" />
                       <span>{b.label}</span>
                     </div>
                     <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-[color:var(--nd-ink-2)]'}`}>{b.text}</p>

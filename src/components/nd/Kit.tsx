@@ -60,7 +60,7 @@ export const PageHero: React.FC<{
           <span>صفحه اصلی</span>
         </button>
         <ChevronLeft className="w-3 h-3 opacity-60" />
-        <span className="text-[color:var(--nd-accent)] font-extrabold">{names[page]}</span>
+        <span className="text-[color:var(--nd-accent)] font-extrabold">{names[page] || title}</span>
       </nav>
       <motion.div
         initial={{ opacity: 0, y: 18 }}

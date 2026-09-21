@@ -20,6 +20,8 @@ import { ContactPage } from './pages/ContactPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { AdminPage } from './pages/AdminPage';
+import { CustomPageView } from './pages/CustomPageView';
+import { SEOHead } from './components/SEOHead';
 
 function MainLayout() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -34,7 +36,7 @@ function MainLayout() {
   const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
 
-  const { isAdmin, setIsAdmin } = useContent();
+  const { isAdmin, setIsAdmin, data } = useContent();
 
   const handleToggleTheme = useCallback(() => {
     setTheme((t) => {
@@ -70,6 +72,12 @@ function MainLayout() {
         'home', 'services', 'portfolio', 'about', 'blog', 'contact', 
         'projects', 'products', 'admin'
       ];
+      const customSlugs = (data.CUSTOM_PAGES || []).map((cp) => cp.slug);
+      if (customSlugs.includes(rawHash)) {
+        setCurrentPage(rawHash as Page);
+        setSelectedBlogPostId(null);
+        return;
+      }
       if (validPages.includes(rawHash as Page)) {
         setCurrentPage(rawHash as Page);
         if (rawHash !== 'blog') {
@@ -84,7 +92,7 @@ function MainLayout() {
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [data.CUSTOM_PAGES]);
 
   // Theme root attributes — drives the ND token system + legacy branches
   useEffect(() => {
@@ -96,21 +104,6 @@ function MainLayout() {
     document.body.style.color = theme === 'dark' ? '#f2f1fa' : '#17171c';
   }, [theme]);
 
-  // Per-page document title (SEO + tab clarity)
-  useEffect(() => {
-    const titles: Record<string, string> = {
-      home: 'امید عدلی | متخصص پرفورمنس مارکتینگ و CRO',
-      services: 'خدمات | امید عدلی',
-      portfolio: 'نمونه‌کارها و کیس‌استادی‌ها | امید عدلی',
-      about: 'درباره من | امید عدلی',
-      blog: 'وبلاگ و مقالات | امید عدلی',
-      contact: 'تماس و شروع همکاری | امید عدلی',
-      projects: 'پروژه‌ها | امید عدلی',
-      products: 'محصولات | امید عدلی',
-      admin: 'پنل مدیریت | امید عدلی',
-    };
-    document.title = titles[currentPage] || 'امید عدلی | متخصص پرفورمنس مارکتینگ و CRO';
-  }, [currentPage]);
 
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
@@ -139,6 +132,9 @@ function MainLayout() {
 
   return (
     <div className="min-h-screen relative flex flex-col transition-colors duration-500 font-['Vazirmatn',sans-serif] nd-bg overflow-x-hidden">
+      {/* SEO meta tags — driven by the CMS (global, per-page and per-post) */}
+      <SEOHead currentPage={currentPage} blogPostId={selectedBlogPostId} />
+
       {/* Cinematic reading progress + filmic grain */}
       <ScrollProgress />
       <Grain />
@@ -243,6 +239,15 @@ function MainLayout() {
                 onNavigate={handleNavigate}
               />
             )}
+
+            {currentPage !== 'admin' &&
+              (data.CUSTOM_PAGES || []).some((cp) => cp.slug === (currentPage as string)) && (
+                <CustomPageView
+                  customPage={(data.CUSTOM_PAGES || []).find((cp) => cp.slug === (currentPage as string))!}
+                  theme={theme}
+                  onNavigate={handleNavigate}
+                />
+              )}
           </motion.div>
         </AnimatePresence>
       </main>
