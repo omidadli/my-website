@@ -38,10 +38,10 @@ export const SectionWrapper: React.FC<SectionWrapperProps> = ({
       }`}
     >
       {/* Admin Control Bar for Section */}
-      <div className="z-30 mb-2 flex flex-wrap items-center justify-between gap-2 bg-[#120a38]/90 border border-[#8b5cf6]/40 rounded-2xl px-4 py-2 text-xs text-white shadow-xl backdrop-blur-md dir-rtl font-sans">
+      <div className="z-30 mb-2 flex flex-wrap items-center justify-between gap-2 bg-[color:var(--nd-surface)]/90 border border-[color:var(--nd-accent)]/40 rounded-2xl px-4 py-2 text-xs text-white shadow-xl backdrop-blur-md dir-rtl font-sans">
         <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-amber-400" />
-          <span className="font-bold text-amber-300">سکشن: {sectionItem.label || sectionName}</span>
+          <Layers className="w-4 h-4 text-[color:var(--nd-accent)]" />
+          <span className="font-bold text-[color:var(--nd-accent)]">سکشن: {sectionItem.label || sectionName}</span>
           {sectionItem.isHidden ? (
             <span className="px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-300 font-extrabold text-[10px] border border-rose-500/40">
               مخفی در دید کاربران

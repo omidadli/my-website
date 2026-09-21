@@ -7,9 +7,9 @@ import { Footer } from './components/Footer';
 import { BackgroundBlobs } from './components/BackgroundBlobs';
 import { QuickActionDock } from './components/QuickActionDock';
 import { CustomCursor } from './components/CustomCursor';
-import { SplashScreen } from './components/SplashScreen';
 import { AdminFloatingBar } from './components/cms/AdminFloatingBar';
 import { AdminLoginModal } from './components/cms/AdminLoginModal';
+import { ScrollProgress, Grain } from './components/motion/Cinematic';
 import { HomePage } from './pages/HomePage';
 import { ServicesPage } from './pages/ServicesPage';
 import { PortfolioPage } from './pages/PortfolioPage';
@@ -20,23 +20,35 @@ import { ContactPage } from './pages/ContactPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { AdminPage } from './pages/AdminPage';
+import { CustomPageView } from './pages/CustomPageView';
+import { SEOHead } from './components/SEOHead';
+import { ChatWidget } from './components/ChatWidget';
 
 function MainLayout() {
-  const [theme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      return (localStorage.getItem('nd-theme') as Theme) || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<CaseStudy | null>(null);
   const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(null);
-  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
 
-  const { isAdmin, setIsAdmin } = useContent();
+  const { isAdmin, setIsAdmin, data } = useContent();
 
-  const handleSplashComplete = useCallback(() => {
-    setShowSplash(false);
-  }, []);
-
-  const handleReplaySplash = useCallback(() => {
-    setShowSplash(true);
+  const handleToggleTheme = useCallback(() => {
+    setTheme((t) => {
+      const next: Theme = t === 'light' ? 'dark' : 'light';
+      try {
+        localStorage.setItem('nd-theme', next);
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
   }, []);
 
   // Read initial page & admin trigger from URL hash or pathname on load
@@ -61,6 +73,12 @@ function MainLayout() {
         'home', 'services', 'portfolio', 'about', 'blog', 'contact', 
         'projects', 'products', 'admin'
       ];
+      const customSlugs = (data.CUSTOM_PAGES || []).map((cp) => cp.slug);
+      if (customSlugs.includes(rawHash)) {
+        setCurrentPage(rawHash as Page);
+        setSelectedBlogPostId(null);
+        return;
+      }
       if (validPages.includes(rawHash as Page)) {
         setCurrentPage(rawHash as Page);
         if (rawHash !== 'blog') {
@@ -75,14 +93,18 @@ function MainLayout() {
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [data.CUSTOM_PAGES]);
 
-  // Lock document root to dark class
+  // Theme root attributes — drives the ND token system + legacy branches
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.add('dark');
-    root.classList.remove('light');
-  }, []);
+    root.dataset.theme = theme;
+    root.classList.remove('dark', 'light');
+    root.classList.add(theme);
+    document.body.style.backgroundColor = theme === 'dark' ? '#0b0b12' : '#f6f6f4';
+    document.body.style.color = theme === 'dark' ? '#f2f1fa' : '#17171c';
+  }, [theme]);
+
 
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
@@ -110,29 +132,31 @@ function MainLayout() {
   };
 
   return (
-    <div className="min-h-screen relative flex flex-col transition-colors duration-500 font-['Vazirmatn',sans-serif] bg-[#0a0624] text-[#eae6ff] overflow-x-hidden">
-      {/* Animated Motion Graphic Preloader Splash Screen */}
-      {showSplash && (
-        <SplashScreen onComplete={handleSplashComplete} />
-      )}
+    <div className="min-h-screen relative flex flex-col transition-colors duration-500 font-['Vazirmatn',sans-serif] nd-bg overflow-x-hidden">
+      {/* SEO meta tags — driven by the CMS (global, per-page and per-post) */}
+      <SEOHead currentPage={currentPage} blogPostId={selectedBlogPostId} />
+
+      {/* Cinematic reading progress + filmic grain */}
+      <ScrollProgress />
+      <Grain />
 
       {/* Custom Interactive Floating Cursor */}
       <CustomCursor />
 
       {/* Background Interactive Beam & Grid */}
-      <BackgroundBlobs theme="dark" />
+      <BackgroundBlobs theme={theme} />
 
       {/* Glassmorphic Navigation Header */}
       <Navbar
-        theme="dark"
+        theme={theme}
         currentPage={currentPage}
         onNavigate={handleNavigate}
-        onReplaySplash={handleReplaySplash}
+        onToggleTheme={handleToggleTheme}
         onOpenAdminModal={() => setIsAdminModalOpen(true)}
       />
 
       {/* Main Content Area with Cinematic Motion Page Transitions */}
-      <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-8 relative z-10 pb-28">
+      <main className="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-8 relative z-10 pb-10 pt-28 sm:pt-32">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentPage}
@@ -146,6 +170,7 @@ function MainLayout() {
                 theme={theme}
                 onNavigate={handleNavigate}
                 onSelectCaseStudy={handleSelectCaseStudy}
+                onSelectPost={handleSelectBlogPost}
               />
             )}
 
@@ -215,12 +240,22 @@ function MainLayout() {
                 onNavigate={handleNavigate}
               />
             )}
+
+            {currentPage !== 'admin' &&
+              (data.CUSTOM_PAGES || []).some((cp) => cp.slug === (currentPage as string)) && (
+                <CustomPageView
+                  customPage={(data.CUSTOM_PAGES || []).find((cp) => cp.slug === (currentPage as string))!}
+                  theme={theme}
+                  onNavigate={handleNavigate}
+                />
+              )}
           </motion.div>
         </AnimatePresence>
       </main>
 
       {/* Admin Floating Toolbar */}
       <AdminFloatingBar />
+      <ChatWidget theme={theme} />
 
       {/* Admin PIN Login Modal */}
       <AdminLoginModal

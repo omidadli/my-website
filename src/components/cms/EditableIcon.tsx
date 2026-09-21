@@ -108,16 +108,16 @@ export const EditableIcon: React.FC<EditableIconProps> = ({
           setIsOpen(true);
         }}
         title="تغییر آیکون"
-        className="absolute -top-2 -right-2 z-40 bg-amber-400 text-slate-950 p-1.5 rounded-full shadow-lg opacity-0 group-hover/icon:opacity-100 hover:scale-110 transition-all cursor-pointer border border-slate-900"
+        className="absolute -top-2 -right-2 z-40 bg-[color:var(--nd-accent)] text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover/icon:opacity-100 hover:scale-110 transition-all cursor-pointer "
       >
         <Pencil className="w-3.5 h-3.5" />
       </button>
 
       {isOpen && (
         <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 text-right dir-rtl">
-          <div className="bg-[#120a38] border-2 border-[#8b5cf6] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white">
+          <div className="bg-[color:var(--nd-surface)] border-2 border-[color:var(--nd-accent)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-bold text-lg flex items-center gap-2 text-amber-400">
+              <h3 className="font-bold text-lg flex items-center gap-2 text-[color:var(--nd-accent)]">
                 <Sparkles className="w-5 h-5" />
                 <span>انتخاب آیکون</span>
               </h3>
@@ -141,7 +141,7 @@ export const EditableIcon: React.FC<EditableIconProps> = ({
                     onClick={() => handleSelectIcon(iconKey)}
                     className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
                       isSelected
-                        ? 'bg-[#8b5cf6] border-white text-white shadow-lg scale-105'
+                        ? 'bg-[color:var(--nd-accent)] border-white text-white shadow-lg scale-105'
                         : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/15 hover:text-white'
                     }`}
                   >

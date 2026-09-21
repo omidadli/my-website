@@ -23,7 +23,7 @@ export const RepeaterControls: React.FC<RepeaterControlsProps> = ({
 
   return (
     <div
-      className={`z-40 flex items-center gap-1 bg-[#120a38] border border-amber-400/80 text-white rounded-full p-1 shadow-xl opacity-90 hover:opacity-100 transition-all ${className}`}
+      className={`z-40 flex items-center gap-1 bg-[color:var(--nd-surface)] border border-[color:var(--nd-accent)] text-white rounded-full p-1 shadow-xl opacity-90 hover:opacity-100 transition-all ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Move Up */}

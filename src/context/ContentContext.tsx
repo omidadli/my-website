@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import { api } from '../services/api';
 import * as initialData from '../data/content';
 
 import { 
@@ -25,8 +26,8 @@ export const defaultGlobalSeo: GlobalSeoConfig = {
   defaultKeywords: 'پرفورمنس مارکتینگ, CRO, دیجیتال مارکتینگ, گوگل ادز, امید عدلی, بهینه‌سازی نرخ تبدیل',
   faviconUrl: '/favicon.ico',
   ogImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80',
-  canonicalBaseUrl: 'https://omidadli.com',
-  robotsTxt: 'User-agent: *\nAllow: /\nSitemap: https://omidadli.com/sitemap.xml',
+  canonicalBaseUrl: 'https://omidadli01.site',
+  robotsTxt: 'User-agent: *\nAllow: /\nSitemap: https://omidadli01.site/sitemap.xml',
 };
 
 export const defaultNavigationMenu: NavigationMenuItem[] = [
@@ -42,14 +43,14 @@ export const defaultNavigationMenu: NavigationMenuItem[] = [
 
 export const defaultPageSections: Record<string, PageSectionItem[]> = {
   home: [
-    { id: 'sec-hero', name: 'HERO', label: 'بنر اصلی (Hero)', isHidden: false },
+    { id: 'sec-hero', name: 'HERO', label: 'صحنه سینمایی اصلی (Hero)', isHidden: false },
     { id: 'sec-path-nav', name: 'PATH_NAV', label: 'مسیریابی سه‌گانه (الان کجای مسیره؟)', isHidden: false },
-    { id: 'sec-stats', name: 'STATS', label: 'آمار و شاخص‌های کلیدی (Stats / Proof)', isHidden: false },
+    { id: 'sec-proof', name: 'PROOF', label: 'صحنه اثبات با داده (آمار + کیس‌های منتخب)', isHidden: false },
     { id: 'sec-services', name: 'SERVICES_TABS', label: 'خدمات سه‌مرحله‌ای (تب‌بندی شده)', isHidden: false },
-    { id: 'sec-case-studies', name: 'CASE_STUDIES', label: 'نمونه‌کارها و کیس‌استادی‌ها', isHidden: false },
     { id: 'sec-how-i-work', name: 'HOW_I_WORK', label: 'فرآیند همکاری (How I Work)', isHidden: false },
-    { id: 'sec-why-omid', name: 'WHY_OMID', label: 'چرا با من کار کنید؟ (Why Omid)', isHidden: false },
-    { id: 'sec-experience', name: 'EXPERIENCE', label: 'تجربه و سوابق کاری', isHidden: false },
+    { id: 'sec-why-omid', name: 'WHY_OMID', label: 'چرا با من کار کنید؟ + نقل‌قول مشتری', isHidden: false },
+    { id: 'sec-insights', name: 'INSIGHTS', label: 'آنالیز رایگان + نوشت‌های تازه', isHidden: false },
+    { id: 'sec-faq', name: 'FAQ', label: 'پرسش‌های پرتکرار', isHidden: false },
     { id: 'sec-final-cta', name: 'FINAL_CTA', label: 'فراخوان نهایی اقدام', isHidden: false },
   ],
   services: [
@@ -122,6 +123,8 @@ export interface ContentState {
   BLOG_COMMENTS: BlogComment[];
   PRODUCTS: typeof initialData.PRODUCTS;
   PROJECTS_PAGE_DATA: typeof initialData.PROJECTS_PAGE_DATA;
+  PRODUCTS_PAGE_DATA: typeof initialData.PRODUCTS_PAGE_DATA;
+  CHAT_CONFIG: typeof initialData.CHAT_CONFIG;
   BLOG_PAGE_DATA: typeof initialData.BLOG_PAGE_DATA;
   ONGOING_PROJECTS: typeof initialData.ONGOING_PROJECTS;
   BUSINESS_ANALYSIS_DATA: typeof initialData.BUSINESS_ANALYSIS_DATA;
@@ -132,6 +135,8 @@ export interface ContentState {
   SELECT_PROJECTS: typeof initialData.SELECT_PROJECTS;
   EDUCATION_AND_COURSES: typeof initialData.EDUCATION_AND_COURSES;
   HOW_I_WORK_STEPS: typeof initialData.HOW_I_WORK_STEPS;
+  HOMEPAGE_HOW_I_WORK_STEPS: typeof initialData.HOMEPAGE_HOW_I_WORK_STEPS;
+  WHY_OMID_POINTS: typeof initialData.WHY_OMID_POINTS;
   CUSTOM_PAGES: CustomPage[];
   GLOBAL_SEO: GlobalSeoConfig;
   PAGE_SEO: Record<string, PageSeoConfig>;
@@ -153,6 +158,8 @@ const defaultContentState: ContentState = {
   BLOG_COMMENTS: initialData.INITIAL_BLOG_COMMENTS || [],
   PRODUCTS: initialData.PRODUCTS,
   PROJECTS_PAGE_DATA: initialData.PROJECTS_PAGE_DATA,
+  PRODUCTS_PAGE_DATA: initialData.PRODUCTS_PAGE_DATA,
+  CHAT_CONFIG: initialData.CHAT_CONFIG,
   BLOG_PAGE_DATA: initialData.BLOG_PAGE_DATA,
   ONGOING_PROJECTS: initialData.ONGOING_PROJECTS,
   BUSINESS_ANALYSIS_DATA: initialData.BUSINESS_ANALYSIS_DATA,
@@ -163,6 +170,8 @@ const defaultContentState: ContentState = {
   SELECT_PROJECTS: initialData.SELECT_PROJECTS,
   EDUCATION_AND_COURSES: initialData.EDUCATION_AND_COURSES,
   HOW_I_WORK_STEPS: initialData.HOW_I_WORK_STEPS,
+  HOMEPAGE_HOW_I_WORK_STEPS: initialData.HOMEPAGE_HOW_I_WORK_STEPS,
+  WHY_OMID_POINTS: initialData.WHY_OMID_POINTS,
   CUSTOM_PAGES: [],
   GLOBAL_SEO: defaultGlobalSeo,
   PAGE_SEO: {},
@@ -224,7 +233,9 @@ interface ContentContextType {
   setIsAdmin: (val: boolean) => void;
   pinCode: string;
   changePin: (newPin: string) => void;
-  loginAdmin: (pin: string) => boolean;
+  loginAdmin: (username: string, password?: string) => Promise<boolean>;
+  /** 'cloud' when the Cloudflare D1 API is live, otherwise local-only mode. */
+  persistence: 'local' | 'cloud';
   logoutAdmin: () => void;
   updateField: (path: string, newValue: any) => void;
   addItem: (arrayPath: string, templateItem?: any) => void;
@@ -258,7 +269,7 @@ interface ContentContextType {
   updateNavMenu: (menu: NavigationMenuItem[]) => void;
   generateSitemapXml: () => string;
   generateRobotsTxt: () => string;
-  addBlogComment: (comment: { postId: string; authorName: string; authorEmail: string; content: string }) => void;
+  addBlogComment: (comment: { postId: string; authorName: string; authorEmail: string; content: string }) => Promise<{ ok: boolean; error?: string }>;
   toggleCommentApproval: (commentId: string) => void;
   deleteBlogComment: (commentId: string) => void;
   replyBlogComment: (commentId: string, reply: string) => void;
@@ -296,7 +307,11 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
           STATS: initialData.STATS,
           TIMELINE: initialData.TIMELINE,
           HOW_I_WORK_STEPS: initialData.HOW_I_WORK_STEPS,
+          HOMEPAGE_HOW_I_WORK_STEPS: initialData.HOMEPAGE_HOW_I_WORK_STEPS,
+          WHY_OMID_POINTS: initialData.WHY_OMID_POINTS,
           PROJECTS_PAGE_DATA: { ...initialData.PROJECTS_PAGE_DATA, ...(parsed.PROJECTS_PAGE_DATA || {}) },
+          PRODUCTS_PAGE_DATA: { ...initialData.PRODUCTS_PAGE_DATA, ...(parsed.PRODUCTS_PAGE_DATA || {}) },
+          CHAT_CONFIG: { ...initialData.CHAT_CONFIG, ...(parsed.CHAT_CONFIG || {}) },
           BLOG_PAGE_DATA: { ...initialData.BLOG_PAGE_DATA, ...(parsed.BLOG_PAGE_DATA || {}) },
           BLOG_POSTS: parsed.BLOG_POSTS || initialData.BLOG_POSTS,
           ONGOING_PROJECTS: parsed.ONGOING_PROJECTS || initialData.ONGOING_PROJECTS,
@@ -324,6 +339,50 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     localStorage.setItem('OMID_ADLI_ADMIN_ACTIVE', isAdmin ? 'true' : 'false');
   }, [isAdmin]);
+
+  // ---------- Cloud (Cloudflare D1) persistence ----------
+  const [persistence, setPersistence] = useState<'local' | 'cloud'>('local');
+  const cloudReady = useRef(false);
+
+  // On mount: detect API, pull remote content, restore admin session from token.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const hasApi = await api.probe();
+      if (!hasApi || cancelled) return;
+      setPersistence('cloud');
+      const remote = await api.getContent();
+      if (!cancelled && remote?.data) {
+        const r = remote.data;
+        setData({
+          ...defaultContentState,
+          ...r,
+          // Deep-merge critical objects so partial/older cloud payloads can't blank out fields.
+          PERSONAL_INFO: { ...defaultContentState.PERSONAL_INFO, ...(r.PERSONAL_INFO || {}) },
+          GLOBAL_SEO: { ...defaultGlobalSeo, ...(r.GLOBAL_SEO || {}) },
+        });
+      }
+      if (!cancelled && api.getToken()) {
+        const ok = await api.verify();
+        if (!cancelled) setIsAdmin(ok);
+      }
+      cloudReady.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounced push of every content change to D1 (only while logged in).
+  useEffect(() => {
+    if (persistence !== 'cloud' || !cloudReady.current || !isAdmin) return;
+    const t = setTimeout(() => {
+      api.saveContent(data).then((res) => {
+        if (!res.ok) console.warn('Cloud save failed:', res.error);
+      });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [data, persistence, isAdmin]);
 
   // Activity logger helper
   const logActivity = (action: string, details?: string) => {
@@ -422,10 +481,23 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     logActivity('تغییر پین‌کد ادمین', 'رمز عبور ورود به پیشخوان مدیریت بروزرسانی شد.');
   };
 
-  const loginAdmin = (pin: string) => {
-    if (pin === pinCode) {
+  const loginAdmin = async (username: string, password?: string): Promise<boolean> => {
+    if (persistence === 'cloud') {
+      const res = await api.login(username, password || '');
+      if (res.ok) {
+        setIsAdmin(true);
+        // Seed/backup: push the current (remote-merged) state once after login.
+        api.saveContent(data).catch(() => {});
+        logActivity('ورود موفق', `کاربر «${username}» از طریق سرویس ابری وارد پیشخوان شد.`);
+        return true;
+      }
+      logActivity('ورود ناموفق', 'نام کاربری یا رمز عبور اشتباه بود (سرویس ابری).');
+      return false;
+    }
+    // Local dev fallback (no Cloudflare backend running): legacy PIN mode.
+    if (!password && username === pinCode) {
       setIsAdmin(true);
-      logActivity('ورود موفق', 'کاربر ادمین وارد پیشخوان شد.');
+      logActivity('ورود موفق', 'کاربر ادمین وارد پیشخوان شد (حالت محلی).');
       return true;
     }
     logActivity('ورود ناموفق', 'تلاش برای ورود با رمز اشتباه.');
@@ -433,6 +505,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const logoutAdmin = () => {
+    api.logout();
     setIsAdmin(false);
     logActivity('خروج از سیستم', 'کاربر ادمین از سیستم خارج گردید.');
   };
@@ -729,11 +802,17 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const generateSitemapXml = () => {
-    const baseUrl = data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli.com';
+    const baseUrl = data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli01.site';
     const pages = ['/', '/services', '/portfolio', '/about', '/projects', '/blog', '/products', '/contact'];
     
     (data.CUSTOM_PAGES || []).forEach((cp) => {
       pages.push(`/${cp.slug}`);
+    });
+
+    (data.BLOG_POSTS || []).forEach((post: any) => {
+      if (post?.status !== 'draft') {
+        pages.push(`/blog/${post.slug || post.id}`);
+      }
     });
 
     const urlsXml = pages
@@ -746,41 +825,41 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const generateRobotsTxt = () => {
-    return data.GLOBAL_SEO.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: https://omidadli.com/sitemap.xml';
+    return data.GLOBAL_SEO.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: https://omidadli01.site/sitemap.xml';
   };
 
-  const addBlogComment = (comment: { postId: string; authorName: string; authorEmail: string; content: string }) => {
+  const addBlogComment = async (comment: { postId: string; authorName: string; authorEmail: string; content: string }): Promise<{ ok: boolean; error?: string }> => {
+    if (persistence === 'cloud') {
+      // Cloudflare mode: comments live in their own D1 table and wait for moderation.
+      const res = await api.postComment(comment);
+      if (res.ok) logActivity('دیدگاه جدید (ابری)', `دیدگاه از طرف ${comment.authorName} برای مقاله ${comment.postId} ثبت و در صف تایید قرار گرفت.`);
+      return res;
+    }
     const newComment: BlogComment = {
-      id: 'comm-' + Date.now(),
+      id: 'comment-' + Date.now(),
       postId: comment.postId,
       authorName: comment.authorName,
       authorEmail: comment.authorEmail,
       content: comment.content,
-      date: 'هم‌اکنون',
-      isApproved: true,
-      likes: 0
+      date: new Date().toLocaleString('fa-IR'),
+      isApproved: false,
+      reply: ''
     };
     setData((prev) => {
       const updatedComments = [newComment, ...(prev.BLOG_COMMENTS || [])];
-      // update commentsCount in post
-      const updatedPosts = prev.BLOG_POSTS.map((p) => {
-        if (p.id === comment.postId) {
-          return { ...p, commentsCount: (p.commentsCount || 0) + 1 };
-        }
-        return p;
-      });
-      const updated = {
-        ...prev,
-        BLOG_COMMENTS: updatedComments,
-        BLOG_POSTS: updatedPosts
-      };
+      const updated = { ...prev, BLOG_COMMENTS: updatedComments };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
-    logActivity('دیدگاه جدید', `دیدگاه جدید توسط ${comment.authorName} برای مقاله ${comment.postId} ثبت شد.`);
+    logActivity('دیدگاه جدید', `دیدگاه از طرف ${comment.authorName} ثبت و در صف تایید قرار گرفت.`);
+    return { ok: true };
   };
 
   const toggleCommentApproval = (commentId: string) => {
+    const target = (data.BLOG_COMMENTS || []).find((c) => c.id === commentId);
+    if (persistence === 'cloud' && commentId.startsWith('c-') && target) {
+      api.patchComment(commentId, { isApproved: !target.isApproved });
+    }
     setData((prev) => {
       const updatedComments = (prev.BLOG_COMMENTS || []).map((c) => {
         if (c.id === commentId) {
@@ -792,19 +871,26 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
+    logActivity('تغییر وضعیت دیدگاه', `وضعیت تایید دیدگاه ${commentId} تغییر کرد.`);
   };
 
   const deleteBlogComment = (commentId: string) => {
+    if (persistence === 'cloud' && commentId.startsWith('c-')) {
+      api.deleteComment(commentId);
+    }
     setData((prev) => {
       const updatedComments = (prev.BLOG_COMMENTS || []).filter((c) => c.id !== commentId);
       const updated = { ...prev, BLOG_COMMENTS: updatedComments };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
-    logActivity('حذف دیدگاه', `دیدگاه ${commentId} حذف شد.`);
+    logActivity('حذف دیدگاه', `دیدگاه ${commentId} به‌طور کامل حذف شد.`);
   };
 
   const replyBlogComment = (commentId: string, reply: string) => {
+    if (persistence === 'cloud' && commentId.startsWith('c-')) {
+      api.patchComment(commentId, { reply });
+    }
     setData((prev) => {
       const updatedComments = (prev.BLOG_COMMENTS || []).map((c) => {
         if (c.id === commentId) {
@@ -827,16 +913,30 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setActiveEditModal(null);
   };
 
+  // Visitors never see drafts — admin sees everything.
+  const publicData = useMemo(() => {
+    if (isAdmin) return data;
+    const noDrafts = <T extends { status?: string }>(arr?: T[]): T[] => (arr || []).filter((i) => i?.status !== 'draft');
+    return {
+      ...data,
+      BLOG_POSTS: noDrafts(data.BLOG_POSTS),
+      SERVICES: noDrafts(data.SERVICES),
+      PRODUCTS: noDrafts(data.PRODUCTS),
+      CASE_STUDIES: noDrafts(data.CASE_STUDIES),
+    };
+  }, [data, isAdmin]);
+
   return (
     <ContentContext.Provider
       value={{
-        data,
+        data: publicData,
         isAdmin,
         setIsAdmin,
         pinCode,
         changePin,
         loginAdmin,
         logoutAdmin,
+        persistence,
         updateField,
         addItem,
         removeItem,

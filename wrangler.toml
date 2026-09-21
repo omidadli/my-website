@@ -1,0 +1,18 @@
+# Cloudflare Pages configuration for the personal-site CMS.
+
+name = "my-website"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-21"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "omidadli01-site-db"
+database_id = "89b0d5f8-7ded-4dc8-9f52-79befd0abbec"
+
+# ⚠️ R2 هنوز روی حساب فعال نشده (خطای 403).
+# پس از فعال‌سازی R2 در داشبورد و ساخت باکت، سه خط زیر را از کامنت خارج کنید
+# و همان binding را در داشبورد Pages → Settings → Functions → Bindings هم اضافه کنید:
+#
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "omidadli01-media"

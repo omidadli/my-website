@@ -35,9 +35,9 @@ export const SectionEditHeader: React.FC<SectionEditHeaderProps> = ({
   };
 
   return (
-    <div className={`relative z-40 my-3 p-3 rounded-2xl bg-[#0e072b]/90 border-2 border-amber-400/80 shadow-[0_0_25px_rgba(251,191,36,0.25)] backdrop-blur-md text-white text-xs dir-rtl flex flex-wrap items-center justify-between gap-3 ${className}`}>
+    <div className={`relative z-40 my-3 p-3 rounded-2xl bg-[color:var(--nd-surface)] border-2 border-[color:var(--nd-accent)] shadow-lg backdrop-blur-md text-[color:var(--nd-ink)] text-xs dir-rtl flex flex-wrap items-center justify-between gap-3 ${className}`}>
       <div className="flex items-center gap-2">
-        <span className="p-1.5 rounded-xl bg-amber-400 text-slate-950 font-black flex items-center justify-center">
+        <span className="p-1.5 rounded-xl bg-[color:var(--nd-accent)] text-white font-black flex items-center justify-center">
           <Pencil className="w-3.5 h-3.5" />
         </span>
         
@@ -47,12 +47,12 @@ export const SectionEditHeader: React.FC<SectionEditHeaderProps> = ({
               type="text"
               value={titleInput}
               onChange={(e) => setTitleInput(e.target.value)}
-              className="bg-[#050212] border border-amber-400 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
+              className="bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
               autoFocus
             />
             <button
               onClick={handleSaveTitle}
-              className="p-1 rounded bg-amber-400 text-slate-950 hover:bg-amber-300 font-bold"
+              className="p-1 rounded bg-[color:var(--nd-accent)] text-white hover:opacity-90 font-bold"
             >
               <Check className="w-3.5 h-3.5" />
             </button>
@@ -65,14 +65,14 @@ export const SectionEditHeader: React.FC<SectionEditHeaderProps> = ({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-amber-300">مدیریت سکشن: {currentTitleValue}</span>
+            <span className="font-extrabold text-[color:var(--nd-accent)]">مدیریت سکشن: {currentTitleValue}</span>
             {path && (
               <button
                 onClick={() => {
                   setTitleInput(currentTitleValue);
                   setIsEditingTitle(true);
                 }}
-                className="p-1 rounded-md bg-white/10 hover:bg-amber-400 hover:text-slate-950 transition-colors text-slate-300"
+                className="p-1 rounded-md bg-[color:var(--nd-bg-soft)] hover:bg-[color:var(--nd-accent)] hover:text-white transition-colors text-[color:var(--nd-ink-2)]"
                 title="ویرایش عنوان سکشن"
               >
                 <Pencil className="w-3 h-3" />
@@ -96,7 +96,7 @@ export const SectionEditHeader: React.FC<SectionEditHeaderProps> = ({
 
         <a
           href="#admin"
-          className="px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400 hover:text-slate-950 text-amber-300 border border-amber-400/40 font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+          className="px-3 py-1.5 rounded-xl bg-[color:var(--nd-accent-soft)] hover:bg-[color:var(--nd-accent)] hover:text-white text-[color:var(--nd-accent)] border border-transparent font-bold flex items-center gap-1.5 transition-all cursor-pointer"
         >
           <Settings className="w-3.5 h-3.5" />
           <span>ویرایش در پیشخوان CMS</span>

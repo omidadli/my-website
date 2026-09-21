@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Key, X, Check, ShieldAlert } from 'lucide-react';
+import { Lock, X, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useContent } from '../../context/ContentContext';
 
 interface AdminLoginModalProps {
@@ -7,99 +7,88 @@ interface AdminLoginModalProps {
   onClose: () => void;
 }
 
+/** Quick edit-mode login (matches the /#admin gate: username+password in cloud mode). */
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClose }) => {
-  const { loginAdmin } = useContent();
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState(false);
+  const { loginAdmin, persistence } = useContent();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = loginAdmin(pin);
-    if (success) {
-      setError(false);
-      setPin('');
+    setBusy(true);
+    const ok = persistence === 'cloud'
+      ? await loginAdmin(username.trim(), password)
+      : await loginAdmin(password || username.trim());
+    setBusy(false);
+    if (ok) {
+      setError('');
+      setUsername('');
+      setPassword('');
       onClose();
     } else {
-      setError(true);
+      setError(persistence === 'cloud' ? 'نام کاربری یا رمز عبور اشتباه است.' : 'رمز وارد شده اشتباه است.');
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 text-right dir-rtl">
-      <div className="bg-[#0e072b] border-2 border-[#8b5cf6] rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_60px_rgba(139,92,246,0.4)] text-white space-y-6 relative overflow-hidden">
-        {/* Decorative background glow */}
-        <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#8b5cf6]/30 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+    <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 dir-rtl" role="dialog" aria-modal>
+      <div className="nd-card max-w-sm w-full p-6 sm:p-8 space-y-5 relative">
+        <div className="flex items-center justify-between pb-3 border-b border-[color:var(--nd-line)]">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-[#8b5cf6] to-[#5ce1e6] text-slate-950">
+            <div className="p-2.5 rounded-2xl bg-[color:var(--nd-accent)] text-white">
               <Lock className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-lg text-white">ورود به حالت ویرایش</h3>
-              <p className="text-xs text-slate-400">سیستم مدیریت محتوای زنده (CMS)</p>
+              <h3 className="nd-h2 text-base">ورود به حالت ویرایش</h3>
+              <p className="text-[11px] nd-muted">سیستم مدیریت محتوای زنده (CMS)</p>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10"
-          >
+          <button type="button" onClick={onClose} className="p-1.5 rounded-xl nd-muted hover:text-[color:var(--nd-ink)] hover:bg-[color:var(--nd-bg-soft)] cursor-pointer" aria-label="بستن">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-2">
-              رمز عبور / پین کد ادمین را وارد کنید:
-            </label>
-            <div className="relative">
-              <input
-                type="password"
-                value={pin}
-                onChange={(e) => {
-                  setPin(e.target.value);
-                  setError(false);
-                }}
-                placeholder="رمز عبور پیش‌فرض: 1234"
-                className="w-full bg-[#050214] border-2 border-white/20 focus:border-[#5ce1e6] rounded-2xl px-4 py-3 text-center tracking-widest text-lg text-white focus:outline-none transition-colors"
-                autoFocus
-              />
-              <Key className="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            </div>
-            {error && (
-              <p className="text-xs text-rose-400 font-bold mt-2 flex items-center gap-1">
-                <ShieldAlert className="w-4 h-4" />
-                <span>رمز عبور اشتباه است (پین کد پیش‌فرض: 1234)</span>
-              </p>
-            )}
-          </div>
-
-          <div className="pt-2 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-1/2 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition-colors"
-            >
-              انصراف
-            </button>
-            <button
-              type="submit"
-              className="w-1/2 py-3 rounded-2xl bg-gradient-to-r from-[#8b5cf6] to-[#4c8dff] hover:opacity-90 text-xs font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all"
-            >
-              <Check className="w-4 h-4" />
-              <span>ورود ادمین</span>
-            </button>
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          {persistence === 'cloud' && (
+            <input
+              type="text"
+              autoComplete="username"
+              dir="ltr"
+              value={username}
+              onChange={(e) => { setUsername(e.target.value); setError(''); }}
+              placeholder="نام کاربری"
+              className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-2xl px-4 py-3 text-sm font-bold text-[color:var(--nd-ink)] focus:outline-none focus:border-[color:var(--nd-accent)] transition-colors"
+              autoFocus
+            />
+          )}
+          <input
+            type="password"
+            autoComplete="current-password"
+            dir="ltr"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(''); }}
+            placeholder="رمز عبور"
+            className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-2xl px-4 py-3 text-sm font-bold text-[color:var(--nd-ink)] focus:outline-none focus:border-[color:var(--nd-accent)] transition-colors"
+            autoFocus={persistence !== 'cloud'}
+          />
+          {error && (
+            <p className="text-xs text-[#b91c1c] font-extrabold flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </p>
+          )}
+          <button type="submit" disabled={busy} className="nd-btn w-full py-3 text-xs nd-btn-accent disabled:opacity-50">
+            <ShieldCheck className="w-4 h-4" />
+            <span>{busy ? 'در حال بررسی…' : 'ورود'}</span>
+          </button>
+          {persistence === 'local' && (
+            <p className="text-[10px] nd-faint text-center">حالت توسعه (بدون Cloudflare): رمز محلی مدیریت معتبر است.</p>
+          )}
         </form>
-
-        <p className="text-[11px] text-center text-slate-400 border-t border-white/10 pt-3">
-          💡 رمز عبور پیش‌فرض ادمین: <code className="bg-white/10 px-1.5 py-0.5 rounded text-amber-300 font-mono">1234</code>
-        </p>
       </div>
     </div>
   );

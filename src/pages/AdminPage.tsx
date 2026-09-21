@@ -1,250 +1,330 @@
-import React, { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Layers, 
-  Briefcase, 
-  Sparkles, 
-  BookOpen, 
-  ShoppingBag, 
-  Clock, 
-  Image as ImageIcon, 
-  Settings, 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  Save, 
-  Download, 
-  Upload, 
-  RotateCcw, 
-  Lock, 
-  Check, 
-  X, 
-  Eye, 
-  ArrowLeft,
-  ChevronUp,
-  ChevronDown,
-  Globe,
-  Share2,
-  Phone,
-  Mail,
-  User,
-  ShieldCheck,
-  Star,
-  ExternalLink,
-  Search,
-  History as HistoryIcon,
-  ShieldAlert,
-  Palette,
-  Navigation,
-  Link as LinkIcon,
-  MessageSquare,
-  CheckCircle2,
-  ListTree
-} from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Page } from '../types';
 import { useContent } from '../context/ContentContext';
-import { Page, CustomPage, CustomBlock } from '../types';
-import { TreeEditor } from '../components/admin/TreeEditor';
+import { api } from '../services/api';
+import { CollectionEditor } from '../components/admin/CollectionEditor';
+import { FieldsForm, FieldDef } from '../components/admin/FieldsForm';
+import { SeoBox } from '../components/admin/SeoBox';
+import { ACard, ASectionTitle, AInput, ATextarea, ASelect, ALabel, ABadge, AConfirm, AModal } from '../components/admin/ui';
+import {
+  LayoutDashboard, BookOpen, MessageSquare, Sparkles, Briefcase, ShoppingBag,
+  FolderKanban, UserRound, Home, FileText, Image as ImageIcon, Search, Palette,
+  Settings, Lock, ShieldCheck, Cloud, HardDrive, ExternalLink, LogOut, Plus, Bot,
+  Trash2, ChevronUp, ChevronDown, Download, Copy, CheckCircle2, XCircle, RotateCcw,
+  History, Eye, EyeOff, Wand2, Link2, Upload, Reply, Menu,
+} from 'lucide-react';
 
 interface AdminPageProps {
   onNavigate: (page: Page) => void;
 }
 
+/* ------------------------------------------------------------------ */
+/* Field configurations — every content collection, WordPress-style.  */
+/* ------------------------------------------------------------------ */
+
+const PAGES_LIST = [
+  { key: 'home', label: 'صفحه اصلی' },
+  { key: 'services', label: 'خدمات' },
+  { key: 'portfolio', label: 'نمونه‌کارها' },
+  { key: 'about', label: 'درباره من' },
+  { key: 'blog', label: 'وبلاگ' },
+  { key: 'contact', label: 'تماس' },
+  { key: 'projects', label: 'پروژه‌ها' },
+  { key: 'products', label: 'محصولات' },
+];
+
+const POST_FIELDS: FieldDef[] = [
+  { key: 'title', label: 'عنوان مقاله' },
+  { key: 'seo', label: 'سئو', type: 'seo', urlPrefix: 'blog' },
+  { key: 'excerpt', label: 'خلاصه (در کارت‌های لیست نمایش داده می‌شود)', type: 'textarea', rows: 3 },
+  { key: 'content', label: 'متن کامل (پشتیبان)', type: 'textarea', rows: 8 },
+  { key: 'sections', label: 'بخش‌های مقاله (بدنه اصلی)', type: 'items', singular: 'بخش', defaults: { heading: '', content: '' }, fields: [
+    { key: 'id', label: 'شناسه بخش (انگلیسی)', dir: 'ltr' },
+    { key: 'heading', label: 'عنوان بخش' },
+    { key: 'content', label: 'متن بخش', type: 'textarea', rows: 6 },
+    { key: 'callout', label: 'جعبه نکته (اختیاری)', type: 'textarea', rows: 2 },
+    { key: 'keyPoints', label: 'نکات کلیدی', type: 'tags' },
+  ] },
+  { key: 'tableOfContents', label: 'فهرست مطالب', type: 'items', singular: 'ردیف فهرست', defaults: { id: '', title: '' }, fields: [
+    { key: 'id', label: 'شناسه بخش', dir: 'ltr' },
+    { key: 'title', label: 'عنوان در فهرست' },
+  ] },
+  { key: 'coverImage', label: 'تصویر شاخص', type: 'image' },
+  { key: 'categoryFa', label: 'دسته‌بندی (فارسی)', placeholder: 'مثلاً: رشد' },
+  { key: 'category', label: 'دسته‌بندی (انگلیسی)', dir: 'ltr', placeholder: 'growth' },
+  { key: 'pathCategory', label: 'مسیر مخاطب', type: 'select', options: [
+    { value: '', label: '— بدون مسیر —' },
+    { value: 'start', label: 'شروع (start)' },
+    { value: 'sell', label: 'فروش (sell)' },
+    { value: 'grow', label: 'رشد (grow)' },
+  ] },
+  { key: 'date', label: 'تاریخ انتشار', placeholder: 'شهریور ۱۴۰۴' },
+  { key: 'readTime', label: 'زمان مطالعه', placeholder: '۵ دقیقه' },
+  { key: 'author', label: 'نویسنده' },
+  { key: 'authorRole', label: 'سمت نویسنده' },
+  { key: 'authorAvatar', label: 'آواتار نویسنده', type: 'image' },
+  { key: 'tags', label: 'برچسب‌ها', type: 'tags' },
+  { key: 'viewsCount', label: 'تعداد بازدید', type: 'number', half: true, min: 0 },
+  { key: 'featured', label: 'مقاله ویژه', type: 'toggle' },
+  { key: 'isPopular', label: '«محبوب‌ترین مقاله» باشد', type: 'toggle', hint: 'فقط یک مقاله را انتخاب کنید' },
+];
+
+const SERVICE_FIELDS: FieldDef[] = [
+  { key: 'title', label: 'عنوان خدمت' },
+  { key: 'seo', label: 'سئو', type: 'seo', urlPrefix: 'services' },
+  { key: 'titleEn', label: 'عنوان انگلیسی', dir: 'ltr' },
+  { key: 'iconName', label: 'نام آیکون', dir: 'ltr', hint: 'code / sparkles / target / chart …' },
+  { key: 'shortDesc', label: 'توضیح کوتاه', type: 'textarea', rows: 2 },
+  { key: 'fullDesc', label: 'توضیح کامل', type: 'textarea', rows: 4 },
+  { key: 'features', label: 'امکانات و ویژگی‌ها', type: 'tags' },
+  { key: 'deliverables', label: 'خروجی‌های تحویلی', type: 'tags' },
+  { key: 'tags', label: 'برچسب‌های تخصصی', type: 'tags' },
+  { key: 'packages', label: 'پکیج‌ها و قیمت‌ها', type: 'items', singular: 'پکیج', defaults: { title: '', price: '', description: '' }, fields: [
+    { key: 'title', label: 'نام پکیج' },
+    { key: 'price', label: 'قیمت' },
+    { key: 'badge', label: 'نشان (اختیاری)', placeholder: 'پیشنهادی' },
+    { key: 'description', label: 'توضیح پکیج', type: 'textarea', rows: 2 },
+    { key: 'isPopular', label: 'پکیج محبوب (هایلایت شود)', type: 'toggle' },
+  ] },
+];
+
+const PRODUCT_FIELDS: FieldDef[] = [
+  { key: 'title', label: 'نام محصول' },
+  { key: 'seo', label: 'سئو', type: 'seo', urlPrefix: 'products' },
+  { key: 'description', label: 'توضیحات', type: 'textarea', rows: 3 },
+  { key: 'targetAudience', label: 'برای چه کسانی مناسب است؟', type: 'textarea', rows: 2 },
+  { key: 'iconName', label: 'نام آیکون', dir: 'ltr', hint: 'target / chart / book / calendar …' },
+  { key: 'badge', label: 'نشان', placeholder: 'رایگان' },
+  { key: 'price', label: 'قیمت' },
+  { key: 'actionText', label: 'متن دکمه' },
+];
+
+const CASE_FIELDS: FieldDef[] = [
+  { key: 'title', label: 'عنوان کیس‌استادی' },
+  { key: 'seo', label: 'سئو', type: 'seo', urlPrefix: 'portfolio' },
+  { key: 'client', label: 'نام مشتری/برند' },
+  { key: 'industry', label: 'صنعت (انگلیسی)', type: 'select', options: ['Fintech', 'Crypto', 'Travel', 'E-commerce', 'SaaS', 'Web Design'] },
+  { key: 'industryFa', label: 'صنعت (فارسی)' },
+  { key: 'pathCategory', label: 'مسیر مخاطب', type: 'select', options: [
+    { value: '', label: '— بدون مسیر —' },
+    { value: 'start', label: 'شروع (start)' },
+    { value: 'sell', label: 'فروش (sell)' },
+    { value: 'grow', label: 'رشد (grow)' },
+  ] },
+  { key: 'liveUrl', label: 'لینک زنده پروژه', dir: 'ltr' },
+  { key: 'summary', label: 'خلاصه', type: 'textarea', rows: 2 },
+  { key: 'challenge', label: 'چالش', type: 'textarea', rows: 3 },
+  { key: 'solution', label: 'راهکار', type: 'textarea', rows: 3 },
+  { key: 'results', label: 'نتایج', type: 'textarea', rows: 3 },
+  { key: 'metrics', label: 'شاخص‌های اصلی', type: 'group', fields: [
+    { key: 'roas', label: 'ROAS' },
+    { key: 'conversionRate', label: 'نرخ تبدیل' },
+    { key: 'cacReduction', label: 'کاهش CAC' },
+  ] },
+  { key: 'metricsComparison', label: 'مقایسه قبل/بعد', type: 'items', singular: 'شاخص', defaults: { label: '', before: '', after: '' }, fields: [
+    { key: 'label', label: 'نام شاخص' },
+    { key: 'before', label: 'قبل' },
+    { key: 'after', label: 'بعد' },
+  ] },
+  { key: 'thumbnailIcon', label: 'نام آیکون کاور', dir: 'ltr' },
+  { key: 'heroColor', label: 'رنگ غالب', dir: 'ltr', placeholder: 'indigo' },
+  { key: 'tags', label: 'برچسب‌ها', type: 'tags' },
+  { key: 'date', label: 'تاریخ' },
+  { key: 'featured', label: 'در صفحه اصلی نمایش داده شود', type: 'toggle' },
+];
+
+const newPost = () => ({
+  id: 'post-' + Date.now(),
+  title: 'مقاله‌ی جدید',
+  excerpt: '',
+  content: '',
+  category: 'growth',
+  categoryFa: 'رشد',
+  date: new Date().toLocaleDateString('fa-IR'),
+  readTime: '۵ دقیقه',
+  author: 'امید عدلی',
+  imageIcon: 'book',
+  featured: false,
+  isPopular: false,
+  status: 'draft' as const,
+  slug: '',
+  seo: {},
+  sections: [],
+  tableOfContents: [],
+  tags: [],
+  viewsCount: 0,
+});
+
+/* ------------------------------------------------------------------ */
+
 export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
-  const { 
-    data, 
-    isAdmin, 
-    pinCode, 
-    changePin, 
-    loginAdmin, 
-    logoutAdmin, 
-    updateField, 
-    addItem, 
-    removeItem, 
-    moveItem, 
-    resetToDefaults, 
-    exportJSON, 
-    importJSON,
-    saveChanges,
-    hasUnsavedChanges,
-    addMediaItem,
-    removeMediaItem,
-    updatePageSeo,
-    toggleSectionVisibility,
-    reorderPageSection,
-    createSnapshot,
-    rollbackSnapshot,
-    toggleCommentApproval,
-    deleteBlogComment,
-    replyBlogComment
+  const {
+    data, isAdmin, persistence, pinCode, changePin, loginAdmin, logoutAdmin,
+    updateField, addItem, removeItem, moveItem, duplicateItem,
+    exportJSON, importJSON, createSnapshot, rollbackSnapshot, deleteSnapshot,
+    resetToDefaults, addMediaItem, removeMediaItem, logActivity,
+    toggleSectionVisibility, reorderPageSection, updatePageSeo,
+    generateSitemapXml, generateRobotsTxt,
+    toggleCommentApproval, deleteBlogComment, replyBlogComment,
   } = useContent();
 
-  // Login form state
-  const [pinInput, setPinInput] = useState('');
-  const [loginError, setLoginError] = useState(false);
-
-  // CMS active tab
-  const [activeTab, setActiveTab] = useState<
-    'tree' | 'dashboard' | 'pages' | 'sections' | 'case-studies' | 'services' | 'blog' | 'products' | 'timeline' | 'media' | 'seo' | 'settings' | 'history'
-  >('tree');
-
-  // Snapshot form state
-  const [snapshotDesc, setSnapshotDesc] = useState('');
-
-  // Selected SEO page editing state
-  const [selectedSeoPage, setSelectedSeoPage] = useState<string>('home');
-
-  // Custom page creation state
-  const [newCustomPageTitle, setNewCustomPageTitle] = useState('');
-  const [newCustomPageSlug, setNewCustomPageSlug] = useState('');
-
-  // Toast notification
+  type TabId = 'dashboard' | 'posts' | 'comments' | 'services' | 'portfolio' | 'products' | 'projects' | 'about' | 'home' | 'pages' | 'media' | 'seo' | 'chat' | 'appearance' | 'settings';
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
-  };
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [selectedSeoPage, setSelectedSeoPage] = useState('home');
+  const [commentFilter, setCommentFilter] = useState<'all' | 'pending' | 'approved'>('all');
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [sitemapOut, setSitemapOut] = useState('');
+  const [robotsOut, setRobotsOut] = useState('');
+  const [importText, setImportText] = useState('');
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [chatLog, setChatLog] = useState<{ id: string; question: string; answer: string; mode: string; created_at: string; ip: string }[] | null>(null);
+  const mediaFileRef = useRef<HTMLInputElement>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
-  // Change PIN state
+  // login form
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  // local PIN manager (dev mode only)
   const [oldPinInput, setOldPinInput] = useState('');
   const [newPinInput, setNewPinInput] = useState('');
   const [pinChangeMsg, setPinChangeMsg] = useState<string | null>(null);
 
-  // File upload state for Media Library
-  const [mediaList, setMediaList] = useState<string[]>([
-    data.PERSONAL_INFO.avatar || '',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
-    'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80'
-  ]);
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
 
-  // Blog management sub-tabs and expanded post index
-  const [blogSubTab, setBlogSubTab] = useState<'posts' | 'page-info' | 'comments'>('posts');
-  const [expandedPostIdx, setExpandedPostIdx] = useState<number | null>(0);
-  const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginAdmin(pinInput)) {
-      setLoginError(false);
-      setPinInput('');
+    setLoginBusy(true);
+    const ok = persistence === 'cloud'
+      ? await loginAdmin(loginUser.trim(), loginPass)
+      : await loginAdmin(loginPass || loginUser.trim());
+    setLoginBusy(false);
+    if (ok) {
+      setLoginError('');
+      setLoginUser('');
+      setLoginPass('');
       showToast('خوش آمدید! ورود به پیشخوان مدیریت با موفقیت انجام شد.');
     } else {
-      setLoginError(true);
+      setLoginError(persistence === 'cloud' ? 'نام کاربری یا رمز عبور اشتباه است.' : 'رمز محلی وارد شده اشتباه است.');
     }
   };
 
   const handleChangePin = (e: React.FormEvent) => {
     e.preventDefault();
     if (oldPinInput !== pinCode) {
-      setPinChangeMsg('پین‌کد فعلی اشتباه است.');
+      setPinChangeMsg('رمز فعلی اشتباه است.');
       return;
     }
     if (newPinInput.length < 4) {
-      setPinChangeMsg('پین‌کد جدید باید حداقل ۴ رقم باشد.');
+      setPinChangeMsg('رمز جدید باید حداقل ۴ کاراکتر باشد.');
       return;
     }
     changePin(newPinInput);
-    setPinChangeMsg('پین‌کد با موفقیت تغییر کرد! ✨');
+    setPinChangeMsg('رمز محلی با موفقیت تغییر کرد.');
     setOldPinInput('');
     setNewPinInput('');
   };
 
-  const handleAddCustomPage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCustomPageTitle.trim() || !newCustomPageSlug.trim()) {
-      alert('لطفاً عنوان و آدرس برگه را وارد کنید.');
-      return;
-    }
-    const cleanSlug = newCustomPageSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    const newPage: CustomPage = {
-      id: 'custom-' + Date.now(),
-      title: newCustomPageTitle,
-      slug: cleanSlug,
-      showInMenu: true,
-      blocks: [
-        {
-          id: 'b-' + Date.now(),
-          type: 'text',
-          title: 'خوش آمدید به برگه ' + newCustomPageTitle,
-          content: 'این برگه اختصاصی جدید به سیستم مدیریت محتوای سایت اضافه گردیده است.'
-        }
-      ]
-    };
-    const currentPages = data.CUSTOM_PAGES || [];
-    updateField('CUSTOM_PAGES', [...currentPages, newPage]);
-    setNewCustomPageTitle('');
-    setNewCustomPageSlug('');
-    showToast(`برگه جدید "${newPage.title}" با موفقیت ایجاد شد.`);
-  };
+  const pendingComments = (data.BLOG_COMMENTS || []).filter((c) => !c.isApproved).length;
+  const counts = useMemo(
+    () => [
+      { label: 'مقالات', value: (data.BLOG_POSTS || []).length, tab: 'posts' as TabId, icon: BookOpen },
+      { label: 'خدمات', value: (data.SERVICES || []).length, tab: 'services' as TabId, icon: Sparkles },
+      { label: 'نمونه‌کارها', value: (data.CASE_STUDIES || []).length, tab: 'portfolio' as TabId, icon: Briefcase },
+      { label: 'محصولات', value: (data.PRODUCTS || []).length, tab: 'products' as TabId, icon: ShoppingBag },
+      { label: 'دیدگاه‌های در انتظار', value: pendingComments, tab: 'comments' as TabId, icon: MessageSquare },
+      { label: 'فایل‌های رسانه', value: (data.MEDIA_LIBRARY || []).length, tab: 'media' as TabId, icon: ImageIcon },
+    ],
+    [data, pendingComments],
+  );
 
-  const handleAddMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setMediaList([reader.result, ...mediaList]);
-          showToast('تصویر جدید با موفقیت به کتابخانه رسانه اضافه شد.');
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  const NAV_GROUPS: { group: string; items: { id: TabId; label: string; icon: any; badge?: number }[] }[] = [
+    {
+      group: 'محتوا',
+      items: [
+        { id: 'dashboard', label: 'پیشخوان', icon: LayoutDashboard },
+        { id: 'posts', label: 'مقالات', icon: BookOpen },
+        { id: 'comments', label: 'دیدگاه‌ها', icon: MessageSquare, badge: pendingComments },
+        { id: 'services', label: 'خدمات', icon: Sparkles },
+        { id: 'portfolio', label: 'نمونه‌کارها', icon: Briefcase },
+        { id: 'products', label: 'محصولات', icon: ShoppingBag },
+        { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban },
+        { id: 'home', label: 'صفحه اصلی', icon: Home },
+        { id: 'about', label: 'درباره من', icon: UserRound },
+      ],
+    },
+    {
+      group: 'مدیریت سایت',
+      items: [
+        { id: 'pages', label: 'برگه‌ها و سئوی صفحات', icon: FileText },
+        { id: 'media', label: 'کتابخانه رسانه', icon: ImageIcon },
+        { id: 'seo', label: 'سئویسراسری و نقشه سایت', icon: Search },
+        { id: 'appearance', label: 'منوها و ظاهر', icon: Palette },
+        { id: 'settings', label: 'پشتیبان‌گیری و تنظیمات', icon: Settings },
+      ],
+    },
+  ];
 
-  // If NOT logged in, show WordPress Login Box
+  /* ------------------------- LOGIN GATE ------------------------- */
   if (!isAdmin) {
     return (
-      <div className="min-h-[85vh] flex items-center justify-center py-12 px-4 dir-rtl font-sans">
-        <div className="max-w-md w-full bg-[#120a38]/90 border-2 border-[#8b5cf6] rounded-3xl p-8 shadow-[0_0_50px_rgba(139,92,246,0.3)] backdrop-blur-2xl text-white space-y-6">
+      <div className="min-h-[85vh] flex items-center justify-center py-12 px-4 dir-rtl">
+        <div className="nd-card max-w-md w-full p-8 sm:p-10 space-y-6">
           <div className="text-center space-y-3">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#8b5cf6] to-[#5ce1e6] p-0.5 mx-auto shadow-lg flex items-center justify-center">
-              <div className="w-full h-full bg-[#0e072b] rounded-[14px] flex items-center justify-center text-amber-400">
-                <Lock className="w-8 h-8" />
-              </div>
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-[color:var(--nd-accent)] text-white flex items-center justify-center shadow-md">
+              <Lock className="w-8 h-8" />
             </div>
-            <h1 className="text-2xl font-black gradient-text">ورود به سیستم مدیریت وب‌سایت (CMS)</h1>
-            <p className="text-xs text-slate-300">
-              لطفاً پین‌کد مدیریتی را وارد کنید (پین‌کد پیش‌فرض: <code className="bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono font-bold">1234</code>)
+            <h1 className="nd-h2 text-xl sm:text-2xl">ورود به پیشخوان مدیریت</h1>
+            <p className="text-xs leading-relaxed nd-muted">
+              {persistence === 'cloud'
+                ? 'نام کاربری و رمز عبوری را وارد کنید که در Secrets پنل Cloudflare تنظیم کرده‌اید.'
+                : 'حالت توسعه (بدون اتصال به Cloudflare): رمز محلی مدیریت را وارد کنید.'}
             </p>
           </div>
-
           <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">پین‌کد ورود:</label>
-              <input
-                type="password"
-                value={pinInput}
-                onChange={(e) => {
-                  setPinInput(e.target.value);
-                  setLoginError(false);
-                }}
-                placeholder="• • • •"
-                className="w-full bg-[#0a0520] border-2 border-white/20 focus:border-amber-400 rounded-2xl px-4 py-3 text-center text-xl tracking-[0.5em] font-mono text-white focus:outline-none transition-all dir-ltr"
-                autoFocus
-              />
-            </div>
-
-            {loginError && (
-              <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/50 text-rose-300 text-xs font-bold text-center animate-bounce">
-                پین‌کد وارد شده اشتباه است. پین‌کد پیش‌فرض 1234 می‌باشد.
+            {persistence === 'cloud' && (
+              <div>
+                <label className="block text-xs font-extrabold mb-1.5 text-[color:var(--nd-ink-2)]">نام کاربری</label>
+                <input
+                  type="text"
+                  autoComplete="username"
+                  dir="ltr"
+                  value={loginUser}
+                  onChange={(e) => { setLoginUser(e.target.value); setLoginError(''); }}
+                  placeholder="username"
+                  className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-2xl px-4 py-3 text-sm font-bold text-[color:var(--nd-ink)] focus:outline-none focus:border-[color:var(--nd-accent)] transition-colors"
+                  autoFocus
+                />
               </div>
             )}
-
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-sm shadow-xl hover:shadow-amber-400/20 transition-all cursor-pointer flex items-center justify-center gap-2"
-            >
+            <div>
+              <label className="block text-xs font-extrabold mb-1.5 text-[color:var(--nd-ink-2)]">رمز عبور</label>
+              <input
+                type="password"
+                autoComplete="current-password"
+                dir="ltr"
+                value={loginPass}
+                onChange={(e) => { setLoginPass(e.target.value); setLoginError(''); }}
+                placeholder="••••••••"
+                className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-2xl px-4 py-3 text-sm font-bold text-[color:var(--nd-ink)] focus:outline-none focus:border-[color:var(--nd-accent)] transition-colors"
+                autoFocus={persistence !== 'cloud'}
+              />
+            </div>
+            {loginError && <div className="p-3 rounded-xl bg-[#fee2e2] text-[#b91c1c] text-xs font-extrabold text-center">{loginError}</div>}
+            <button type="submit" disabled={loginBusy} className="nd-btn w-full py-3.5 text-sm nd-btn-accent disabled:opacity-50">
               <ShieldCheck className="w-5 h-5" />
-              <span>ورود به پیشخوان مدیریت</span>
+              <span>{loginBusy ? 'در حال بررسی…' : 'ورود به پیشخوان'}</span>
             </button>
           </form>
-
-          <div className="pt-4 border-t border-white/10 text-center">
-            <button
-              onClick={() => onNavigate('home')}
-              className="text-xs text-slate-400 hover:text-white transition-colors"
-            >
+          <div className="pt-4 border-t border-[color:var(--nd-line)] text-center">
+            <button onClick={() => onNavigate('home')} className="text-xs nd-muted hover:text-[color:var(--nd-accent)] transition-colors cursor-pointer">
               بازگشت به صفحه اصلی سایت
             </button>
           </div>
@@ -253,1748 +333,936 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
     );
   }
 
-  // LOGGED IN: WordPress-like Admin Dashboard
+  /* ------------------------- PANEL SHELL ------------------------- */
+  const comments = (data.BLOG_COMMENTS || []).filter((c) =>
+    commentFilter === 'all' ? true : commentFilter === 'pending' ? !c.isApproved : c.isApproved,
+  );
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setMediaBusy(true);
+    if (persistence === 'cloud') {
+      const item = await api.uploadMedia(file, file.name, file.name);
+      if (item) {
+        addMediaItem(item.url, item.title, item.sizeKb, undefined, ['cloud', 'r2']);
+        showToast('فایل با موفقیت در Cloudflare R2 ذخیره شد.');
+      } else {
+        showToast('آپلود ناموفق بود.');
+      }
+    } else {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          addMediaItem(reader.result, file.name, Math.round(file.size / 1024));
+          showToast('فایل به‌صورت محلی ذخیره شد (حالت توسعه).');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    setMediaBusy(false);
+  };
+
+  const sidebar = (
+    <aside className="w-64 shrink-0 space-y-6">
+      <div className="nd-card p-4 space-y-1.5">
+        <div className="flex items-center gap-2.5 pb-2">
+          <span className="w-9 h-9 rounded-xl bg-[color:var(--nd-accent)] text-white flex items-center justify-center text-sm font-black">ع</span>
+          <div className="min-w-0">
+            <span className="block text-xs font-extrabold truncate">پیشخوان مدیریت</span>
+            <span className="block text-[10px] nd-muted truncate">
+              {persistence === 'cloud' ? 'متصل به Cloudflare D1' : 'حالت محلی (توسعه)'}
+            </span>
+          </div>
+        </div>
+        {persistence === 'cloud' ? (
+          <span className="nd-chip w-full justify-center bg-[color:var(--nd-mint-soft)] text-[color:var(--nd-success)] border-transparent text-[10px]">
+            <Cloud className="w-3 h-3" /> ذخیره‌سازی ابری فعال — تغییرات خودکار ذخیره می‌شوند
+          </span>
+        ) : (
+          <span className="nd-chip w-full justify-center bg-[color:var(--nd-peach-soft)] text-[#d97706] border-transparent text-[10px]">
+            <HardDrive className="w-3 h-3" /> ذخیره در مرورگر — برای اتصال، راهنمای CMS-DEPLOY.md را ببینید
+          </span>
+        )}
+      </div>
+
+      {NAV_GROUPS.map((g) => (
+        <nav key={g.group} className="space-y-1">
+          <span className="block px-3 pb-1 text-[10px] font-black nd-faint tracking-wide">{g.group}</span>
+          {g.items.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { setActiveTab(t.id); setSidebarOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                activeTab === t.id
+                  ? 'bg-[color:var(--nd-accent)] text-white shadow-sm'
+                  : 'text-[color:var(--nd-ink-2)] hover:bg-[color:var(--nd-bg-soft)]'
+              }`}
+            >
+              <t.icon className="w-4 h-4 shrink-0" />
+              <span className="flex-1 text-right">{t.label}</span>
+              {!!t.badge && (
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black ${activeTab === t.id ? 'bg-white/25' : 'bg-[color:var(--nd-peach-soft)] text-[#d97706]'}`}>{t.badge}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+      ))}
+
+      <div className="space-y-1.5">
+        <button onClick={() => onNavigate('home')} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-extrabold text-[color:var(--nd-ink-2)] hover:bg-[color:var(--nd-bg-soft)] transition-all cursor-pointer">
+          <ExternalLink className="w-4 h-4" />
+          <span>مشاهده سایت</span>
+        </button>
+        <button onClick={() => { logoutAdmin(); showToast('از پیشخوان خارج شدید.'); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-extrabold text-[#dc2626] hover:bg-[#fee2e2] transition-all cursor-pointer">
+          <LogOut className="w-4 h-4" />
+          <span>خروج از حساب</span>
+        </button>
+      </div>
+    </aside>
+  );
+
   return (
-    <div className="min-h-screen py-6 px-2 sm:px-6 dir-rtl font-sans text-white space-y-6">
-      {/* Toast popup */}
+    <div className="min-h-screen py-6 px-2 sm:px-4 dir-rtl">
+      {/* Toast */}
       {toastMsg && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[12000] bg-emerald-500 text-slate-950 font-extrabold px-6 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 text-sm animate-bounce border-2 border-emerald-300">
-          <Check className="w-5 h-5" />
-          <span>{toastMsg}</span>
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[130] nd-card py-3! px-5! flex items-center gap-2.5 shadow-xl">
+          <CheckCircle2 className="w-4 h-4 text-[color:var(--nd-success)] shrink-0" />
+          <span className="text-xs font-extrabold">{toastMsg}</span>
         </div>
       )}
 
-      {/* Admin Top Header Banner */}
-      <div className="bg-[#120a38]/90 border-2 border-[#8b5cf6] rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-amber-400 text-slate-950 font-black shadow-lg">
-            <Settings className="w-8 h-8" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-white">پیشخوان مدیریت محتوای وب‌سایت (CMS)</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-mono font-bold border border-emerald-500/40">
-                فعال و آنلاین
-              </span>
-            </div>
-            <p className="text-xs text-slate-300 mt-1">
-              مدیریت کامل تمامی متون، عکس‌ها، آمارها، پروژه‌ها، برگه‌ها و تنظیمات عمومی مثل وردپرس
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          <button
-            onClick={() => onNavigate('home')}
-            className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-lg flex items-center gap-2 transition-all cursor-pointer"
-          >
-            <Eye className="w-4 h-4" />
-            <span>ویرایش بصری مستقیم روی سایت</span>
-          </button>
-
-          <button
-            onClick={() => {
-              saveChanges();
-              showToast('تغییرات با موفقیت ذخیره شدند.');
-            }}
-            className={`px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all cursor-pointer ${
-              hasUnsavedChanges
-                ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 animate-pulse'
-                : 'bg-[#8b5cf6] hover:bg-[#7c3aed] text-white'
-            }`}
-          >
-            <Save className="w-4 h-4" />
-            <span>ذخیره تغییرات</span>
-          </button>
-
-          <button
-            onClick={logoutAdmin}
-            className="px-3.5 py-2.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Lock className="w-4 h-4" />
-            <span>خروج</span>
-          </button>
-        </div>
+      {/* Mobile top bar */}
+      <div className="lg:hidden flex items-center justify-between mb-4">
+        <button onClick={() => setSidebarOpen(true)} className="nd-btn nd-btn-ghost px-4 py-2.5 text-xs cursor-pointer">
+          <Menu className="w-4 h-4" />
+          <span>منوی مدیریت</span>
+        </button>
+        <ABadge tone={persistence === 'cloud' ? 'ok' : 'warn'}>{persistence === 'cloud' ? '☁️ ابری' : 'محلی'}</ABadge>
       </div>
+      <AModal open={sidebarOpen} onClose={() => setSidebarOpen(false)} title="منوی مدیریت">
+        <div className="[&>aside]:w-full">{sidebar}</div>
+      </AModal>
 
-      {/* Main CMS Layout: Sidebar Tabs + Content Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Sidebar Navigation */}
-        <div className="lg:col-span-3 space-y-2">
-          <div className="bg-[#120a38]/80 border border-white/10 rounded-3xl p-3 space-y-1">
-            {[
-              { id: 'tree', label: 'ویرایشگر ساختاریافته (Tree Editor ✏️)', icon: Layers },
-              { id: 'dashboard', label: 'داشبورد خلاصه', icon: LayoutDashboard },
-              { id: 'pages', label: 'مدیریت برگه‌ها و صفحات', icon: FileText },
-              { id: 'sections', label: 'مدیریت سکشن‌های سایت', icon: Layers },
-              { id: 'media', label: 'کتابخانه رسانه (Media)', icon: ImageIcon },
-              { id: 'seo', label: 'سئو و متاتگ‌ها (SEO)', icon: Search },
-              { id: 'settings', label: 'تنظیمات عمومی، منو و تم', icon: Settings },
-              { id: 'history', label: 'تاریخچه تغییرات و لاگ‌ها', icon: HistoryIcon },
-              { id: 'case-studies', label: 'نمونه‌کارها (کیس‌استادی)', icon: Briefcase },
-              { id: 'services', label: 'خدمات و پکیج‌ها', icon: Sparkles },
-              { id: 'blog', label: 'مقالات و آموز‌ش‌ها', icon: BookOpen },
-              { id: 'products', label: 'محصولات و دوره‌ها', icon: ShoppingBag },
-              { id: 'timeline', label: 'سوابق و تایم‌لاین', icon: Clock },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full text-right px-4 py-3 rounded-2xl font-bold text-xs flex items-center gap-3 transition-all cursor-pointer ${
-                    active
-                      ? 'bg-gradient-to-r from-[#8b5cf6] to-[#4c8dff] text-white shadow-lg font-black'
-                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${active ? 'text-amber-300' : 'text-slate-400'}`} />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
+      <div className="flex gap-6 items-start max-w-[1500px] mx-auto">
+        <div className="hidden lg:block sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">{sidebar}</div>
 
-          <div className="p-4 rounded-3xl bg-white/5 border border-white/10 text-xs text-slate-300 space-y-2">
-            <div className="font-bold text-white flex items-center gap-1.5 text-amber-400">
-              <Sparkles className="w-4 h-4" />
-              <span>راهنمای سیستم CMS:</span>
-            </div>
-            <p className="leading-relaxed">
-              شما می‌توانید تمامی فیلدها را به شکل دستی ویرایش کنید یا با کلیک روی دکمه ویرایش بصری، مستقیماً روی هر صفحه با آیکون مداد ✏️ تغییرات را اعمال نمایید.
-            </p>
-          </div>
-        </div>
-
-        {/* Content View Area */}
-        <div className="lg:col-span-9 space-y-6">
-          {/* TAB 0: STRUCTURED TREE EDITOR */}
-          {activeTab === 'tree' && <TreeEditor />}
-
-          {/* TAB 1: DASHBOARD */}
+        <main className="flex-1 min-w-0 space-y-6 pb-24">
+          {/* ---------------- DASHBOARD ---------------- */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {[
-                  { title: 'کیس‌استادی‌ها', count: data.CASE_STUDIES?.length || 0, color: 'from-[#2563eb] to-[#3b82f6]' },
-                  { title: 'خدمات تخصصی', count: data.SERVICES?.length || 0, color: 'from-[#8b5cf6] to-[#a855f7]' },
-                  { title: 'مقالات بلاگ', count: data.BLOG_POSTS?.length || 0, color: 'from-[#06b6d4] to-[#3b82f6]' },
-                  { title: 'برگه‌های اختصاصی', count: data.CUSTOM_PAGES?.length || 0, color: 'from-amber-500 to-orange-500' },
-                ].map((stat, i) => (
-                  <div key={i} className={`p-5 rounded-3xl bg-gradient-to-br ${stat.color} text-white shadow-xl space-y-1`}>
-                    <div className="text-3xl font-black dir-ltr text-right">{stat.count}</div>
-                    <div className="text-xs font-bold text-white/90">{stat.title}</div>
-                  </div>
+              <ASectionTitle title="پیشخوان" desc="خلاصه وضعیت محتوای سایت و ذخیره‌سازی" />
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {counts.map((c) => (
+                  <button key={c.label} onClick={() => setActiveTab(c.tab)} className="nd-card nd-card-hover p-5 text-right cursor-pointer space-y-2">
+                    <c.icon className="w-5 h-5 text-[color:var(--nd-accent)]" />
+                    <span className="block text-2xl font-black dir-ltr text-right">{c.value}</span>
+                    <span className="block text-[11px] font-extrabold nd-muted">{c.label}</span>
+                  </button>
                 ))}
               </div>
-
-              {/* Quick Actions Card */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-amber-400 border-r-4 border-amber-400 pr-3">
-                  میانبرهای سریع مدیریت
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <button
-                    onClick={() => setActiveTab('pages')}
-                    className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-right space-y-1 transition-all cursor-pointer"
-                  >
-                    <FileText className="w-6 h-6 text-[#5ce1e6]" />
-                    <div className="font-black text-sm text-white">افزودن برگه جدید</div>
-                    <p className="text-[11px] text-slate-400">ساخت صفحه جدید با slug و بلاک‌های اختصاصی</p>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('case-studies')}
-                    className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-right space-y-1 transition-all cursor-pointer"
-                  >
-                    <Briefcase className="w-6 h-6 text-[#8b5cf6]" />
-                    <div className="font-black text-sm text-white">مدیریت نمونه‌کارها</div>
-                    <p className="text-[11px] text-slate-400">افزودن یا ویرایش پروژه‌ها و آمار ROAS</p>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('settings')}
-                    className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-right space-y-1 transition-all cursor-pointer"
-                  >
-                    <Settings className="w-6 h-6 text-amber-400" />
-                    <div className="font-black text-sm text-white">تنظیمات اصلی و پین‌کد</div>
-                    <p className="text-[11px] text-slate-400">تغییر اطلاعات تماس، پین‌کد و دریافت بکاپ</p>
-                  </button>
-                </div>
-              </div>
-
-              {/* Personal Info Quick Overview */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-white border-r-4 border-[#8b5cf6] pr-3">
-                  مشخصات صاحب سایت
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="block text-slate-400 mb-1">نام و نام خانوادگی:</label>
-                    <input
-                      type="text"
-                      value={data.PERSONAL_INFO.name}
-                      onChange={(e) => updateField('PERSONAL_INFO.name', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-white font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-1">عنوان شغلی:</label>
-                    <input
-                      type="text"
-                      value={data.PERSONAL_INFO.title}
-                      onChange={(e) => updateField('PERSONAL_INFO.title', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-white font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-1">ایمیل کاری:</label>
-                    <input
-                      type="text"
-                      value={data.PERSONAL_INFO.email}
-                      onChange={(e) => updateField('PERSONAL_INFO.email', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-white font-mono dir-ltr text-right"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-1">شماره تماس / واتساپ:</label>
-                    <input
-                      type="text"
-                      value={data.PERSONAL_INFO.phoneFormatted}
-                      onChange={(e) => updateField('PERSONAL_INFO.phoneFormatted', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-white font-mono dir-ltr text-right"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: PAGES & MENU MANAGER */}
-          {activeTab === 'pages' && (
-            <div className="space-y-6">
-              {/* Create Custom Page Form */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border-2 border-amber-400/50 space-y-4">
-                <h3 className="text-base font-black text-amber-400 flex items-center gap-2">
-                  <Plus className="w-5 h-5" />
-                  <span>ساخت برگه / صفحه جدید (WordPress Page Builder)</span>
-                </h3>
-
-                <form onSubmit={handleAddCustomPage} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">عنوان برگه جدید:</label>
-                    <input
-                      type="text"
-                      value={newCustomPageTitle}
-                      onChange={(e) => setNewCustomPageTitle(e.target.value)}
-                      placeholder="مثال: مشاوره تخصصی گوگل ادز"
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">آدرس URL / Slug:</label>
-                    <input
-                      type="text"
-                      value={newCustomPageSlug}
-                      onChange={(e) => setNewCustomPageSlug(e.target.value)}
-                      placeholder="google-ads-consulting"
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-xs text-white font-mono dir-ltr focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-
-                  <div className="flex items-end">
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>ایجاد برگه اختصاصی</span>
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* Standard Site Pages List */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-white border-r-4 border-[#8b5cf6] pr-3">
-                  صفحات پیش‌فرض وب‌سایت
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  {[
-                    { id: 'home', label: 'صفحه اصلی', slug: '/' },
-                    { id: 'services', label: 'خدمات تخصصی', slug: '/services' },
-                    { id: 'portfolio', label: 'نمونه‌کارها و کیس‌استادی', slug: '/portfolio' },
-                    { id: 'about', label: 'درباره من', slug: '/about' },
-                    { id: 'blog', label: 'آموزش و بلاگ', slug: '/blog' },
-                    { id: 'contact', label: 'تماس و مشاوره', slug: '/contact' },
-                    { id: 'projects', label: 'پروژه‌ها', slug: '/projects' },
-                    { id: 'products', label: 'محصولات', slug: '/products' },
-                  ].map((p, idx) => (
-                    <div key={idx} className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
-                      <div>
-                        <div className="font-bold text-white text-sm">{p.label}</div>
-                        <div className="text-[11px] font-mono text-slate-400 dir-ltr">{p.slug}</div>
-                      </div>
-                      <button
-                        onClick={() => onNavigate(p.id as Page)}
-                        className="px-3 py-1.5 rounded-xl bg-[#8b5cf6]/20 hover:bg-[#8b5cf6] text-[#8b5cf6] hover:text-white transition-all font-bold text-[11px]"
-                      >
-                        مشاهده برگه
-                      </button>
+              <ACard>
+                <ASectionTitle title="آخرین تغییرات" desc="۸ رویداد اخیر" />
+                <div className="space-y-2">
+                  {(data.AUDIT_LOGS || []).slice(0, 8).map((log) => (
+                    <div key={log.id} className="flex items-start justify-between gap-3 text-xs border-b border-[color:var(--nd-line)] pb-2 last:border-0">
+                      <span>
+                        <span className="font-extrabold block">{log.action}</span>
+                        <span className="nd-muted text-[10px] block mt-0.5">{log.details}</span>
+                      </span>
+                      <span className="text-[10px] nd-faint shrink-0 dir-ltr">{log.timestamp}</span>
                     </div>
                   ))}
+                  {(data.AUDIT_LOGS || []).length === 0 && <p className="text-xs nd-muted">رویدادی ثبت نشده است.</p>}
                 </div>
-              </div>
-
-              {/* Custom Pages List */}
-              {data.CUSTOM_PAGES && data.CUSTOM_PAGES.length > 0 && (
-                <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                  <h3 className="text-base font-black text-amber-400 border-r-4 border-amber-400 pr-3">
-                    برگه‌های اختصاصی ساخته‌شده توسط شما
-                  </h3>
-
-                  <div className="space-y-3">
-                    {data.CUSTOM_PAGES.map((cp, idx) => (
-                      <div key={cp.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-black text-white text-base">{cp.title}</span>
-                            <span className="font-mono text-xs text-amber-300 block dir-ltr">/{cp.slug}</span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => removeItem('CUSTOM_PAGES', idx)}
-                              className="p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition-all text-xs"
-                              title="حذف برگه"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Custom Blocks for this page */}
-                        <div className="pt-2 border-t border-white/10 space-y-2">
-                          <span className="text-xs font-bold text-slate-400 block">بلاک‌های محتوایی برگه:</span>
-                          {cp.blocks?.map((block, bIdx) => (
-                            <div key={block.id} className="p-3 rounded-xl bg-[#0a0520] border border-white/10 space-y-2 text-xs">
-                              <input
-                                type="text"
-                                value={block.title || ''}
-                                onChange={(e) => updateField(`CUSTOM_PAGES.${idx}.blocks.${bIdx}.title`, e.target.value)}
-                                placeholder="عنوان بلاک"
-                                className="w-full bg-white/5 border border-white/10 rounded-lg p-2 font-bold text-white"
-                              />
-                              <textarea
-                                value={block.content || ''}
-                                onChange={(e) => updateField(`CUSTOM_PAGES.${idx}.blocks.${bIdx}.content`, e.target.value)}
-                                placeholder="متن کامل بلاک..."
-                                className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-slate-200 min-h-[60px]"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              </ACard>
             </div>
           )}
 
-          {/* TAB 3: SECTIONS & CONTENT MANAGER */}
-          {activeTab === 'sections' && (
-            <div className="space-y-6">
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-white border-r-4 border-[#8b5cf6] pr-3">
-                  ویرایش متون و محتوای بخش‌های اصلی
-                </h3>
-
-                {/* Section Selector */}
-                <div className="space-y-6">
-                  {/* HERO SECTION */}
-                  <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-                    <div className="font-black text-amber-400 text-sm">۱. بنر اصلی (Hero Section)</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <label className="block text-slate-400 mb-1">نام اصلی:</label>
-                        <input
-                          type="text"
-                          value={data.PERSONAL_INFO.name}
-                          onChange={(e) => updateField('PERSONAL_INFO.name', e.target.value)}
-                          className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-400 mb-1">عنوان تخصصی:</label>
-                        <input
-                          type="text"
-                          value={data.PERSONAL_INFO.title}
-                          onChange={(e) => updateField('PERSONAL_INFO.title', e.target.value)}
-                          className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-bold"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-slate-400 mb-1">بیوگرافی و توضیحات اصلی:</label>
-                        <textarea
-                          value={data.PERSONAL_INFO.bio}
-                          onChange={(e) => updateField('PERSONAL_INFO.bio', e.target.value)}
-                          className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white min-h-[80px]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* STATS SECTION */}
-                  <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="font-black text-amber-400 text-sm">۲. آمار و دستاوردها (Stats)</div>
-                      <button
-                        onClick={() => addItem('STATS')}
-                        className="px-3 py-1 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs"
-                      >
-                        + افزودن آمار جدید
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {data.STATS?.map((stat, sIdx) => (
-                        <div key={sIdx} className="p-3 rounded-xl bg-[#0a0520] border border-white/10 space-y-2 text-xs">
-                          <div className="flex justify-between items-center">
-                            <span className="font-mono text-amber-300 font-bold">آمار #{sIdx + 1}</span>
-                            <button
-                              onClick={() => removeItem('STATS', sIdx)}
-                              className="text-rose-400 hover:text-rose-300"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            value={stat.value}
-                            onChange={(e) => updateField(`STATS.${sIdx}.value`, e.target.value)}
-                            placeholder="عدد (مثلا +200%)"
-                            className="w-full bg-white/5 border border-white/10 rounded-lg p-1.5 text-white font-bold font-mono dir-ltr text-right"
-                          />
-                          <input
-                            type="text"
-                            value={stat.label}
-                            onChange={(e) => updateField(`STATS.${sIdx}.label`, e.target.value)}
-                            placeholder="عنوان آمار"
-                            className="w-full bg-white/5 border border-white/10 rounded-lg p-1.5 text-white font-bold"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: CASE STUDIES / PORTFOLIO */}
-          {activeTab === 'case-studies' && (
-            <div className="space-y-6">
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <h3 className="text-base font-black text-amber-400">
-                    مدیریت کیس‌استادی‌ها و نمونه‌کارها ({data.CASE_STUDIES?.length || 0})
-                  </h3>
+          {/* ---------------- POSTS ---------------- */}
+          {activeTab === 'posts' && (
+            <div className="space-y-8">
+              <CollectionEditor
+                title="مقالات"
+                desc="هر مقاله: عنوان، متن بخش‌بندی‌شده، تصویر شاخص، وضعیت انتشار، آدرس انگلیسی و سئوی کامل"
+                arrayPath="BLOG_POSTS"
+                fields={POST_FIELDS}
+                defaults={newPost}
+                addLabel="نوشتن مقاله جدید"
+                searchPlaceholder="جستجو در مقالات…"
+                preview={(p) => ({
+                  title: p.title,
+                  subtitle: `${p.categoryFa || ''} · ${p.date || ''} · ${p.readTime || ''}`,
+                  image: p.coverImage,
+                  badges: [
+                    p.status === 'draft' ? { text: 'پیش‌نویس', tone: 'warn' as const } : { text: 'منتشرشده', tone: 'ok' as const },
+                    ...(p.isPopular ? [{ text: 'محبوب‌ترین', tone: 'accent' as const }] : []),
+                  ],
+                })}
+                extraActions={(p, idx) => (
                   <button
-                    onClick={() => addItem('CASE_STUDIES')}
-                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg"
+                    type="button"
+                    onClick={() => {
+                      const sections = (p.sections || []).map((s: any, i: number) => ({ ...s, id: s.id || `section-${i + 1}` }));
+                      const toc = sections.filter((s: any) => s.heading).map((s: any) => ({ id: s.id, title: s.heading }));
+                      updateField(`BLOG_POSTS.${idx}.sections`, sections);
+                      updateField(`BLOG_POSTS.${idx}.tableOfContents`, toc);
+                      showToast('فهرست مطالب از بخش‌های مقاله ساخته شد.');
+                    }}
+                    className="nd-btn nd-btn-ghost px-4 py-2 text-[11px] cursor-pointer"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>افزودن نمونه‌کار جدید</span>
+                    <Wand2 className="w-3.5 h-3.5" />
+                    <span>ساخت خودکار فهرست مطالب از بخش‌ها</span>
                   </button>
-                </div>
-
-                <div className="space-y-4">
-                  {data.CASE_STUDIES?.map((cs, idx) => (
-                    <div key={cs.id || idx} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4 text-xs">
-                      <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                        <span className="font-black text-white text-sm">
-                          #{idx + 1} - {cs.title} ({cs.client})
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => removeItem('CASE_STUDIES', idx)}
-                            className="p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition-all"
-                            title="حذف این نمونه‌کار"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-slate-400 mb-1">عنوان کیس‌استادی:</label>
-                          <input
-                            type="text"
-                            value={cs.title}
-                            onChange={(e) => updateField(`CASE_STUDIES.${idx}.title`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 mb-1">نام مشتری / برند:</label>
-                          <input
-                            type="text"
-                            value={cs.client}
-                            onChange={(e) => updateField(`CASE_STUDIES.${idx}.client`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 mb-1">بازگشت سرمایه (ROAS):</label>
-                          <input
-                            type="text"
-                            value={cs.metrics?.roas || ''}
-                            onChange={(e) => updateField(`CASE_STUDIES.${idx}.metrics.roas`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-amber-300 font-bold font-mono dir-ltr text-right"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 mb-1">نرخ تبدیل (Conversion Rate):</label>
-                          <input
-                            type="text"
-                            value={cs.metrics?.conversionRate || ''}
-                            onChange={(e) => updateField(`CASE_STUDIES.${idx}.metrics.conversionRate`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-emerald-300 font-bold font-mono dir-ltr text-right"
-                          />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <label className="block text-slate-400 mb-1">خلاصه توضیحات کیس‌استادی:</label>
-                          <textarea
-                            value={cs.summary}
-                            onChange={(e) => updateField(`CASE_STUDIES.${idx}.summary`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white min-h-[60px]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: SERVICES */}
-          {activeTab === 'services' && (
-            <div className="space-y-6">
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <h3 className="text-base font-black text-amber-400">
-                    مدیریت خدمات تخصصی ({data.SERVICES?.length || 0})
-                  </h3>
-                  <button
-                    onClick={() => addItem('SERVICES')}
-                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>افزودن خدمت جدید</span>
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {data.SERVICES?.map((srv, idx) => (
-                    <div key={srv.id || idx} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 text-xs">
-                      <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                        <span className="font-black text-white text-sm">
-                          #{idx + 1} - {srv.title}
-                        </span>
-                        <button
-                          onClick={() => removeItem('SERVICES', idx)}
-                          className="p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-slate-400 mb-1">عنوان خدمت (فارسی):</label>
-                          <input
-                            type="text"
-                            value={srv.title}
-                            onChange={(e) => updateField(`SERVICES.${idx}.title`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 mb-1">عنوان انگلیسی:</label>
-                          <input
-                            type="text"
-                            value={srv.titleEn}
-                            onChange={(e) => updateField(`SERVICES.${idx}.titleEn`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-mono dir-ltr text-right"
-                          />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <label className="block text-slate-400 mb-1">توضیحات کوتاه:</label>
-                          <textarea
-                            value={srv.shortDesc}
-                            onChange={(e) => updateField(`SERVICES.${idx}.shortDesc`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white min-h-[50px]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 6: BLOG & CONTENT STRATEGY */}
-          {activeTab === 'blog' && (
-            <div className="space-y-6">
-              {/* Blog Sub-Tabs */}
-              <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl bg-[#120a38]/90 border border-white/10">
-                <button
-                  onClick={() => setBlogSubTab('posts')}
-                  className={`px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition-all cursor-pointer ${
-                    blogSubTab === 'posts'
-                      ? 'bg-amber-400 text-slate-950 shadow-lg'
-                      : 'text-slate-300 hover:bg-white/5'
-                  }`}
-                >
-                  <BookOpen className="w-4 h-4" />
-                  <span>مقالات و محتوا ({data.BLOG_POSTS?.length || 0})</span>
-                </button>
-                <button
-                  onClick={() => setBlogSubTab('page-info')}
-                  className={`px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition-all cursor-pointer ${
-                    blogSubTab === 'page-info'
-                      ? 'bg-amber-400 text-slate-950 shadow-lg'
-                      : 'text-slate-300 hover:bg-white/5'
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>استراتژی و هدر وبلاگ</span>
-                </button>
-                <button
-                  onClick={() => setBlogSubTab('comments')}
-                  className={`px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition-all cursor-pointer ${
-                    blogSubTab === 'comments'
-                      ? 'bg-amber-400 text-slate-950 shadow-lg'
-                      : 'text-slate-300 hover:bg-white/5'
-                  }`}
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>مدیریت دیدگاه‌ها ({data.BLOG_COMMENTS?.length || 0})</span>
-                </button>
-              </div>
-
-              {/* Sub-Tab 1: POSTS */}
-              {blogSubTab === 'posts' && (
-                <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-5">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                    <div>
-                      <h3 className="text-base font-black text-amber-400">
-                        لیست و ویرایش کامل مقالات
-                      </h3>
-                      <p className="text-xs text-slate-400">
-                        امکان تنظیم سرفصل‌ها (H2)، فهرست مطالب، نکات طلایی و کاور اختصاصی
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        addItem('BLOG_POSTS');
-                        setExpandedPostIdx(data.BLOG_POSTS?.length || 0);
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>مقاله جدید</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {data.BLOG_POSTS?.map((post, idx) => {
-                      const isExpanded = expandedPostIdx === idx;
-                      return (
-                        <div key={post.id || idx} className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden text-xs">
-                          {/* Accordion Bar */}
-                          <div 
-                            onClick={() => setExpandedPostIdx(isExpanded ? null : idx)}
-                            className="p-4 flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.07] transition-colors cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="w-6 h-6 rounded-full bg-amber-400/20 text-amber-300 font-black flex items-center justify-center text-[10px]">
-                                {idx + 1}
-                              </span>
-                              <div>
-                                <h4 className="font-black text-white text-sm">{post.title || 'مقاله بدون عنوان'}</h4>
-                                <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                                  <span>{post.categoryFa}</span>
-                                  <span>•</span>
-                                  <span>{post.readTime}</span>
-                                  {post.isPopular && <span className="text-amber-400 font-bold">★ محبوب‌ترین</span>}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeItem('BLOG_POSTS', idx);
-                                }}
-                                className="p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition-all cursor-pointer"
-                                title="حذف مقاله"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                              <div className="p-1.5 rounded-lg bg-white/10 text-slate-300">
-                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Expanded Post Editor */}
-                          {isExpanded && (
-                            <div className="p-5 border-t border-white/10 space-y-4">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                                <div className="sm:col-span-2 md:col-span-3">
-                                  <label className="block text-slate-400 mb-1 font-bold">عنوان کامل مقاله:</label>
-                                  <input
-                                    type="text"
-                                    value={post.title}
-                                    onChange={(e) => updateField(`BLOG_POSTS.${idx}.title`, e.target.value)}
-                                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold text-sm"
-                                  />
-                                </div>
-
-                                <div>
-                                  <label className="block text-slate-400 mb-1">دسته‌بندی موضوعی:</label>
-                                  <select
-                                    value={post.categoryFa}
-                                    onChange={(e) => updateField(`BLOG_POSTS.${idx}.categoryFa`, e.target.value)}
-                                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white"
-                                  >
-                                    <option value="پرفورمنس مارکتینگ">پرفورمنس مارکتینگ</option>
-                                    <option value="بهینه‌سازی نرخ تبدیل">بهینه‌سازی نرخ تبدیل (CRO)</option>
-                                    <option value="آنالیتیکس و ترکینگ">آنالیتیکس و ترکینگ</option>
-                                    <option value="سئو و رشد ارگانیک">سئو و رشد ارگانیک</option>
-                                    <option value="طراحی وب و شروع آنلاین">طراحی وب و شروع آنلاین</option>
-                                  </select>
-                                </div>
-
-                                <div>
-                                  <label className="block text-slate-400 mb-1">مسیر سه‌گانه کاربر:</label>
-                                  <select
-                                    value={post.pathCategory || 'sell'}
-                                    onChange={(e) => updateField(`BLOG_POSTS.${idx}.pathCategory`, e.target.value)}
-                                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white"
-                                  >
-                                    <option value="start">شروع کنیم (راه‌اندازی)</option>
-                                    <option value="sell">بهتر بفروشیم (CRO و تبلیغات)</option>
-                                    <option value="grow">رشد کنیم (اسکیل و اتومیشن)</option>
-                                  </select>
-                                </div>
-
-                                <div>
-                                  <label className="block text-slate-400 mb-1">مدت زمان مطالعه:</label>
-                                  <input
-                                    type="text"
-                                    value={post.readTime}
-                                    onChange={(e) => updateField(`BLOG_POSTS.${idx}.readTime`, e.target.value)}
-                                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white"
-                                  />
-                                </div>
-
-                                <div className="sm:col-span-2">
-                                  <label className="block text-slate-400 mb-1">آدرس تصویر کاور مقاله:</label>
-                                  <input
-                                    type="text"
-                                    value={post.coverImage || ''}
-                                    onChange={(e) => updateField(`BLOG_POSTS.${idx}.coverImage`, e.target.value)}
-                                    placeholder="https://..."
-                                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-mono dir-ltr text-right"
-                                  />
-                                </div>
-
-                                <div>
-                                  <label className="block text-slate-400 mb-1">تاریخ بروزرسانی:</label>
-                                  <input
-                                    type="text"
-                                    value={post.updatedAt || post.date || '۱۴۰۴'}
-                                    onChange={(e) => updateField(`BLOG_POSTS.${idx}.updatedAt`, e.target.value)}
-                                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white"
-                                  />
-                                </div>
-
-                                <div className="sm:col-span-2 md:col-span-3 flex items-center gap-6 p-3 rounded-xl bg-white/5 border border-white/10">
-                                  <label className="flex items-center gap-2 text-white cursor-pointer select-none font-bold">
-                                    <input
-                                      type="checkbox"
-                                      checked={!!post.isPopular}
-                                      onChange={(e) => updateField(`BLOG_POSTS.${idx}.isPopular`, e.target.checked)}
-                                      className="w-4 h-4 rounded text-amber-400 focus:ring-0"
-                                    />
-                                    <span>محبوب‌ترین مقاله (نمایش در هدر صفحه وبلاگ)</span>
-                                  </label>
-
-                                  <label className="flex items-center gap-2 text-white cursor-pointer select-none font-bold">
-                                    <input
-                                      type="checkbox"
-                                      checked={!!post.featured}
-                                      onChange={(e) => updateField(`BLOG_POSTS.${idx}.featured`, e.target.checked)}
-                                      className="w-4 h-4 rounded text-amber-400 focus:ring-0"
-                                    />
-                                    <span>مقاله ویژه (Featured)</span>
-                                  </label>
-                                </div>
-
-                                <div className="sm:col-span-2 md:col-span-3">
-                                  <label className="block text-slate-400 mb-1 font-bold">چکیده / لید مقاله (نمایش در کارت‌ها و بالای صفحه مقاله):</label>
-                                  <textarea
-                                    rows={2}
-                                    value={post.excerpt}
-                                    onChange={(e) => updateField(`BLOG_POSTS.${idx}.excerpt`, e.target.value)}
-                                    className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Sections Management */}
-                              <div className="pt-4 border-t border-white/10 space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <h5 className="font-black text-amber-300 text-xs flex items-center gap-1.5">
-                                    <ListTree className="w-4 h-4" />
-                                    <span>سرفصل‌های ساختاریافته مقاله ({post.sections?.length || 0})</span>
-                                  </h5>
-                                  <button
-                                    onClick={() => {
-                                      const currentSections = post.sections || [];
-                                      const newSec = {
-                                        id: `sec-${Date.now()}`,
-                                        heading: `${currentSections.length + 1}. سرفصل جدید`,
-                                        content: 'متن توضیحات این بخش...',
-                                        callout: 'نکته کلیدی این بخش'
-                                      };
-                                      updateField(`BLOG_POSTS.${idx}.sections`, [...currentSections, newSec]);
-                                      // also update table of contents
-                                      const currentToc = post.tableOfContents || [];
-                                      updateField(`BLOG_POSTS.${idx}.tableOfContents`, [
-                                        ...currentToc,
-                                        { id: newSec.id, title: newSec.heading }
-                                      ]);
-                                    }}
-                                    className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    <span>افزودن سرفصل H2</span>
-                                  </button>
-                                </div>
-
-                                {post.sections?.map((sec, sIdx) => (
-                                  <div key={sec.id || sIdx} className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-2">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-bold text-amber-400 text-xs">سرفصل #{sIdx + 1}</span>
-                                      <button
-                                        onClick={() => {
-                                          const filtered = post.sections?.filter((_, i) => i !== sIdx);
-                                          updateField(`BLOG_POSTS.${idx}.sections`, filtered);
-                                          const filteredToc = post.tableOfContents?.filter((_, i) => i !== sIdx);
-                                          updateField(`BLOG_POSTS.${idx}.tableOfContents`, filteredToc);
-                                        }}
-                                        className="p-1 text-rose-400 hover:text-rose-200 cursor-pointer"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                    <input
-                                      type="text"
-                                      value={sec.heading}
-                                      onChange={(e) => updateField(`BLOG_POSTS.${idx}.sections.${sIdx}.heading`, e.target.value)}
-                                      placeholder="عنوان سرفصل (مثلا: ۱. روش اجرای کمپین)"
-                                      className="w-full bg-[#0a0520] border border-white/20 rounded-lg p-2 text-white font-bold text-xs"
-                                    />
-                                    <textarea
-                                      rows={3}
-                                      value={sec.content}
-                                      onChange={(e) => updateField(`BLOG_POSTS.${idx}.sections.${sIdx}.content`, e.target.value)}
-                                      placeholder="متن کامل این بخش..."
-                                      className="w-full bg-[#0a0520] border border-white/20 rounded-lg p-2 text-white text-xs"
-                                    />
-                                    <input
-                                      type="text"
-                                      value={sec.callout || ''}
-                                      onChange={(e) => updateField(`BLOG_POSTS.${idx}.sections.${sIdx}.callout`, e.target.value)}
-                                      placeholder="باکس نکته طلایی / کال اوت (اختیاری)"
-                                      className="w-full bg-[#0a0520] border border-white/20 rounded-lg p-2 text-cyan-300 text-xs"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Sub-Tab 2: PAGE INFO & CONTENT STRATEGY */}
-              {blogSubTab === 'page-info' && (
-                <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                  <h3 className="text-base font-black text-amber-400 border-b border-white/10 pb-3">
-                    تنظیمات استراتژی محتوا و هدر وبلاگ
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <label className="block text-slate-400 mb-1">نشان بالای هدر (Badge):</label>
-                      <input
-                        type="text"
-                        value={data.BLOG_PAGE_DATA?.badge || ''}
-                        onChange={(e) => updateField('BLOG_PAGE_DATA.badge', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-400 mb-1">متن پیش‌فرض جستجو:</label>
-                      <input
-                        type="text"
-                        value={data.BLOG_PAGE_DATA?.searchPlaceholder || ''}
-                        onChange={(e) => updateField('BLOG_PAGE_DATA.searchPlaceholder', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-slate-400 mb-1">تیتر اصلی صفحه وبلاگ (Headline):</label>
-                      <input
-                        type="text"
-                        value={data.BLOG_PAGE_DATA?.headline || ''}
-                        onChange={(e) => updateField('BLOG_PAGE_DATA.headline', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-slate-400 mb-1">زیرتیتر توضیحی (Subheadline):</label>
-                      <textarea
-                        rows={2}
-                        value={data.BLOG_PAGE_DATA?.subheadline || ''}
-                        onChange={(e) => updateField('BLOG_PAGE_DATA.subheadline', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2 pt-4 border-t border-white/10">
-                      <h4 className="font-bold text-amber-300 mb-3">تنظیمات سکشن خبرنامه وبلاگ</h4>
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-400 mb-1">تیتر خبرنامه:</label>
-                      <input
-                        type="text"
-                        value={data.BLOG_PAGE_DATA?.newsletterHeadline || ''}
-                        onChange={(e) => updateField('BLOG_PAGE_DATA.newsletterHeadline', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-400 mb-1">متن دکمه خبرنامه:</label>
-                      <input
-                        type="text"
-                        value={data.BLOG_PAGE_DATA?.newsletterCta || ''}
-                        onChange={(e) => updateField('BLOG_PAGE_DATA.newsletterCta', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-slate-400 mb-1">زیرتیتر خبرنامه:</label>
-                      <input
-                        type="text"
-                        value={data.BLOG_PAGE_DATA?.newsletterSubheadline || ''}
-                        onChange={(e) => updateField('BLOG_PAGE_DATA.newsletterSubheadline', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Sub-Tab 3: COMMENTS MODERATION */}
-              {blogSubTab === 'comments' && (
-                <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                    <h3 className="text-base font-black text-amber-400">
-                      مدیریت دیدگاه‌ها و نظرات کاربران ({data.BLOG_COMMENTS?.length || 0})
-                    </h3>
-                  </div>
-
-                  {(!data.BLOG_COMMENTS || data.BLOG_COMMENTS.length === 0) ? (
-                    <div className="p-8 rounded-2xl bg-white/5 text-center text-slate-400 text-xs">
-                      هنوز دیدگاهی ثبت نشده است.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {data.BLOG_COMMENTS.map((comm) => (
-                        <div key={comm.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 text-xs">
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
-                            <div className="flex items-center gap-3">
-                              <span className="font-black text-white text-sm">{comm.authorName}</span>
-                              <span className="text-slate-400 dir-ltr font-mono">{comm.authorEmail}</span>
-                              <span className="text-slate-500">•</span>
-                              <span className="text-slate-400">{comm.date}</span>
-                              <span className="text-amber-400">برای مقاله: {comm.postId}</span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => toggleCommentApproval(comm.id)}
-                                className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
-                                  comm.isApproved
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                                }`}
-                              >
-                                {comm.isApproved ? '✓ تایید شده' : '⏳ در انتظار تایید'}
-                              </button>
-
-                              <button
-                                onClick={() => deleteBlogComment(comm.id)}
-                                className="p-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition-all cursor-pointer"
-                                title="حذف دیدگاه"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <p className="text-slate-200 leading-relaxed bg-[#0a0520] p-3 rounded-xl">
-                            {comm.content}
-                          </p>
-
-                          {/* Reply Section */}
-                          <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="پاسخ ادمین به این دیدگاه..."
-                              value={replyTextMap[comm.id] !== undefined ? replyTextMap[comm.id] : (comm.reply || '')}
-                              onChange={(e) => setReplyTextMap({ ...replyTextMap, [comm.id]: e.target.value })}
-                              className="flex-1 w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white text-xs"
-                            />
-                            <button
-                              onClick={() => {
-                                const text = replyTextMap[comm.id] !== undefined ? replyTextMap[comm.id] : (comm.reply || '');
-                                replyBlogComment(comm.id, text);
-                                showToast('پاسخ با موفقیت ثبت شد.');
-                              }}
-                              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shrink-0 cursor-pointer shadow-md"
-                            >
-                              ثبت پاسخ
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 7: PRODUCTS */}
-          {activeTab === 'products' && (
-            <div className="space-y-6">
-              {/* Header Info */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-amber-400 border-b border-white/10 pb-3">
-                  تنظیمات هدر صفحه محصولات و ابزارها
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="block text-slate-400 mb-1">نشان بالای هدر (Badge):</label>
-                    <input
-                      type="text"
-                      value={data.PRODUCTS_PAGE_DATA?.badge || ''}
-                      onChange={(e) => updateField('PRODUCTS_PAGE_DATA.badge', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 mb-1">تیتر اصلی صفحه:</label>
-                    <input
-                      type="text"
-                      value={data.PRODUCTS_PAGE_DATA?.headline || ''}
-                      onChange={(e) => updateField('PRODUCTS_PAGE_DATA.headline', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-slate-400 mb-1">زیرتیتر توضیحی:</label>
-                    <textarea
-                      rows={2}
-                      value={data.PRODUCTS_PAGE_DATA?.subheadline || ''}
-                      onChange={(e) => updateField('PRODUCTS_PAGE_DATA.subheadline', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Products List */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <h3 className="text-base font-black text-amber-400">
-                    مدیریت محصولات و ابزارها ({data.PRODUCTS?.length || 0})
-                  </h3>
-                  <button
-                    onClick={() => addItem('PRODUCTS')}
-                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>محصول جدید</span>
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {data.PRODUCTS?.map((prod, idx) => (
-                    <div key={prod.id || idx} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 text-xs">
-                      <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                        <span className="font-black text-white text-sm">
-                          #{idx + 1} - {prod.title}
-                        </span>
-                        <button
-                          onClick={() => removeItem('PRODUCTS', idx)}
-                          className="p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition-all cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <div className="sm:col-span-2">
-                          <label className="block text-slate-400 mb-1 font-bold">عنوان محصول:</label>
-                          <input
-                            type="text"
-                            value={prod.title}
-                            onChange={(e) => updateField(`PRODUCTS.${idx}.title`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 mb-1">نشان (Badge):</label>
-                          <input
-                            type="text"
-                            value={prod.badge || ''}
-                            onChange={(e) => updateField(`PRODUCTS.${idx}.badge`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-slate-400 mb-1">قیمت / تعرفه:</label>
-                          <input
-                            type="text"
-                            value={prod.price || ''}
-                            onChange={(e) => updateField(`PRODUCTS.${idx}.price`, e.target.value)}
-                            placeholder="مثلا: رایگان یا ۲۰۰ هزار تومان"
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-amber-400 font-bold"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-slate-400 mb-1">متن دکمه (CTA):</label>
-                          <input
-                            type="text"
-                            value={prod.actionText || ''}
-                            onChange={(e) => updateField(`PRODUCTS.${idx}.actionText`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-slate-400 mb-1">آیکون (target, chart, laptop, rocket):</label>
-                          <input
-                            type="text"
-                            value={prod.iconName || 'target'}
-                            onChange={(e) => updateField(`PRODUCTS.${idx}.iconName`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-mono"
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2 md:col-span-3">
-                          <label className="block text-slate-400 mb-1">مناسب برای (مخاطبان هدف):</label>
-                          <input
-                            type="text"
-                            value={prod.targetAudience}
-                            onChange={(e) => updateField(`PRODUCTS.${idx}.targetAudience`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white"
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2 md:col-span-3">
-                          <label className="block text-slate-400 mb-1">توضیحات محصول:</label>
-                          <textarea
-                            value={prod.description}
-                            onChange={(e) => updateField(`PRODUCTS.${idx}.description`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white min-h-[50px]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 8: TIMELINE */}
-          {activeTab === 'timeline' && (
-            <div className="space-y-6">
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <h3 className="text-base font-black text-amber-400">
-                    مدیریت تایم‌لاین و سوابق کاری ({data.TIMELINE?.length || 0})
-                  </h3>
-                  <button
-                    onClick={() => addItem('TIMELINE')}
-                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>سوابق جدید</span>
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {data.TIMELINE?.map((item, idx) => (
-                    <div key={idx} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 text-xs">
-                      <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                        <span className="font-black text-white text-sm">
-                          {item.year} - {item.title} ({item.company})
-                        </span>
-                        <button
-                          onClick={() => removeItem('TIMELINE', idx)}
-                          className="p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-slate-400 mb-1">سال / دوره:</label>
-                          <input
-                            type="text"
-                            value={item.year}
-                            onChange={(e) => updateField(`TIMELINE.${idx}.year`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 mb-1">سمت / عنوان:</label>
-                          <input
-                            type="text"
-                            value={item.title}
-                            onChange={(e) => updateField(`TIMELINE.${idx}.title`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-400 mb-1">نام شرکت:</label>
-                          <input
-                            type="text"
-                            value={item.company}
-                            onChange={(e) => updateField(`TIMELINE.${idx}.company`, e.target.value)}
-                            className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 text-white"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 9: MEDIA LIBRARY */}
-          {activeTab === 'media' && (
-            <div className="space-y-6">
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4 flex-wrap gap-3">
-                  <div>
-                    <h3 className="text-base font-black text-amber-400">کتابخانه رسانه و مدیریت فایل‌ها (Media Library)</h3>
-                    <p className="text-xs text-slate-400">آپلود و ذخیره تصاویر متصل به پایگاه داده مرکزی CMS</p>
-                  </div>
-
-                  <label className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all">
-                    <Upload className="w-4 h-4" />
-                    <span>آپلود تصویر جدید</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            if (typeof reader.result === 'string') {
-                              addMediaItem({
-                                url: reader.result,
-                                title: file.name,
-                                alt: file.name
-                              });
-                              showToast('تصویر جدید با موفقیت ذخیره گردید.');
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {(data.MEDIA_LIBRARY || []).map((media) => (
-                    <div key={media.id} className="p-3 rounded-2xl bg-white/5 border border-white/10 space-y-2 group/m relative">
-                      <div className="h-32 rounded-xl overflow-hidden border border-white/10 bg-black/40 relative">
-                        <img
-                          src={media.url}
-                          alt={media.alt || media.title}
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          onClick={() => {
-                            removeMediaItem(media.id);
-                            showToast('تصویر از کتابخانه رسانه حذف شد.');
-                          }}
-                          className="absolute top-2 left-2 p-1.5 rounded-lg bg-rose-600/90 text-white hover:bg-rose-600 transition-all shadow-md opacity-80 hover:opacity-100"
-                          title="حذف تصویر"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="text-[11px] font-bold text-white truncate">{media.title}</div>
-
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(media.url);
-                            showToast('لینک مستقیم تصویر کپی شد!');
-                          }}
-                          className="w-full py-1.5 rounded-xl bg-white/10 hover:bg-amber-400 hover:text-slate-950 text-[10px] font-bold transition-all text-center"
-                        >
-                          کپی لینک
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB: SEO & META TAGS */}
-          {activeTab === 'seo' && (
-            <div className="space-y-6">
-              {/* Global SEO Settings */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-amber-400 flex items-center gap-2 border-r-4 border-amber-400 pr-3">
-                  <Globe className="w-5 h-5" />
-                  <span>تنظیمات عمومی سئو (Global SEO)</span>
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">عنوان اصلی سایت (Site Title):</label>
-                    <input
-                      type="text"
-                      value={data.GLOBAL_SEO?.siteTitle || ''}
-                      onChange={(e) => updateField('GLOBAL_SEO.siteTitle', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">الگوی پسوند عنوان (Title Template):</label>
-                    <input
-                      type="text"
-                      value={data.GLOBAL_SEO?.titleTemplate || ''}
-                      onChange={(e) => updateField('GLOBAL_SEO.titleTemplate', e.target.value)}
-                      placeholder="%s | امید عدلی"
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold dir-ltr text-right"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-slate-300 font-bold mb-1">توضیحات متای پیش‌فرض (Default Meta Description):</label>
-                    <textarea
-                      value={data.GLOBAL_SEO?.defaultDescription || ''}
-                      onChange={(e) => updateField('GLOBAL_SEO.defaultDescription', e.target.value)}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white min-h-[70px] text-xs"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-slate-300 font-bold mb-1">کلمات کلیدی اصلی (Keywords - جداشده با کاما):</label>
-                    <input
-                      type="text"
-                      value={(data.GLOBAL_SEO?.keywords || []).join(', ')}
-                      onChange={(e) => updateField('GLOBAL_SEO.keywords', e.target.value.split(',').map(s => s.trim()))}
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white text-xs"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Per-Page SEO Settings */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                  <h3 className="text-base font-black text-white flex items-center gap-2">
-                    <Search className="w-5 h-5 text-[#5ce1e6]" />
-                    <span>تنظیمات سئو به تفکیک صفحات</span>
-                  </h3>
-
-                  <select
-                    value={selectedSeoPage}
-                    onChange={(e) => setSelectedSeoPage(e.target.value)}
-                    className="bg-[#0a0520] border border-white/20 text-white font-bold text-xs rounded-xl px-3 py-2"
-                  >
-                    <option value="home">صفحه اصلی (Home)</option>
-                    <option value="services">خدمات (Services)</option>
-                    <option value="portfolio">نمونه‌کارها (Portfolio)</option>
-                    <option value="about">درباره من (About)</option>
-                    <option value="blog">بلاگ (Blog)</option>
-                    <option value="contact">تماس (Contact)</option>
-                  </select>
-                </div>
-
-                {(() => {
-                  const pSeo = (data.PAGE_SEO && data.PAGE_SEO[selectedSeoPage]) || { title: '', description: '', keywords: [] };
-                  return (
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <label className="block text-slate-300 font-bold mb-1">عنوان این برگه در گوگل (Meta Title):</label>
-                        <input
-                          type="text"
-                          value={pSeo.title}
-                          onChange={(e) => updatePageSeo(selectedSeoPage, { ...pSeo, title: e.target.value })}
-                          className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white font-bold"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-300 font-bold mb-1">توضیحات این برگه (Meta Description):</label>
-                        <textarea
-                          value={pSeo.description}
-                          onChange={(e) => updatePageSeo(selectedSeoPage, { ...pSeo, description: e.target.value })}
-                          className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white min-h-[60px]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-300 font-bold mb-1">کلمات کلیدی برگه (Keywords):</label>
-                        <input
-                          type="text"
-                          value={(pSeo.keywords || []).join(', ')}
-                          onChange={(e) => updatePageSeo(selectedSeoPage, { ...pSeo, keywords: e.target.value.split(',').map(s => s.trim()) })}
-                          className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white"
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 10: SETTINGS (Navigation Menu, Theme, PIN, Backup) */}
-          {activeTab === 'settings' && (
-            <div className="space-y-6">
-              {/* Navigation Menu Manager */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                  <h3 className="text-base font-black text-amber-400 flex items-center gap-2">
-                    <Navigation className="w-5 h-5" />
-                    <span>مدیریت منوی ناوبری بالای سایت (Navigation Menu)</span>
-                  </h3>
-                  <button
-                    onClick={() => addItem('NAVIGATION_MENU')}
-                    className="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs"
-                  >
-                    + افزودن ایتم به منو
-                  </button>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  {(data.NAVIGATION_MENU || []).map((nav, nIdx) => (
-                    <div key={nav.id} className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between gap-3 flex-wrap">
-                      <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                        <input
-                          type="text"
-                          value={nav.title}
-                          onChange={(e) => updateField(`NAVIGATION_MENU.${nIdx}.title`, e.target.value)}
-                          className="bg-[#0a0520] border border-white/20 rounded-xl px-3 py-1.5 font-bold text-white text-xs w-36"
-                        />
-                        <input
-                          type="text"
-                          value={nav.path}
-                          onChange={(e) => updateField(`NAVIGATION_MENU.${nIdx}.path`, e.target.value)}
-                          className="bg-[#0a0520] border border-white/20 rounded-xl px-3 py-1.5 font-mono text-slate-300 text-xs dir-ltr w-36"
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => updateField(`NAVIGATION_MENU.${nIdx}.isVisible`, !nav.isVisible)}
-                          className={`px-3 py-1.5 rounded-xl font-bold transition-all text-xs ${
-                            nav.isVisible ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-700/50 text-slate-400'
-                          }`}
-                        >
-                          {nav.isVisible ? 'نمایش در منو' : 'مخفی'}
-                        </button>
-
-                        <button
-                          onClick={() => moveItem('NAVIGATION_MENU', nIdx, nIdx - 1)}
-                          disabled={nIdx === 0}
-                          className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30"
-                        >
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          onClick={() => moveItem('NAVIGATION_MENU', nIdx, nIdx + 1)}
-                          disabled={nIdx === (data.NAVIGATION_MENU.length - 1)}
-                          className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          onClick={() => removeItem('NAVIGATION_MENU', nIdx)}
-                          className="p-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Theme & Design Customizer */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-white border-r-4 border-[#8b5cf6] pr-3 flex items-center gap-2">
-                  <Palette className="w-5 h-5 text-[#8b5cf6]" />
-                  <span>تنظیمات قالب و رنگ‌بندی (Theme Config)</span>
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">رنگ اصلی برند (Primary Color):</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={data.THEME_CONFIG?.primaryColor || '#8b5cf6'}
-                        onChange={(e) => updateField('THEME_CONFIG.primaryColor', e.target.value)}
-                        className="w-10 h-10 rounded-xl bg-transparent border-0 cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={data.THEME_CONFIG?.primaryColor || '#8b5cf6'}
-                        onChange={(e) => updateField('THEME_CONFIG.primaryColor', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 font-mono text-white dir-ltr"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">رنگ ثانویه / اکسنت (Accent Color):</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={data.THEME_CONFIG?.accentColor || '#5ce1e6'}
-                        onChange={(e) => updateField('THEME_CONFIG.accentColor', e.target.value)}
-                        className="w-10 h-10 rounded-xl bg-transparent border-0 cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={data.THEME_CONFIG?.accentColor || '#5ce1e6'}
-                        onChange={(e) => updateField('THEME_CONFIG.accentColor', e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 font-mono text-white dir-ltr"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* PIN Code Manager */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border-2 border-amber-400/50 space-y-4">
-                <h3 className="text-base font-black text-amber-400 flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5" />
-                  <span>تغییر پین‌کد ورود به مدیریت</span>
-                </h3>
-
-                <form onSubmit={handleChangePin} className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">پین‌کد فعلی:</label>
-                    <input
-                      type="password"
-                      value={oldPinInput}
-                      onChange={(e) => setOldPinInput(e.target.value)}
-                      placeholder="• • • •"
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-center text-white font-mono dir-ltr"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">پین‌کد جدید:</label>
-                    <input
-                      type="password"
-                      value={newPinInput}
-                      onChange={(e) => setNewPinInput(e.target.value)}
-                      placeholder="• • • •"
-                      className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-center text-white font-mono dir-ltr"
-                    />
-                  </div>
-
-                  <div className="flex items-end">
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-lg transition-all cursor-pointer"
-                    >
-                      تغییر پین‌کد
-                    </button>
-                  </div>
-                </form>
-
-                {pinChangeMsg && (
-                  <div className="p-3 rounded-xl bg-white/10 text-amber-300 text-xs font-bold">
-                    {pinChangeMsg}
-                  </div>
                 )}
-              </div>
-
-              {/* Data Import & Export & Reset */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-white border-r-4 border-[#8b5cf6] pr-3">
-                  پشتیبان‌گیری و بازنشانی اطلاعات
-                </h3>
-
-                <div className="flex items-center gap-3 flex-wrap text-xs">
-                  <button
-                    onClick={exportJSON}
-                    className="px-4 py-3 rounded-2xl bg-[#8b5cf6] hover:bg-[#7c3aed] text-white font-bold flex items-center gap-2 shadow-lg cursor-pointer"
-                  >
-                    <Download className="w-4 h-4 text-amber-300" />
-                    <span>دانلود خروجی کامل JSON (پشتیبان)</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (confirm('آیا مطمئن هستید که می‌خواهید تمام محتوا را به حالت اولیه بازگردانید؟')) {
-                        resetToDefaults();
-                        showToast('محتوا به حالت اولیه بازنشانی شد.');
-                      }
-                    }}
-                    className="px-4 py-3 rounded-2xl bg-rose-600/80 hover:bg-rose-600 text-white font-bold flex items-center gap-2 shadow-lg cursor-pointer"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    <span>بازنشانی به داده‌های اولیه اول سایت</span>
-                  </button>
+              />
+              <ACard>
+                <ASectionTitle title="تنظیمات صفحه وبلاگ" desc="متن‌های هدر، جستجو و خبرنامه" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="BLOG_PAGE_DATA" item={data.BLOG_PAGE_DATA} fields={[
+                    { key: 'badge', label: 'نشان هدر' },
+                    { key: 'headline', label: 'تیتر اصلی' },
+                    { key: 'subheadline', label: 'زیرتیتر', type: 'textarea', rows: 2 },
+                    { key: 'searchPlaceholder', label: 'متن جای‌نما جستجو' },
+                    { key: 'newsletterHeadline', label: 'تیتر خبرنامه' },
+                    { key: 'newsletterSubheadline', label: 'توضیح خبرنامه', type: 'textarea', rows: 2 },
+                    { key: 'newsletterPlaceholder', label: 'جای‌نما ایمیل' },
+                    { key: 'newsletterCta', label: 'متن دکمه عضویت' },
+                    { key: 'newsletterSuccess', label: 'پیام موفقیت عضویت', type: 'textarea', rows: 2 },
+                  ]} />
                 </div>
-              </div>
+              </ACard>
             </div>
           )}
 
-          {/* TAB: HISTORY, SNAPSHOTS & AUDIT LOGS */}
-          {activeTab === 'history' && (
-            <div className="space-y-6">
-              {/* Snapshot creation card */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-amber-400 border-r-4 border-amber-400 pr-3 flex items-center gap-2">
-                  <HistoryIcon className="w-5 h-5" />
-                  <span>ثبت و بازیابی نسخه پشتیبان لحظه‌ای (Version Snapshots)</span>
-                </h3>
-
-                <div className="flex items-center gap-3 flex-wrap text-xs">
-                  <input
-                    type="text"
-                    value={snapshotDesc}
-                    onChange={(e) => setSnapshotDesc(e.target.value)}
-                    placeholder="توضیحات نقطه بازیابی (مثلا: قبل از تغییر خدمات)"
-                    className="flex-1 min-w-[240px] bg-[#0a0520] border border-white/20 rounded-xl px-3 py-2 text-white font-bold"
-                  />
-                  <button
-                    onClick={() => {
-                      createSnapshot(snapshotDesc || 'نسخه پشتیبان دستی');
-                      setSnapshotDesc('');
-                      showToast('نسخه پشتیبان با موفقیت ثبت شد!');
-                    }}
-                    className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-lg transition-all"
-                  >
-                    + ثبت نسخه فعلی (Snapshot)
-                  </button>
-                </div>
-
-                <div className="space-y-2 pt-3">
-                  {(data.VERSION_HISTORY || []).map((snap) => (
-                    <div key={snap.id} className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-white block">{snap.description}</span>
-                        <span className="text-[10px] text-slate-400 font-mono dir-ltr">{new Date(snap.timestamp).toLocaleString('fa-IR')}</span>
+          {/* ---------------- COMMENTS ---------------- */}
+          {activeTab === 'comments' && (
+            <div className="space-y-4">
+              <ASectionTitle
+                title={`دیدگاه‌ها (${(data.BLOG_COMMENTS || []).length})`}
+                desc="تایید، پاسخ و مدیریت دیدگاه‌های مقالات"
+                action={
+                  <span className="flex gap-1.5">
+                    {(['all', 'pending', 'approved'] as const).map((f) => (
+                      <button key={f} onClick={() => setCommentFilter(f)} className={`nd-chip cursor-pointer ${commentFilter === f ? 'bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] border-transparent' : ''}`}>
+                        {f === 'all' ? 'همه' : f === 'pending' ? `در انتظار (${pendingComments})` : 'تاییدشده'}
+                      </button>
+                    ))}
+                  </span>
+                }
+              />
+              {comments.length === 0 && <ACard className="text-center py-10"><p className="text-xs nd-muted">دیدگاهی در این دسته نیست.</p></ACard>}
+              {comments.map((c) => {
+                const post = (data.BLOG_POSTS || []).find((p: any) => p.id === c.postId);
+                return (
+                  <ACard key={c.id} className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs font-extrabold">{c.authorName}</span>
+                        <span className="text-[10px] nd-muted dir-ltr">{c.authorEmail}</span>
+                        {c.isApproved ? <ABadge tone="ok">تاییدشده</ABadge> : <ABadge tone="warn">در انتظار</ABadge>}
+                      </span>
+                      <span className="text-[10px] nd-faint">{c.date} · {post?.title || 'مقاله حذف‌شده'}</span>
+                    </div>
+                    <p className="text-xs nd-muted leading-relaxed">{c.content}</p>
+                    {c.reply && (
+                      <div className="p-3 rounded-xl bg-[color:var(--nd-accent-soft)] text-[11px] font-bold text-[color:var(--nd-ink-2)]">
+                        <span className="text-[color:var(--nd-accent)] block mb-1">پاسخ شما:</span>{c.reply}
                       </div>
-
-                      <button
-                        onClick={() => {
-                          if (confirm(`آیا مطمئن هستید که می‌خواهید به این نسخه بازگردید؟`)) {
-                            rollbackSnapshot(snap.id);
-                            showToast('نسخه با موفقیت بازیابی شد!');
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-[#8b5cf6]/20 hover:bg-[#8b5cf6] text-[#8b5cf6] hover:text-white transition-all font-bold text-xs"
-                      >
-                        بازگردانی این نسخه
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button onClick={() => { toggleCommentApproval(c.id); showToast(c.isApproved ? 'دیدگاه به حالت در انتظار برگشت.' : 'دیدگاه تایید و منتشر شد.'); }} className={`nd-btn px-4 py-2 text-[11px] cursor-pointer ${c.isApproved ? 'nd-btn-ghost' : 'nd-btn-accent'}`}>
+                        {c.isApproved ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                        <span>{c.isApproved ? 'لغو تایید' : 'تایید و انتشار'}</span>
+                      </button>
+                      <div className="flex-1 min-w-[200px] flex gap-2">
+                        <AInput placeholder="پاسخ شما…" value={replyDrafts[c.id] || c.reply || ''} onChange={(e) => setReplyDrafts({ ...replyDrafts, [c.id]: e.target.value })} />
+                        <button onClick={() => { const txt = (replyDrafts[c.id] || '').trim(); if (!txt) return; replyBlogComment(c.id, txt); setReplyDrafts({ ...replyDrafts, [c.id]: '' }); showToast('پاسخ ثبت شد.'); }} className="nd-btn nd-btn-ghost px-4 py-2 text-[11px] shrink-0 cursor-pointer">
+                          <Reply className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <button onClick={() => { if (confirm('این دیدگاه حذف شود؟')) { deleteBlogComment(c.id); showToast('دیدگاه حذف شد.'); } }} className="p-2 rounded-lg text-[#dc2626] hover:bg-[#fee2e2] cursor-pointer shrink-0">
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                  ))}
+                  </ACard>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ---------------- SERVICES ---------------- */}
+          {activeTab === 'services' && (
+            <CollectionEditor
+              title="خدمات"
+              desc="هر خدمت: توضیحات، ویژگی‌ها، پکیج‌های قیمت و سئوی اختصاصی"
+              arrayPath="SERVICES"
+              fields={SERVICE_FIELDS}
+              defaults={() => ({ id: 'service-' + Date.now(), title: 'خدمت جدید', titleEn: '', iconName: 'sparkles', shortDesc: '', fullDesc: '', features: [], deliverables: [], tags: [], packages: [], status: 'draft', slug: '', seo: {} })}
+              addLabel="افزودن خدمت"
+              preview={(s) => ({ title: s.title, subtitle: s.shortDesc, badges: [s.status === 'draft' ? { text: 'پیش‌نویس', tone: 'warn' as const } : { text: 'منتشرشده', tone: 'ok' as const }] })}
+            />
+          )}
+
+          {/* ---------------- PORTFOLIO ---------------- */}
+          {activeTab === 'portfolio' && (
+            <CollectionEditor
+              title="نمونه‌کارها و کیس‌استادی‌ها"
+              desc="چالش، راهکار، نتیجه و شاخص‌های عددی هر پروژه"
+              arrayPath="CASE_STUDIES"
+              fields={CASE_FIELDS}
+              defaults={() => ({ id: 'case-' + Date.now(), title: 'کیس‌استادی جدید', client: '', industry: 'E-commerce' as const, industryFa: 'فروشگاهی', pathCategory: 'grow' as const, summary: '', challenge: '', solution: '', results: '', thumbnailIcon: 'chart', heroColor: 'indigo', featured: false, metrics: { roas: '', conversionRate: '', cacReduction: '' }, metricsComparison: [], tags: [], date: new Date().toLocaleDateString('fa-IR'), status: 'draft', slug: '', seo: {} })}
+              addLabel="افزودن نمونه‌کار"
+              preview={(c) => ({ title: c.title, subtitle: `${c.client || ''} · ${c.industryFa || ''}`, badges: [c.featured ? { text: 'ویژه', tone: 'accent' as const } : { text: 'عادی', tone: 'muted' as const }, c.status === 'draft' ? { text: 'پیش‌نویس', tone: 'warn' as const } : { text: 'منتشرشده', tone: 'ok' as const }] })}
+            />
+          )}
+
+          {/* ---------------- PRODUCTS ---------------- */}
+          {activeTab === 'products' && (
+            <div className="space-y-8">
+              <CollectionEditor
+                title="محصولات و ابزارها"
+                arrayPath="PRODUCTS"
+                fields={PRODUCT_FIELDS}
+                defaults={() => ({ id: 'product-' + Date.now(), title: 'محصول جدید', description: '', targetAudience: '', iconName: 'target', badge: '', price: '', actionText: 'دریافت', status: 'draft', slug: '', seo: {} })}
+                addLabel="افزودن محصول"
+                preview={(p) => ({ title: p.title, subtitle: `${p.price || ''} · ${p.badge || ''}`, badges: [p.status === 'draft' ? { text: 'پیش‌نویس', tone: 'warn' as const } : { text: 'منتشرشده', tone: 'ok' as const }] })}
+              />
+              <ACard>
+                <ASectionTitle title="تنظیمات صفحه محصولات" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="PRODUCTS_PAGE_DATA" item={data.PRODUCTS_PAGE_DATA} fields={[
+                    { key: 'badge', label: 'نشان هدر' },
+                    { key: 'headline', label: 'تیتر اصلی' },
+                    { key: 'subheadline', label: 'زیرتیتر', type: 'textarea', rows: 2 },
+                  ]} />
                 </div>
-              </div>
+              </ACard>
+            </div>
+          )}
 
-              {/* Audit Logs list */}
-              <div className="p-6 rounded-3xl bg-[#120a38]/80 border border-white/10 space-y-4">
-                <h3 className="text-base font-black text-white border-r-4 border-[#8b5cf6] pr-3 flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5 text-[#8b5cf6]" />
-                  <span>لاگ فعالیت‌های سیستم (Audit Logs)</span>
-                </h3>
+          {/* ---------------- PROJECTS ---------------- */}
+          {activeTab === 'projects' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle title="تنظیمات صفحه پروژه‌ها" desc="بنر ظرفیت همکاری و متن‌های صفحه" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="PROJECTS_PAGE_DATA" item={data.PROJECTS_PAGE_DATA} fields={[
+                    { key: 'badge', label: 'نشان هدر' },
+                    { key: 'headline', label: 'تیتر اصلی' },
+                    { key: 'subheadline', label: 'زیرتیتر', type: 'textarea', rows: 2 },
+                    { key: 'capacityStatus', label: 'وضعیت ظرفیت پذیرش پروژه', type: 'select', options: [
+                      { value: 'active', label: 'فعال — پروژه جدید می‌گیرم' },
+                      { value: 'limited', label: 'محدود — ظرفیت کم' },
+                      { value: 'full', label: 'تکمیل — فعلاً ظرفیت ندارم' },
+                    ] },
+                    { key: 'capacityText', label: 'متن بنر ظرفیت', type: 'textarea', rows: 2 },
+                    { key: 'sectionTitle', label: 'عنوان بخش پروژه‌ها' },
+                    { key: 'portfolioHeadline', label: 'تیتر ارجاع به نمونه‌کارها' },
+                    { key: 'portfolioBody', label: 'متن ارجاع به نمونه‌کارها', type: 'textarea', rows: 2 },
+                    { key: 'portfolioCta', label: 'متن دکمه نمونه‌کارها' },
+                  ]} />
+                </div>
+              </ACard>
+              <CollectionEditor
+                title="پروژه‌های جاری و سابق"
+                arrayPath="ONGOING_PROJECTS"
+                fields={[
+                  { key: 'title', label: 'عنوان پروژه' },
+                  { key: 'status', label: 'وضعیت', type: 'select', options: ['در حال اجرا', 'تکمیل‌شده'] },
+                  { key: 'description', label: 'توضیحات', type: 'textarea', rows: 2 },
+                  { key: 'isPlaceholder', label: 'آیتم جای‌نما (کم‌رنگ نمایش داده شود)', type: 'toggle' },
+                ]}
+                defaults={() => ({ id: 'prj-' + Date.now(), title: 'پروژه جدید', status: 'در حال اجرا', description: '', isPlaceholder: false })}
+                addLabel="افزودن پروژه"
+                preview={(p) => ({ title: p.title, subtitle: p.description, badges: [{ text: p.status, tone: p.status === 'در حال اجرا' ? 'ok' as const : 'muted' as const }] })}
+              />
+              <CollectionEditor
+                title="همکاری‌های منتخب (لیست «چند پروژه دیگه»)"
+                arrayPath="SELECT_PROJECTS"
+                fields={[
+                  { key: 'title', label: 'عنوان' },
+                  { key: 'desc', label: 'توضیح کوتاه', type: 'textarea', rows: 2 },
+                  { key: 'date', label: 'تاریخ' },
+                ]}
+                defaults={() => ({ title: 'همکاری جدید', desc: '', date: '' })}
+                addLabel="افزودن همکاری"
+                preview={(p) => ({ title: p.title, subtitle: `${p.date || ''} — ${p.desc || ''}` })}
+              />
+            </div>
+          )}
 
-                <div className="space-y-2 text-xs max-h-[300px] overflow-y-auto pr-1">
-                  {(data.AUDIT_LOGS || []).map((log) => (
-                    <div key={log.id} className="p-2.5 rounded-xl bg-[#0a0520] border border-white/10 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-[#5ce1e6]" />
-                        <span className="font-bold text-white">{log.action}</span>
-                        {log.details && <span className="text-slate-400 text-[11px]">({log.details})</span>}
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-500 dir-ltr">
-                        {new Date(log.timestamp).toLocaleTimeString('fa-IR')}
+          {/* ---------------- HOME ---------------- */}
+          {activeTab === 'home' && (
+            <div className="space-y-8">
+              <CollectionEditor
+                title="آمار و ارقام (نوار اثبات)"
+                arrayPath="STATS"
+                fields={[
+                  { key: 'value', label: 'مقدار', placeholder: '۲.۹ برابر' },
+                  { key: 'label', label: 'عنوان' },
+                  { key: 'subtext', label: 'توضیح' },
+                  { key: 'icon', label: 'نام آیکون', dir: 'ltr' },
+                ]}
+                defaults={() => ({ value: '', label: '', subtext: '', icon: 'trending-up' })}
+                addLabel="افزودن آمار"
+                preview={(s) => ({ title: `${s.value} — ${s.label}`, subtitle: s.subtext })}
+              />
+              <CollectionEditor
+                title="مسیر همکاری در صفحه اصلی"
+                desc="مراحل «چطور کار می‌کنیم» که در صفحه اصلی نمایش داده می‌شود"
+                arrayPath="HOMEPAGE_HOW_I_WORK_STEPS"
+                fields={[
+                  { key: 'step', label: 'شماره مرحله', half: true },
+                  { key: 'icon', label: 'نام آیکون', dir: 'ltr', half: true },
+                  { key: 'title', label: 'عنوان' },
+                  { key: 'desc', label: 'توضیح', type: 'textarea', rows: 2 },
+                ]}
+                defaults={() => ({ step: '', title: '', desc: '', icon: 'rocket' })}
+                addLabel="افزودن مرحله"
+                preview={(s) => ({ title: `${s.step}. ${s.title}`, subtitle: s.desc })}
+              />
+              <CollectionEditor
+                title="مسیر ۴ مرحله‌ای همکاری (صفحه خدمات)"
+                arrayPath="HOW_I_WORK_STEPS"
+                fields={[
+                  { key: 'step', label: 'شماره مرحله', half: true },
+                  { key: 'icon', label: 'نام آیکون', dir: 'ltr', half: true },
+                  { key: 'title', label: 'عنوان' },
+                  { key: 'desc', label: 'توضیح', type: 'textarea', rows: 2 },
+                ]}
+                defaults={() => ({ step: '', title: '', desc: '', icon: 'rocket' })}
+                addLabel="افزودن مرحله"
+                preview={(s) => ({ title: `${s.step}. ${s.title}`, subtitle: s.desc })}
+              />
+              <CollectionEditor
+                title="چرا امید؟ (نقاط تمایز)"
+                arrayPath="WHY_OMID_POINTS"
+                fields={[
+                  { key: 'title', label: 'عنوان' },
+                  { key: 'description', label: 'توضیح', type: 'textarea', rows: 3 },
+                  { key: 'icon', label: 'نام آیکون', dir: 'ltr' },
+                ]}
+                defaults={() => ({ title: '', description: '', icon: 'target' })}
+                addLabel="افزودن نقطه تمایز"
+                preview={(p) => ({ title: p.title, subtitle: p.description })}
+              />
+              <CollectionEditor
+                title="نقل‌قول مشتریان"
+                arrayPath="TESTIMONIALS"
+                fields={[
+                  { key: 'clientName', label: 'نام مشتری/تیم' },
+                  { key: 'clientRole', label: 'سمت' },
+                  { key: 'company', label: 'شرکت' },
+                  { key: 'avatarUrl', label: 'آواتار', type: 'image' },
+                  { key: 'rating', label: 'امتیاز (۱ تا ۵)', type: 'number', min: 1, max: 5, half: true },
+                  { key: 'metricHighlight', label: 'نشان دستاورد' },
+                  { key: 'quote', label: 'متن نقل‌قول', type: 'textarea', rows: 4 },
+                ]}
+                defaults={() => ({ id: 't-' + Date.now(), clientName: '', clientRole: '', company: '', avatarUrl: '', rating: 5, quote: '', metricHighlight: '' })}
+                addLabel="افزودن نقل‌قول"
+                preview={(t) => ({ title: `${t.clientName} — ${t.company}`, subtitle: t.quote, image: t.avatarUrl })}
+              />
+              <ACard>
+                <ASectionTitle title="بخش تحلیل کسب‌وکار" desc="«قبل از پیشنهاد، وضعیتت رو می‌فهمم»" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="BUSINESS_ANALYSIS_DATA" item={data.BUSINESS_ANALYSIS_DATA} fields={[
+                    { key: 'headline', label: 'تیتر' },
+                    { key: 'subheadline', label: 'زیرتیتر', type: 'textarea', rows: 2 },
+                    { key: 'steps', label: 'مراحل تحلیل', type: 'items', singular: 'مرحله', defaults: { step: '', title: '', desc: '' }, fields: [
+                      { key: 'step', label: 'شماره', half: true },
+                      { key: 'title', label: 'عنوان' },
+                      { key: 'desc', label: 'توضیح', type: 'textarea', rows: 2 },
+                    ] },
+                    { key: 'checklist', label: 'چک‌لیست سوالات', type: 'tags' },
+                  ]} />
+                </div>
+              </ACard>
+            </div>
+          )}
+
+          {/* ---------------- ABOUT ---------------- */}
+          {activeTab === 'about' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle title="اطلاعات فردی و راه‌های ارتباطی" desc="این اطلاعات در کل سایت (هدر، تماس، فوتر و سئو) استفاده می‌شود" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="PERSONAL_INFO" item={data.PERSONAL_INFO} fields={[
+                    { key: 'name', label: 'نام و نام خانوادگی' },
+                    { key: 'title', label: 'عنوان شغلی' },
+                    { key: 'avatar', label: 'عکس پروفایل', type: 'image' },
+                    { key: 'tagline', label: 'تگ‌لاین', type: 'textarea', rows: 2 },
+                    { key: 'bio', label: 'بیوگرافی کامل', type: 'textarea', rows: 5 },
+                    { key: 'shortBio', label: 'بیوگرافی کوتاه', type: 'textarea', rows: 3 },
+                    { key: 'experienceYears', label: 'سال‌های تجربه', half: true },
+                    { key: 'campaignsCount', label: 'تعداد کمپین‌ها', half: true },
+                    { key: 'avgRoasBoost', label: 'میانگین رشد ROAS', half: true },
+                    { key: 'totalAdSpendManaged', label: 'برندهای مدیریت‌شده', half: true },
+                    { key: 'availability', label: 'وضعیت پذیرش همکاری', type: 'textarea', rows: 2 },
+                    { key: 'location', label: 'موقعیت مکانی' },
+                    { key: 'email', label: 'ایمیل', dir: 'ltr' },
+                    { key: 'phone', label: 'شماره تماس (انگلیسی)', dir: 'ltr' },
+                    { key: 'phoneFormatted', label: 'شماره تماس (نمایش فارسی)' },
+                    { key: 'telegram', label: 'آیدی تلگرام', dir: 'ltr' },
+                    { key: 'telegramUrl', label: 'لینک تلگرام', dir: 'ltr' },
+                    { key: 'whatsappUrl', label: 'لینک واتساپ', dir: 'ltr' },
+                    { key: 'linkedin', label: 'لینکدین', dir: 'ltr' },
+                    { key: 'instagram', label: 'اینستاگرام', dir: 'ltr' },
+                    { key: 'xTwitter', label: 'توییتر/ایکس', dir: 'ltr' },
+                    { key: 'website', label: 'دامنه سایت', dir: 'ltr' },
+                  ]} />
+                </div>
+              </ACard>
+              <CollectionEditor
+                title="تایم‌لاین مسیر حرفه‌ای"
+                arrayPath="TIMELINE"
+                fields={[
+                  { key: 'year', label: 'بازه زمانی' },
+                  { key: 'title', label: 'عنوان شغلی' },
+                  { key: 'company', label: 'شرکت / مکان' },
+                  { key: 'description', label: 'توضیح (چالش و دستاورد)', type: 'textarea', rows: 4 },
+                  { key: 'achievement', label: 'دستاوردها' },
+                ]}
+                defaults={() => ({ year: '', title: '', company: '', description: '', achievement: '' })}
+                addLabel="افزودن سابقه"
+                preview={(t) => ({ title: `${t.title} — ${t.company}`, subtitle: t.year, badges: t.achievement ? [{ text: 'با دستاورد', tone: 'ok' as const }] : [] })}
+              />
+              <CollectionEditor
+                title="ابزارها و مهارت‌ها (نوار درصد)"
+                arrayPath="SKILLS_TOOLS"
+                fields={[
+                  { key: 'name', label: 'نام ابزار', dir: 'ltr' },
+                  { key: 'category', label: 'دسته', type: 'select', options: ['Ads', 'Analytics', 'CRO', 'Tech'] },
+                  { key: 'icon', label: 'نام آیکون', dir: 'ltr' },
+                  { key: 'proficiency', label: 'درصد تسلط', type: 'number', min: 0, max: 100 },
+                ]}
+                defaults={() => ({ name: '', category: 'Ads', icon: 'chart', proficiency: 80 })}
+                addLabel="افزودن ابزار"
+                preview={(s) => ({ title: s.name, subtitle: `${s.category} — ${s.proficiency}٪` })}
+              />
+              <ACard>
+                <ASectionTitle title="لیست کامل مهارت‌ها" desc="دو ستون «مهارت‌های تخصصی» و «مهارت‌های نرم» در صفحه درباره من" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="ALL_SKILLS_LIST" item={data.ALL_SKILLS_LIST} fields={[
+                    { key: 'hard', label: 'مهارت‌های تخصصی', type: 'items', singular: 'گروه', defaults: { title: '', tags: [] }, fields: [
+                      { key: 'title', label: 'عنوان گروه', dir: 'ltr' },
+                      { key: 'tags', label: 'مهارت‌ها', type: 'tags' },
+                    ] },
+                    { key: 'soft', label: 'مهارت‌های نرم', type: 'items', singular: 'گروه', defaults: { title: '', tags: [] }, fields: [
+                      { key: 'title', label: 'عنوان گروه' },
+                      { key: 'tags', label: 'مهارت‌ها', type: 'tags' },
+                    ] },
+                  ]} />
+                </div>
+              </ACard>
+              <CollectionEditor
+                title="همکاری‌های دیگر"
+                arrayPath="OTHER_COLLABORATIONS"
+                fields={[
+                  { key: 'company', label: 'نام شرکت' },
+                  { key: 'role', label: 'نقش همکاری' },
+                ]}
+                defaults={() => ({ company: '', role: '' })}
+                addLabel="افزودن همکاری"
+                preview={(c) => ({ title: c.company, subtitle: c.role })}
+              />
+              <ACard>
+                <ASectionTitle title="تحصیلات و دوره‌ها" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="EDUCATION_AND_COURSES" item={data.EDUCATION_AND_COURSES} fields={[
+                    { key: 'education', label: 'تحصیلات', type: 'items', singular: 'مقطع', defaults: { title: '', institute: '', year: '', grade: '' }, fields: [
+                      { key: 'title', label: 'عنوان مقطع' },
+                      { key: 'institute', label: 'موسسه' },
+                      { key: 'year', label: 'سال', half: true },
+                      { key: 'grade', label: 'معدل/دستاورد', half: true },
+                    ] },
+                    { key: 'courses', label: 'دوره‌های تخصصی', type: 'items', singular: 'دوره', defaults: { title: '', provider: '', date: '' }, fields: [
+                      { key: 'title', label: 'نام دوره' },
+                      { key: 'provider', label: 'موسسه برگزارکننده' },
+                      { key: 'date', label: 'تاریخ' },
+                    ] },
+                  ]} />
+                </div>
+              </ACard>
+            </div>
+          )}
+
+          {/* ---------------- PAGES ---------------- */}
+          {activeTab === 'pages' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle
+                  title="سئوی صفحات"
+                  desc="عنوان، توضیحات متا و تنظیمات گوگل برای هر صفحه"
+                  action={
+                    <ASelect value={selectedSeoPage} onChange={(e) => setSelectedSeoPage(e.target.value)} className="w-auto!">
+                      {PAGES_LIST.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                      {(data.CUSTOM_PAGES || []).map((cp) => <option key={cp.id} value={cp.slug}>{cp.title} (برگه سفارشی)</option>)}
+                    </ASelect>
+                  }
+                />
+                <SeoBox
+                  defaultOpen
+                  showStatus={false}
+                  showSlug={false}
+                  values={{ ...(data.PAGE_SEO?.[selectedSeoPage] || {}) }}
+                  onChange={(k, v) => updatePageSeo(selectedSeoPage, { [k]: v } as any)}
+                />
+              </ACard>
+
+              <ACard>
+                <ASectionTitle title="سکشن‌های صفحه اصلی" desc="نمایش/عدم نمایش و ترتیب بخش‌ها — محتوا از تب‌های دیگر مدیریت می‌شود" />
+                <div className="space-y-2">
+                  {(data.PAGE_SECTIONS?.['home'] || []).map((sec: any, i: number, arr: any[]) => (
+                    <div key={sec.id} className="flex items-center gap-3 rounded-xl border border-[color:var(--nd-line)] bg-[color:var(--nd-surface)] p-3">
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-xs font-extrabold truncate">{sec.label}</span>
+                        <span className="block text-[10px] nd-faint dir-ltr font-mono">{sec.name}</span>
+                      </span>
+                      <button
+                        onClick={() => toggleSectionVisibility('home', sec.id)}
+                        className={`nd-chip cursor-pointer ${sec.isHidden ? 'bg-[color:var(--nd-peach-soft)] text-[#d97706] border-transparent' : 'bg-[color:var(--nd-mint-soft)] text-[color:var(--nd-success)] border-transparent'}`}
+                      >
+                        {sec.isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        <span>{sec.isHidden ? 'مخفی' : 'نمایش'}</span>
+                      </button>
+                      <span className="flex gap-0.5">
+                        <button disabled={i === 0} onClick={() => reorderPageSection('home', i, i - 1)} className="p-1.5 rounded-lg hover:bg-[color:var(--nd-bg-soft)] disabled:opacity-25 cursor-pointer"><ChevronUp className="w-4 h-4" /></button>
+                        <button disabled={i === arr.length - 1} onClick={() => reorderPageSection('home', i, i + 1)} className="p-1.5 rounded-lg hover:bg-[color:var(--nd-bg-soft)] disabled:opacity-25 cursor-pointer"><ChevronDown className="w-4 h-4" /></button>
                       </span>
                     </div>
                   ))}
                 </div>
-              </div>
+              </ACard>
+
+              <CollectionEditor
+                title="برگه‌های سفارشی"
+                desc="صفحه‌های جدید با آدرس دلخواه — مثل وردپرس «برگه» بسازید"
+                arrayPath="CUSTOM_PAGES"
+                fields={[
+                  { key: 'title', label: 'عنوان برگه' },
+                  { key: 'slug', label: 'آدرس (URL Slug)', dir: 'ltr', hint: 'مثلاً: free-analysis' },
+                  { key: 'description', label: 'توضیح کوتاه', type: 'textarea', rows: 2 },
+                  { key: 'showInMenu', label: 'در منوی سایت نمایش داده شود', type: 'toggle' },
+                  { key: 'blocks', label: 'بلوک‌های محتوا', type: 'items', singular: 'بلوک', defaults: { type: 'text', title: '', content: '' }, fields: [
+                    { key: 'type', label: 'نوع بلوک', type: 'select', options: [
+                      { value: 'text', label: 'متن' },
+                      { value: 'image', label: 'تصویر' },
+                      { value: 'cta', label: 'دکمه فراخوان (CTA)' },
+                      { value: 'features', label: 'لیست ویژگی‌ها' },
+                      { value: 'faq', label: 'سوالات متداول' },
+                    ] },
+                    { key: 'title', label: 'عنوان بلوک' },
+                    { key: 'content', label: 'متن بلوک', type: 'textarea', rows: 4 },
+                    { key: 'imageUrl', label: 'تصویر بلوک', type: 'image' },
+                    { key: 'buttonText', label: 'متن دکمه (برای CTA)' },
+                    { key: 'buttonLink', label: 'لینک دکمه', dir: 'ltr' },
+                    { key: 'items', label: 'آیتم‌ها (برای ویژگی‌ها/FAQ)', type: 'items', singular: 'آیتم', defaults: { title: '', desc: '' }, fields: [
+                      { key: 'title', label: 'عنوان' },
+                      { key: 'desc', label: 'توضیح', type: 'textarea', rows: 2 },
+                    ] },
+                  ] },
+                ]}
+                defaults={() => ({ id: 'custom-' + Date.now(), slug: 'page-' + Date.now().toString().slice(-5), title: 'برگه جدید', description: '', showInMenu: false, blocks: [] })}
+                addLabel="ساخت برگه جدید"
+                preview={(cp) => ({ title: cp.title, subtitle: `/${cp.slug}`, badges: [cp.showInMenu ? { text: 'در منو', tone: 'ok' as const } : { text: 'بدون منو', tone: 'muted' as const }] })}
+              />
             </div>
           )}
-        </div>
+
+          {/* ---------------- MEDIA ---------------- */}
+          {activeTab === 'media' && (
+            <div className="space-y-4">
+              <ASectionTitle
+                title={`کتابخانه رسانه (${(data.MEDIA_LIBRARY || []).length})`}
+                desc={persistence === 'cloud' ? 'فایل‌ها روی Cloudflare R2 ذخیره می‌شوند و از هر دستگاهی در دسترس‌اند' : 'حالت محلی: فایل‌ها فقط در همین مرورگر ذخیره می‌شوند'}
+                action={
+                  <button onClick={() => mediaFileRef.current?.click()} disabled={mediaBusy} className="nd-btn nd-btn-accent px-5 py-2.5 text-xs cursor-pointer disabled:opacity-50">
+                    <Upload className="w-4 h-4" />
+                    <span>{mediaBusy ? 'در حال آپلود…' : 'آپلود فایل جدید'}</span>
+                  </button>
+                }
+              />
+              <input ref={mediaFileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleMediaUpload} />
+              {(data.MEDIA_LIBRARY || []).length === 0 ? (
+                <ACard className="text-center py-12"><p className="text-xs nd-muted">کتابخانه خالی است.</p></ACard>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {(data.MEDIA_LIBRARY || []).map((m, i) => (
+                    <ACard key={m.id} className="p-3! space-y-2">
+                      <div className="aspect-square rounded-xl overflow-hidden bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)]">
+                        <img src={m.url} alt={m.alt || m.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                      <span className="block text-[10px] font-extrabold truncate">{m.title}</span>
+                      <AInput placeholder="متن جایگزین (alt)…" value={m.alt || ''} onChange={(e) => updateField(`MEDIA_LIBRARY.${i}.alt`, e.target.value)} className="py-1.5! text-[10px]!" />
+                      <span className="flex gap-1.5">
+                        <button onClick={() => { navigator.clipboard.writeText(m.url); showToast('لینک کپی شد.'); }} className="nd-btn nd-btn-ghost px-2.5 py-1.5 text-[10px] grow cursor-pointer"><Link2 className="w-3 h-3" /><span>کپی لینک</span></button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm('این فایل حذف شود؟')) return;
+                            if (m.url.startsWith('/api/media/file/')) await api.deleteMedia(decodeURIComponent(m.url.replace('/api/media/file/', '')));
+                            removeMediaItem(m.id);
+                            showToast('فایل حذف شد.');
+                          }}
+                          className="p-1.5 rounded-lg text-[#dc2626] hover:bg-[#fee2e2] cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    </ACard>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ---------------- SEO ---------------- */}
+          {activeTab === 'seo' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle title="سئویسراسری سایت" desc="مقادیر پیش‌فرض برای همه صفحات" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="GLOBAL_SEO" item={data.GLOBAL_SEO} fields={[
+                    { key: 'siteTitle', label: 'نام سایت' },
+                    { key: 'titleTemplate', label: 'قالب عنوان صفحات', hint: 'مثلاً: %s | امید عدلی' },
+                    { key: 'defaultMetaDesc', label: 'توضیحات متای پیش‌فرض', type: 'textarea', rows: 3 },
+                    { key: 'defaultKeywords', label: 'کلمات کلیدی پیش‌فرض', hint: 'با کاما جدا کنید' },
+                    { key: 'faviconUrl', label: 'فاوآیکون', type: 'image' },
+                    { key: 'ogImage', label: 'تصویر پیش‌فرض اشتراک‌گذاری', type: 'image' },
+                    { key: 'canonicalBaseUrl', label: 'آدرس پایه سایت', dir: 'ltr' },
+                    { key: 'robotsTxt', label: 'متن robots.txt', type: 'textarea', rows: 4 },
+                  ]} />
+                </div>
+              </ACard>
+              <ACard>
+                <ASectionTitle title="نقشه سایت و robots.txt" desc="خروجی آماده برای Google Search Console" />
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button onClick={() => { setSitemapOut(generateSitemapXml()); showToast('sitemap.xml تولید شد.'); }} className="nd-btn nd-btn-ghost px-4 py-2.5 text-xs cursor-pointer"><Wand2 className="w-4 h-4" /><span>ساخت sitemap.xml</span></button>
+                  <button onClick={() => { setRobotsOut(generateRobotsTxt()); showToast('robots.txt تولید شد.'); }} className="nd-btn nd-btn-ghost px-4 py-2.5 text-xs cursor-pointer"><Wand2 className="w-4 h-4" /><span>ساخت robots.txt</span></button>
+                  {sitemapOut && <button onClick={() => downloadText('sitemap.xml', sitemapOut)} className="nd-btn nd-btn-accent px-4 py-2.5 text-xs cursor-pointer"><Download className="w-4 h-4" /><span>دانلود sitemap</span></button>}
+                  {robotsOut && <button onClick={() => downloadText('robots.txt', robotsOut)} className="nd-btn nd-btn-accent px-4 py-2.5 text-xs cursor-pointer"><Download className="w-4 h-4" /><span>دانلود robots</span></button>}
+                </div>
+                {sitemapOut && <ATextarea rows={8} dir="ltr" readOnly value={sitemapOut} className="font-mono text-[10px]! text-left" />}
+                {robotsOut && <ATextarea rows={4} dir="ltr" readOnly value={robotsOut} className="font-mono text-[10px]! text-left mt-3" />}
+              </ACard>
+            </div>
+          )}
+
+          {/* ---------------- CHAT / AI ASSISTANT ---------------- */}
+          {activeTab === 'chat' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle
+                  title="رفتار دستیار هوشمند"
+                  desc="شخصیت، لحن و قوانین پاسخ‌دهی AI مشاور — ответы همیشه از داده‌های خود سایت ساخته می‌شوند"
+                  action={
+                    <button
+                      onClick={async () => { setChatLog(await api.listChats()); showToast('تاریخچه گفتگوها دریافت شد.'); }}
+                      className="nd-btn nd-btn-ghost px-4 py-2 text-[11px] cursor-pointer"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>دریافت تاریخچه گفتگوها</span>
+                    </button>
+                  }
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="CHAT_CONFIG" item={data.CHAT_CONFIG} fields={[
+                    { key: 'enabled', label: 'دستیار در سایت فعال باشد', type: 'toggle', hint: 'خاموش = ویجت چت به بازدیدکنندگان نمایش داده نمی‌شود' },
+                    { key: 'title', label: 'نام دستیار (در هدر چت)' },
+                    { key: 'greeting', label: 'پیام خوش‌آمدگویی', type: 'textarea', rows: 3 },
+                    { key: 'persona', label: 'شخصیت و قوانین پاسخ‌دهی (System Prompt)', type: 'textarea', rows: 8, hint: 'لحن، مرزها و CTA را اینجا تعریف کنید' },
+                    { key: 'quickQuestions', label: 'سوال‌های پیشنهادی (چیپ‌های سریع)', type: 'tags' },
+                    { key: 'ctaText', label: 'متن دعوت به اقدام (انتهای پاسخ‌ها)', type: 'textarea', rows: 2 },
+                    { key: 'fallbackMessage', label: 'پاسخ پیش‌فرض (وقتی جوابی پیدا نشد)', type: 'textarea', rows: 2 },
+                  ]} />
+                </div>
+              </ACard>
+
+              <ACard>
+                <ASectionTitle title="تاریخچه گفتگوها (پایش رفتار)" desc="۲۰۰ گفتگوی آخر بازدیدکنندگان — ببینید چه چیزی می‌پرسند" />
+                {chatLog === null ? (
+                  <p className="text-xs nd-muted">برای دیدن تاریخچه، دکمه «دریافت تاریخچه گفتگوها» را بزنید.</p>
+                ) : chatLog.length === 0 ? (
+                  <p className="text-xs nd-muted">گفتگویی ثبت نشده است.</p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {chatLog.map((c) => (
+                      <div key={c.id} className="rounded-xl border border-[color:var(--nd-line)] p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-extrabold text-[color:var(--nd-accent)]">سوال: <span className="text-[color:var(--nd-ink)]">{c.question}</span></span>
+                          <span className="text-[9px] nd-faint dir-ltr shrink-0">{new Date(c.created_at).toLocaleString('fa-IR')}</span>
+                        </div>
+                        <p className="text-[11px] nd-muted leading-relaxed whitespace-pre-wrap line-clamp-4">{c.answer}</p>
+                        <span className="nd-chip text-[9px]">{c.mode === 'ai' ? '🤖 پاسخ Gemini' : '📚 پاسخ از داده سایت'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ACard>
+            </div>
+          )}
+
+          {/* ---------------- APPEARANCE ---------------- */}
+          {activeTab === 'appearance' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle
+                  title="منوی اصلی سایت"
+                  desc="ترتیب و عنوان آیتم‌های ناوبری"
+                  action={
+                    <button
+                      onClick={() => {
+                        addItem('NAVIGATION_MENU', { id: 'nav-' + Date.now(), label: 'آیتم جدید', pageSlug: 'home', isHidden: true, order: (data.NAVIGATION_MENU || []).length });
+                        showToast('آیتم جدید اضافه شد (به‌صورت مخفی — وقتی آماده شد نمایشش دهید).');
+                      }}
+                      className="nd-btn nd-btn-accent px-4 py-2 text-[11px] cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /><span>افزودن آیتم منو</span>
+                    </button>
+                  }
+                />
+                <div className="space-y-2">
+                  {(data.NAVIGATION_MENU || []).map((nav, nIdx) => (
+                    <div key={nav.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--nd-line)] bg-[color:var(--nd-surface)] p-3">
+                      <AInput className="w-40!" value={nav.label} onChange={(e) => updateField(`NAVIGATION_MENU.${nIdx}.label`, e.target.value)} />
+                      <ASelect className="w-44!" value={nav.pageSlug} onChange={(e) => updateField(`NAVIGATION_MENU.${nIdx}.pageSlug`, e.target.value)}>
+                        {PAGES_LIST.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                        {(data.CUSTOM_PAGES || []).map((cp) => <option key={cp.id} value={cp.slug}>{cp.title} (سفارشی)</option>)}
+                      </ASelect>
+                      <button
+                        onClick={() => updateField(`NAVIGATION_MENU.${nIdx}.isHidden`, !nav.isHidden)}
+                        className={`nd-chip cursor-pointer ${!nav.isHidden ? 'bg-[color:var(--nd-mint-soft)] text-[color:var(--nd-success)] border-transparent' : 'bg-[color:var(--nd-peach-soft)] text-[#d97706] border-transparent'}`}
+                      >
+                        {!nav.isHidden ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                        <span>{!nav.isHidden ? 'نمایش' : 'مخفی'}</span>
+                      </button>
+                      <span className="flex gap-0.5 mr-auto">
+                        <button disabled={nIdx === 0} onClick={() => moveItem('NAVIGATION_MENU', nIdx, nIdx - 1)} className="p-1.5 rounded-lg hover:bg-[color:var(--nd-bg-soft)] disabled:opacity-25 cursor-pointer"><ChevronUp className="w-4 h-4" /></button>
+                        <button disabled={nIdx === (data.NAVIGATION_MENU || []).length - 1} onClick={() => moveItem('NAVIGATION_MENU', nIdx, nIdx + 1)} className="p-1.5 rounded-lg hover:bg-[color:var(--nd-bg-soft)] disabled:opacity-25 cursor-pointer"><ChevronDown className="w-4 h-4" /></button>
+                        <button onClick={() => removeItem('NAVIGATION_MENU', nIdx)} className="p-1.5 rounded-lg text-[#dc2626] hover:bg-[#fee2e2] cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </ACard>
+
+              <ACard>
+                <ASectionTitle title="رنگ‌ها و ظاهر" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="THEME_CONFIG" item={data.THEME_CONFIG} fields={[
+                    { key: 'accentColor', label: 'رنگ اصلی برند', dir: 'ltr', hint: '#4f46e5' },
+                    { key: 'secondaryColor', label: 'رنگ ثانویه', dir: 'ltr' },
+                    { key: 'fontScale', label: 'ضریب اندازه فونت', type: 'number', min: 0.8, max: 1.3, half: true },
+                  ]} />
+                </div>
+              </ACard>
+
+              {persistence === 'local' && (
+                <ACard>
+                  <ASectionTitle title="رمز محلی مدیریت" desc="فقط در حالت توسعه (بدون اتصال به Cloudflare) استفاده می‌شود" />
+                  <form onSubmit={handleChangePin} className="flex flex-wrap items-end gap-3">
+                    <div className="w-40">
+                      <ALabel>رمز فعلی</ALabel>
+                      <AInput type="password" dir="ltr" value={oldPinInput} onChange={(e) => setOldPinInput(e.target.value)} />
+                    </div>
+                    <div className="w-40">
+                      <ALabel>رمز جدید</ALabel>
+                      <AInput type="password" dir="ltr" value={newPinInput} onChange={(e) => setNewPinInput(e.target.value)} />
+                    </div>
+                    <button type="submit" className="nd-btn nd-btn-accent px-5 py-2.5 text-xs cursor-pointer"><span>تغییر رمز</span></button>
+                    {pinChangeMsg && <span className="text-[11px] font-extrabold text-[color:var(--nd-accent)] w-full">{pinChangeMsg}</span>}
+                  </form>
+                </ACard>
+              )}
+            </div>
+          )}
+
+          {/* ---------------- SETTINGS ---------------- */}
+          {activeTab === 'settings' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle title="پشتیبان‌گیری و بازیابی" desc="خروجی/ورود کامل محتوا به‌صورت JSON" />
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button onClick={() => { createSnapshot(); showToast('اسنپ‌شات ذخیره شد.'); }} className="nd-btn nd-btn-accent px-4 py-2.5 text-xs cursor-pointer"><Copy className="w-4 h-4" /><span>ایجاد اسنپ‌شات فوری</span></button>
+                  <button onClick={() => { exportJSON(); showToast('فایل بکاپ دانلود شد.'); }} className="nd-btn nd-btn-ghost px-4 py-2.5 text-xs cursor-pointer"><Download className="w-4 h-4" /><span>دانلود بکاپ JSON</span></button>
+                  <button onClick={() => importFileRef.current?.click()} className="nd-btn nd-btn-ghost px-4 py-2.5 text-xs cursor-pointer"><Upload className="w-4 h-4" /><span>بازیابی از فایل</span></button>
+                  <input ref={importFileRef} type="file" accept="application/json" className="hidden" onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const r = new FileReader();
+                    r.onloadend = () => {
+                      if (typeof r.result === 'string' && importJSON(r.result)) showToast('بکاپ با موفقیت بازیابی شد.');
+                      else showToast('فایل JSON معتبر نیست.');
+                    };
+                    r.readAsText(f);
+                    e.target.value = '';
+                  }} />
+                </div>
+                <ALabel>یا JSON را مستقیم اینجا paste کنید</ALabel>
+                <ATextarea rows={4} dir="ltr" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{ "PERSONAL_INFO": … }' className="font-mono text-[10px]! text-left" />
+                <button onClick={() => { if (!importText.trim()) return; if (importJSON(importText)) { showToast('بازیابی انجام شد.'); setImportText(''); } else showToast('JSON نامعتبر است.'); }} className="nd-btn nd-btn-ghost px-4 py-2 text-[11px] mt-2 cursor-pointer"><RotateCcw className="w-3.5 h-3.5" /><span>بازیابی از متن</span></button>
+              </ACard>
+
+              <ACard>
+                <ASectionTitle title="تاریخچه نسخه‌ها (اسنپ‌شات‌ها)" desc="۲۰ نسخه آخر — امکان بازگشت فوری" />
+                <div className="space-y-2">
+                  {(data.VERSION_HISTORY || []).map((snap) => (
+                    <div key={snap.id} className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--nd-line)] p-3">
+                      <span className="min-w-0">
+                        <span className="block text-xs font-extrabold truncate">{snap.label}</span>
+                        <span className="block text-[10px] nd-faint">{snap.timestamp}</span>
+                      </span>
+                      <span className="flex gap-1.5 shrink-0">
+                        <button onClick={() => { if (confirm('بازگشت به این نسخه؟ تغییرات بعد از آن از دست می‌رود.')) { rollbackSnapshot(snap.id); showToast('به نسخه انتخابی بازگشتید.'); } }} className="nd-btn nd-btn-ghost px-3 py-1.5 text-[10px] cursor-pointer"><History className="w-3 h-3" /><span>بازگشت</span></button>
+                        <button onClick={() => deleteSnapshot(snap.id)} className="p-1.5 rounded-lg text-[#dc2626] hover:bg-[#fee2e2] cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </span>
+                    </div>
+                  ))}
+                  {(data.VERSION_HISTORY || []).length === 0 && <p className="text-xs nd-muted">اسنپ‌شاتی وجود ندارد.</p>}
+                </div>
+              </ACard>
+
+              <ACard>
+                <ASectionTitle title="گزارش رویدادها" desc="۵۰ رویداد اخیر پنل" />
+                <div className="max-h-72 overflow-y-auto space-y-1.5">
+                  {(data.AUDIT_LOGS || []).map((log) => (
+                    <div key={log.id} className="flex items-start justify-between gap-3 text-[11px] border-b border-[color:var(--nd-line)] pb-1.5 last:border-0">
+                      <span><span className="font-extrabold">{log.action}</span> <span className="nd-muted">— {log.details}</span></span>
+                      <span className="nd-faint shrink-0 dir-ltr text-[10px]">{log.timestamp}</span>
+                    </div>
+                  ))}
+                </div>
+              </ACard>
+
+              <ACard className="border-[#dc2626]/40">
+                <ASectionTitle title="منطقه خطر" desc="بازنشانی کل سایت به محتوای کارخانه" />
+                <button onClick={() => setConfirmReset(true)} className="nd-btn px-5 py-2.5 text-xs bg-[#dc2626] text-white hover:bg-[#b91c1c] cursor-pointer">
+                  <RotateCcw className="w-4 h-4" />
+                  <span>بازنشانی کامل محتوا</span>
+                </button>
+              </ACard>
+            </div>
+          )}
+        </main>
       </div>
+
+      <AConfirm
+        open={confirmReset}
+        message="همه‌ی تغییرات محتوا حذف و سایت به حالت اولیه برمی‌گردد. قبل از ادامه مطمئن شوید بکاپ گرفته‌اید. ادامه می‌دهید؟"
+        onCancel={() => setConfirmReset(false)}
+        onConfirm={() => { resetToDefaults(); setConfirmReset(false); showToast('سایت به حالت اولیه بازنشانی شد.'); }}
+      />
     </div>
   );
+
+  function downloadText(filename: string, text: string) {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 };

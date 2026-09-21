@@ -8,13 +8,14 @@ import { SectionWrapper } from '../components/cms/SectionWrapper';
 import { IsometricDashboard } from '../components/3D/IsometricDashboard';
 import { IconBadge3D } from '../components/3D/3DIconBadge';
 import { TiltCard } from '../components/3D/TiltCard';
-import { 
-  ChevronLeft, 
-  ArrowUpLeft, 
-  Sparkles, 
-  Target, 
-  Rocket, 
-  TrendingUp, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpLeft,
+  Sparkles,
+  Target,
+  Rocket,
+  TrendingUp,
   Layers,
   MessageCircle,
   ClipboardCheck,
@@ -22,28 +23,122 @@ import {
   Briefcase,
   CheckCircle2,
   Quote,
-  ArrowRight,
+  Award,
   Code,
   Megaphone,
-  Laptop
+  Laptop,
+  Star,
+  Send,
+  Search,
 } from 'lucide-react';
-import { CinematicSection, CinematicStagger, CinematicItem } from '../components/motion/CinematicSection';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
+import { MaskLines, Magnetic } from '../components/motion/Cinematic';
 
 interface HomePageProps {
   theme: Theme;
   onNavigate: (page: Page) => void;
   onSelectCaseStudy: (caseStudy: CaseStudy) => void;
+  onSelectPost?: (postId: string) => void;
 }
 
-export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectCaseStudy }) => {
-  const isDark = theme === 'dark';
+/* ------------------------------------------------------------------ */
+/*  Icon helpers                                                       */
+/* ------------------------------------------------------------------ */
+const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
+  code: Code,
+  sparkles: Sparkles,
+  megaphone: Megaphone,
+  rocket: Rocket,
+  target: Target,
+  chart: LineChart,
+  laptop: Laptop,
+  'trending-up': TrendingUp,
+  award: Award,
+  layers: Layers,
+  'message-circle': MessageCircle,
+  'clipboard-check': ClipboardCheck,
+  briefcase: Briefcase,
+};
+
+const iconFor = (name: string) => ICON_MAP[name] || Sparkles;
+
+/* Soft pastel tints cycled across cards — calm, professional palette */
+const TINTS = [
+  { bg: 'var(--nd-accent-soft)', fg: '#4f46e5' },
+  { bg: 'var(--nd-sky-soft)', fg: '#1d6fd8' },
+  { bg: 'var(--nd-mint-soft)', fg: '#0f9d6e' },
+  { bg: 'var(--nd-peach-soft)', fg: '#d97706' },
+];
+
+/* ------------------------------------------------------------------ */
+/*  Small building blocks                                              */
+/* ------------------------------------------------------------------ */
+const SectionHead: React.FC<{
+  eyebrow: string;
+  icon?: React.ReactNode;
+  title: string;
+  desc?: string;
+  align?: 'center' | 'start';
+}> = ({ eyebrow, icon, title, desc, align = 'center' }) => (
+  <div className={`${align === 'center' ? 'text-center mx-auto' : 'text-right'} max-w-2xl space-y-4`}>
+    <span className="nd-eyebrow">
+      {icon}
+      <span>{eyebrow}</span>
+    </span>
+    <h2 className="nd-h2 text-2xl sm:text-3xl lg:text-[2.6rem]">{title}</h2>
+    {desc && <p className="nd-muted text-sm sm:text-base leading-relaxed">{desc}</p>}
+  </div>
+);
+
+const IconTile: React.FC<{ name: string; tint: { bg: string; fg: string }; size?: 'sm' | 'md' }> = ({
+  name,
+  tint,
+  size = 'md',
+}) => {
+  const Icon = iconFor(name);
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-2xl ${size === 'md' ? 'w-12 h-12' : 'w-10 h-10'}`}
+      style={{ background: tint.bg, color: tint.fg }}
+    >
+      <Icon className={size === 'md' ? 'w-6 h-6' : 'w-5 h-5'} />
+    </span>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  HomePage                                                           */
+/* ------------------------------------------------------------------ */
+export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectCaseStudy, onSelectPost }) => {
   const { data } = useContent();
+  const isDark = theme === 'dark';
 
-  // Active tab in Services section ('start' | 'sell' | 'grow')
-  const [activeServiceTab, setActiveServiceTab] = useState<'start' | 'sell' | 'grow'>('start');
+  const [activeServiceTab, setActiveServiceTab] = useState<'start' | 'sell' | 'grow'>('sell');
+  const [promptValue, setPromptValue] = useState('');
+  const [openFaq, setOpenFaq] = useState<number>(-1);
+
+  // Cinematic pointer parallax for the hero stage
+  const px = useMotionValue(0);
+  const py = useMotionValue(0);
+  const sx = useSpring(px, { stiffness: 90, damping: 20 });
+  const sy = useSpring(py, { stiffness: 90, damping: 20 });
+  const orbX = useTransform(sx, (v) => v * 18);
+  const orbY = useTransform(sy, (v) => v * 14);
+  const orb2X = useTransform(sx, (v) => v * -12);
+  const dashX = useTransform(sx, (v) => v * -9);
+  const dashY = useTransform(sy, (v) => v * -7);
+  const spotX = useTransform(sx, (v) => `${50 + v * 38}%`);
+  const spotY = useTransform(sy, (v) => `${42 + v * 34}%`);
+
+  const handleStageMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    px.set(((e.clientX - r.left) / r.width - 0.5) * 2);
+    py.set(((e.clientY - r.top) / r.height - 0.5) * 2);
+  };
   const servicesSectionRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
 
+  const personal = data.PERSONAL_INFO;
   const stats = data.STATS || [];
   const services = data.SERVICES || [];
   const caseStudies = data.CASE_STUDIES || [];
@@ -51,17 +146,32 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
   const howIWork = data.HOMEPAGE_HOW_I_WORK_STEPS || data.HOW_I_WORK_STEPS || [];
   const timeline = data.TIMELINE || [];
   const otherCollaborations = data.OTHER_COLLABORATIONS || [];
+  const whyOmidPoints = data.WHY_OMID_POINTS || [];
+  const skills = data.SKILLS_TOOLS || [];
   const homeSections = data.PAGE_SECTIONS['home'] || [];
 
-  // Function to handle clicking on the 3-path navigation cards
+  const featuredStudies = (caseStudies.filter((c) => c.featured).length ? caseStudies.filter((c) => c.featured) : caseStudies).slice(0, 6);
+  const homepageStudies = featuredStudies.slice(0, 4);
+  const homepageTimeline = timeline.slice(0, 4);
+
   const handlePathNavClick = (tab: 'start' | 'sell' | 'grow') => {
     setActiveServiceTab(tab);
-    if (servicesSectionRef.current) {
-      servicesSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    servicesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // 3-Path Navigation cards data
+  const scrollCarousel = (dir: 1 | -1) => {
+    const el = carouselRef.current;
+    if (!el) return;
+    // RTL: next items live to the left → negative scrollLeft
+    el.scrollBy({ left: dir * -1 * (el.clientWidth * 0.75), behavior: 'smooth' });
+  };
+
+  const handlePromptSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    onNavigate('contact');
+  };
+
+  /* 3-path navigation cards (copy preserved) */
   const pathCards = [
     {
       id: 'start' as const,
@@ -70,10 +180,6 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       desc: 'هنوز سایت یا پیج فعالی ندارم، یا تازه راه افتادم و نمی‌دونم از کجا شروع کنم.',
       cta: 'ببین از کجا شروع کنیم',
       iconName: 'sparkles',
-      glow: 'rgba(139, 92, 246, 0.25)',
-      accentBg: 'from-violet-500/20 to-purple-500/10',
-      accentBorder: 'border-violet-500/30',
-      accentText: 'text-violet-400'
     },
     {
       id: 'sell' as const,
@@ -82,11 +188,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       desc: 'سایت یا پیج دارم، بازدید هم میاد، ولی فروش اونی نیست که باید باشه.',
       cta: 'ببین مشکل کجاست',
       iconName: 'target',
-      glow: 'rgba(59, 130, 246, 0.3)',
-      accentBg: 'from-blue-500/20 to-cyan-500/10',
-      accentBorder: 'border-blue-500/40',
-      accentText: 'text-blue-400',
-      isFeatured: true
+      isFeatured: true,
     },
     {
       id: 'grow' as const,
@@ -95,323 +197,502 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       desc: 'همه‌چیز کار می‌کنه، ولی می‌خوام سیستم رشدم رو قوی‌تر و مقیاس‌پذیرتر کنم.',
       cta: 'ببین چطور رشد کنیم',
       iconName: 'rocket',
-      glow: 'rgba(16, 185, 129, 0.25)',
-      accentBg: 'from-emerald-500/20 to-teal-500/10',
-      accentBorder: 'border-emerald-500/30',
-      accentText: 'text-emerald-400'
-    }
+    },
   ];
 
-  // Service Tabs Configuration (mapped by id)
   const tabConfig = {
     start: {
       label: 'شروع کنیم',
       tagline: 'هنوز آنلاین شروع نکرده‌اید؟ از صفر کنارتان هستم.',
       serviceIds: ['web-app-design', 'ui-ux-design', 'social-media-strategy'],
       ctaText: 'ببینیم دقیقاً چی نیاز داری',
-      icon: Sparkles
+      icon: Sparkles,
     },
     sell: {
       label: 'بهتر بفروشیم',
       tagline: 'آنلاین هستید، اما فروش آن چیزی نیست که باید باشد؟ با هم پیدا می‌کنیم مشکل کجاست.',
       serviceIds: ['performance-marketing', 'cro-optimization', 'tracking-analytics'],
       ctaText: 'ببینیم دقیقاً چی نیاز داری',
-      icon: Target
+      icon: Target,
     },
     grow: {
       label: 'رشد کنیم',
-      tagline: 'فروش دارید؟ حالا بیایید سیستم رشدتان را بهتر کنیم.',
+      tagline: 'فروش دارید؟ حالا وقت مقیاس‌پذیر کردن و رشد پایدار است.',
       serviceIds: ['seo-growth', 'growth-strategy', 'marketing-automation', 'retention-strategy'],
       ctaText: 'ببینیم دقیقاً چی نیاز داری',
-      icon: Rocket
-    }
-  };
-
-  // 4 Featured Case Studies strictly for Homepage
-  const targetCaseStudyIds = ['eads-campaigns', 'eqamat24-cro', 'golchin-home', 'dayan-performance'];
-  const homepageCaseStudies = targetCaseStudyIds
-    .map(id => caseStudies.find(c => c.id === id))
-    .filter(Boolean) as CaseStudy[];
-
-  // If some couldn't be matched by id, fallback to first 4
-  const finalHomepageCaseStudies = homepageCaseStudies.length === 4 
-    ? homepageCaseStudies 
-    : caseStudies.slice(0, 4);
-
-  // Why Omid 3 key points
-  const whyOmidPoints = [
-    {
-      title: 'همه‌ی مسیر رو با هم می‌بینم',
-      desc: 'به‌جای اینکه هر بخش کسب‌وکارتون (سایت، محتوا، تبلیغات، تحلیل) جدا جدا پیش بره، کمک می‌کنم همه در یک مسیر مشخص برای فروش و رشد کار کنن.',
-      icon: 'layers'
+      icon: Rocket,
     },
-    {
-      title: 'تصمیم‌هام رو با داده می‌گیرم، نه حدس',
-      desc: 'هر پیشنهادی که می‌دم، بر اساس تحلیل واقعی رفتار مشتری‌های شماست، نه یه فرمول یکسان برای همه.',
-      icon: 'chart'
-    },
-    {
-      title: 'نتیجه رو با عدد نشونتون می‌دم',
-      desc: 'همون‌طور که تا اینجا دیدید، ادعا نمی‌کنم — نتیجه رو با عدد ثابت می‌کنم.',
-      icon: 'target'
-    }
+  } as const;
+
+  const promptSuggestions = [
+    'نرخ تبدیل سایتم رو بیشتر کن',
+    'بودجه تبلیغاتم هدر می‌ره',
+    'می‌خوام رتبه ۱ گوگل بشم',
+    'سایت ندارم؛ از صفر شروع کنم',
   ];
 
-  // 3 Featured Experience Milestones for Homepage (Dayan, Eads, Ahan Online)
-  const homepageTimeline = timeline.filter(t => 
-    t.company.includes('دایان') || t.company.includes('ای ادز') || t.company.includes('آهن آنلاین')
-  );
-  const finalHomepageTimeline = homepageTimeline.length >= 3 ? homepageTimeline.slice(0, 3) : timeline.slice(0, 3);
-
-  // Helper to render icon for How I Work
-  const getHowIWorkIcon = (stepNum: string) => {
-    switch (stepNum) {
-      case '۱':
-      case '01':
-      case '۰۱':
-        return <MessageCircle className="w-5 h-5 text-violet-400" />;
-      case '۲':
-      case '02':
-      case '۰۲':
-        return <ClipboardCheck className="w-5 h-5 text-blue-400" />;
-      case '۳':
-      case '03':
-      case '۰۳':
-        return <Rocket className="w-5 h-5 text-emerald-400" />;
-      default:
-        return <TrendingUp className="w-5 h-5 text-[#5ce1e6]" />;
-    }
-  };
-
+  /* ---------------------------------------------------------------- */
   const renderSectionByName = (secName: string) => {
     switch (secName) {
-      // 1. HERO (Static - As requested in homepage-content-final.md)
+      /* ============ 1. HERO ============ */
       case 'HERO':
         return (
-          <CinematicSection variant="fade-up" showGlowBeam glowColor="purple" className="relative pt-6 pb-12" id="hero-section">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-              {/* Text & CTAs */}
-              <motion.div 
-                initial={{ opacity: 0, x: 30, filter: 'blur(8px)' }}
-                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-                className="lg:col-span-7 text-right space-y-6"
-              >
-                {/* Eyebrow */}
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#8b5cf6]/10 border border-[#8b5cf6]/30 text-xs font-black text-[#a78bfa] shadow-sm">
-                  <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                  <span>برای فروشگاه‌ها و کسب‌وکارهای فروش‌محور</span>
-                </div>
+          <section id="hero-section" className="relative">
+            {/* ---------- Cinematic dark stage (full-bleed) ---------- */}
+            <div
+              onMouseMove={isDark ? handleStageMove : undefined}
+              className={
+                isDark
+                  ? 'nd-stage nd-hairline-top relative left-1/2 -translate-x-1/2 w-screen rounded-b-[44px] -mt-28 sm:-mt-32'
+                  : 'relative'
+              }
+            >
+              {/* dark-theme cinematic decorations */}
+              {isDark && (
+                <>
+              <span className="nd-watermark" aria-hidden>رشد</span>
 
-                {/* Headline (H1) */}
-                <h1 className={`text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.25] tracking-tight ${
-                  isDark ? 'text-white' : 'text-[#1a1240]'
-                }`}>
-                  فروشگاهتان را آنلاین شروع کنید،{' '}
-                  <span className="gradient-text">بهتر بفروشید و رشد کنید.</span>
+              {/* pointer spotlight */}
+              <motion.div
+                aria-hidden
+                style={{ left: spotX, top: spotY }}
+                className="absolute w-[42rem] h-[42rem] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+              >
+                <div className="w-full h-full rounded-full" style={{ background: 'radial-gradient(circle, rgba(148,163,255,0.14), transparent 62%)' }} />
+              </motion.div>
+
+              {/* aurora orbs — parallax layers */}
+              <motion.div style={{ x: orbX, y: orbY }} className="absolute -top-40 -left-32 pointer-events-none">
+                <div className="w-[36rem] h-[36rem] rounded-full blur-3xl opacity-40 nd-float-slow" style={{ background: 'radial-gradient(circle, rgba(99,91,255,0.5), transparent 65%)' }} />
+              </motion.div>
+              <motion.div style={{ x: orb2X }} className="absolute top-1/2 -right-24 pointer-events-none">
+                <div className="w-[28rem] h-[28rem] rounded-full blur-3xl opacity-30 nd-float" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.4), transparent 65%)' }} />
+              </motion.div>
+
+              {/* floating particles */}
+              <span className="nd-particle" style={{ top: '22%', right: '14%', animationDelay: '0s' }} aria-hidden />
+              <span className="nd-particle" style={{ top: '38%', right: '82%', animationDelay: '-2.4s' }} aria-hidden />
+              <span className="nd-particle" style={{ top: '64%', right: '24%', animationDelay: '-4.8s' }} aria-hidden />
+              <span className="nd-particle" style={{ top: '74%', right: '68%', animationDelay: '-6.2s' }} aria-hidden />
+                </>
+              )}
+
+              <div className={`relative max-w-5xl mx-auto px-4 sm:px-8 text-center space-y-8 ${isDark ? 'pt-36 sm:pt-40 pb-16 sm:pb-20' : 'pt-8 sm:pt-14 pb-10'}`}>
+                {/* Trust pill */}
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  className={`${isDark ? 'nd-glass-dark' : 'nd-glass'} inline-flex items-center gap-3 rounded-full ps-2 pe-4 py-1.5`}
+                >
+                  <span className="flex">
+                    <img src={personal.avatar} alt={personal.name} className={`w-7 h-7 rounded-full object-cover ring-2 ${isDark ? 'ring-white/30' : 'ring-white'}`} />
+                    <span className={`-ms-2 w-7 h-7 rounded-full ring-2 grid place-items-center text-[10px] font-black text-white ${isDark ? 'ring-white/30' : 'ring-white'}`} style={{ background: 'linear-gradient(135deg,#4f46e5,#38bdf8)' }}>
+                      ۵+
+                    </span>
+                  </span>
+                  <span className={`text-xs font-extrabold ${isDark ? 'text-slate-200' : 'text-[color:var(--nd-ink-2)]'}`}>
+                    همراه برندهای فروش‌محور · {personal.experienceYears} تجربه
+                  </span>
+                  <span className={`hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold ${isDark ? 'text-emerald-300' : 'text-[color:var(--nd-success)]'}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {personal.availability}
+                  </span>
+                </motion.div>
+
+                {/* Headline — cinematic mask reveal */}
+                <h1 className={`nd-h1 ${isDark ? 'text-white' : ''} text-[2.2rem] leading-[1.28] sm:text-5xl sm:leading-[1.22] lg:text-[3.7rem] lg:leading-[1.18]`}>
+                  <MaskLines
+                    delay={0.1}
+                    lines={[
+                      <span key="1">فروشگاهتان را آنلاین شروع کنید،</span>,
+                      <span key="2">
+                        {isDark ? (
+                          <span className="nd-text-glow nd-shine">بهتر بفروشید</span>
+                        ) : (
+                          <span className="relative inline-block text-[color:var(--nd-accent)]">
+                            <span className="absolute inset-x-[-6px] bottom-[4px] h-3.5 sm:h-4 rounded-md bg-[rgba(99,102,241,0.16)] -rotate-1" aria-hidden />
+                            <span className="relative">بهتر بفروشید</span>
+                          </span>
+                        )}{' '}
+                        و رشد کنید.
+                      </span>,
+                    ]}
+                  />
                 </h1>
 
-                {/* Subheadline */}
-                <p className={`text-sm sm:text-base leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                {/* Sub */}
+                <motion.p
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-sm sm:text-lg leading-relaxed max-w-2xl mx-auto`}
+                >
                   فرقی نمی‌کنه تازه می‌خواید وارد دنیای آنلاین بشید یا همین حالا فروشگاه و سایت دارید؛ از طراحی سایت و راه‌اندازی پیج و محتوا تا تبلیغات، تحلیل و افزایش فروش، کمکتون می‌کنم مسیر درست رشدتون رو پیدا کنید و اجراش کنید.
-                </p>
+                </motion.p>
 
-                {/* Intro statement */}
-                <div className={`p-4 rounded-2xl border text-xs sm:text-sm leading-relaxed ${
-                  isDark ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
-                }`}>
-                  <span className="font-bold text-[#5ce1e6] ml-1">من امید عدلی هستم؛</span>
-                  متخصص رشد دیجیتال برای فروشگاه‌ها. کمک می‌کنم بفهمید مشتری‌ها کجا شما را پیدا می‌کنند، چرا بعضی‌ها خرید می‌کنند و بعضی‌ها نه، و برای بهتر شدن فروش باید دقیقاً روی چه چیزی کار کنید.
-                </div>
+                {/* Prompt box — dark glass */}
+                <motion.form
+                  onSubmit={handlePromptSubmit}
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  className={`${isDark ? 'nd-glass-dark' : 'nd-card'} rounded-[26px] p-3 sm:p-4 max-w-2xl mx-auto text-right`}
+                >
+                  <div className="flex items-center gap-3 px-2 sm:px-3 pt-2 pb-3">
+                    <Search className={`w-5 h-5 shrink-0 ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`} />
+                    <input
+                      value={promptValue}
+                      onChange={(e) => setPromptValue(e.target.value)}
+                      placeholder="نیازت رو بنویس؛ مثلاً: بازدید میاد ولی فروش نه…"
+                      className={`w-full bg-transparent text-sm sm:text-base font-medium focus:outline-none ${isDark ? 'text-white placeholder:text-slate-500' : 'text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)]'}`}
+                    />
+                  </div>
+                  <div className={`flex flex-wrap items-center gap-2 border-t pt-3 px-1 ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
+                    {promptSuggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setPromptValue(s)}
+                        className={`nd-chip transition-colors cursor-pointer ${isDark ? 'bg-white/5 border-white/10 text-slate-300 hover:text-white hover:border-indigo-400/50' : 'hover:text-[color:var(--nd-accent)] hover:border-[rgba(79,70,229,0.4)]'}`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                    <button type="submit" className={`nd-btn ms-auto px-5 py-2.5 text-xs sm:text-sm ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'}`}>
+                      <span>تحلیل رایگان نیازت</span>
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
+                </motion.form>
 
                 {/* CTAs */}
-                <div className="flex flex-wrap items-center gap-4 pt-2">
-                  <button
-                    onClick={() => onNavigate('contact')}
-                    className="glow-btn px-7 py-4 rounded-2xl text-sm font-black text-white inline-flex items-center gap-2.5 shadow-xl cursor-pointer hover:scale-105 transition-transform"
-                  >
-                    <span>ببینیم کسب‌وکارتان به چی نیاز دارد</span>
-                    <ArrowUpLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={() => onNavigate('portfolio')}
-                    className={`px-6 py-4 rounded-2xl text-sm font-bold border transition-all cursor-pointer ${
-                      isDark ? 'bg-white/5 hover:bg-white/15 border-white/15 text-white' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800'
-                    }`}
-                  >
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.7, delay: 0.62 }}
+                  className="flex flex-wrap items-center justify-center gap-3"
+                >
+                  <Magnetic>
+                    <button onClick={() => onNavigate('contact')} className={`nd-btn px-7 py-4 text-xs sm:text-sm ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'}`}>
+                      <span>ببینیم کسب‌وکارتان به چی نیاز دارد</span>
+                      <ArrowUpLeft className="w-4 h-4" />
+                    </button>
+                  </Magnetic>
+                  <button onClick={() => onNavigate('portfolio')} className={`nd-btn px-6 py-4 text-xs sm:text-sm ${isDark ? 'nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10' : 'nd-btn-ghost'}`}>
                     <span>پروژه‌هایی که انجام دادم</span>
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
-                </div>
+                </motion.div>
 
-                {/* Proof micro-list */}
-                <div className="pt-2 text-xs font-bold text-slate-400 flex flex-wrap items-center gap-2">
-                  <span>طراحی سایت</span>
-                  <span className="text-slate-500">·</span>
-                  <span>محتوا و شبکه‌های اجتماعی</span>
-                  <span className="text-slate-500">·</span>
-                  <span>تبلیغات</span>
-                  <span className="text-slate-500">·</span>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.7, delay: 0.72 }}
+                  className={`flex flex-wrap items-center justify-center gap-2 text-[11px] sm:text-xs font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}
+                >
+                  <span>طراحی سایت</span><span>·</span>
+                  <span>محتوا و شبکه‌های اجتماعی</span><span>·</span>
+                  <span>تبلیغات</span><span>·</span>
                   <span>تحلیل و بهینه‌سازی فروش</span>
-                </div>
-              </motion.div>
+                </motion.div>
 
-              {/* 3D Visual Asset */}
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.92, filter: 'blur(10px)' }}
-                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                transition={{ duration: 1.1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                className="lg:col-span-5"
-              >
-                <IsometricDashboard theme={theme} />
-              </motion.div>
+                {/* Dashboard showcase — dark glass frame */}
+                <motion.div
+                  initial={{ opacity: 0, y: 44, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 1, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative max-w-4xl mx-auto"
+                  style={{ x: dashX, y: dashY }}
+                >
+                  {isDark && <div className="nd-conic-ring" aria-hidden />}
+                  <div className={`relative rounded-[28px] sm:rounded-[32px] p-3 sm:p-4 ${isDark ? 'nd-glass-dark' : 'nd-card'}`}>
+                    <div className="flex items-center gap-2 px-2 pb-3">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/80" />
+                      <span className={`ms-3 flex-1 h-7 rounded-full grid place-items-center text-[10px] font-bold dir-ltr ${isDark ? 'bg-white/5 border border-white/10 text-slate-500' : 'bg-[color:var(--nd-bg)] border border-[color:var(--nd-line)] text-[color:var(--nd-faint)]'}`}>
+                        {personal.website}
+                      </span>
+                    </div>
+                    <div className={`rounded-[18px] sm:rounded-[22px] overflow-hidden border ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`} style={{ background: isDark ? 'linear-gradient(180deg,#141428,#0d0d1a)' : 'linear-gradient(180deg,#f7f6ff,#eef4ff)' }}>
+                      <IsometricDashboard theme={isDark ? 'dark' : 'light'} />
+                    </div>
+                  </div>
+
+                  {stats.slice(0, 2).map((s, i) => (
+                    <div
+                      key={i}
+                      className={`${isDark ? 'nd-glass-dark' : 'nd-card'} absolute hidden lg:flex items-center gap-2.5 rounded-2xl px-4 py-3 ${i === 0 ? '-right-10 top-8 nd-float' : '-left-12 bottom-10 nd-float-slow'}`}
+                    >
+                      <span className="w-9 h-9 rounded-xl grid place-items-center" style={isDark ? { background: 'rgba(255,255,255,0.08)', color: '#a5b4fc' } : { background: 'var(--nd-accent-soft)', color: '#4f46e5' }}>
+                        {React.createElement(iconFor(s.icon), { className: 'w-4 h-4' })}
+                      </span>
+                      <span>
+                        <span className={`block text-sm font-black dir-ltr text-right ${isDark ? 'text-white' : 'text-[color:var(--nd-ink)]'}`}>{s.value}</span>
+                        <span className={`block text-[10px] font-bold ${isDark ? 'text-slate-400' : 'text-[color:var(--nd-muted)]'}`}>{s.label}</span>
+                      </span>
+                    </div>
+                  ))}
+                </motion.div>
+
+                {/* Scroll cue */}
+                <div className="flex justify-center pt-2">
+                  <ChevronLeft className={`w-5 h-5 nd-scroll-cue rotate-[-90deg] ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`} />
+                </div>
+              </div>
             </div>
-          </CinematicSection>
+
+            {/* ---------- Intro statement — overlapping the stage edge ---------- */}
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              className={`relative z-10 nd-card max-w-3xl mx-auto p-6 sm:p-8 flex flex-col sm:flex-row items-start gap-5 ${isDark ? '-mt-10 sm:-mt-12' : 'mt-6'}`}
+            >
+              <img src={personal.avatar} alt={personal.name} className="w-16 h-16 rounded-2xl object-cover shadow-sm shrink-0" />
+              <p className="text-sm sm:text-base leading-relaxed text-[color:var(--nd-ink-2)]">
+                <span className="font-black text-[color:var(--nd-accent)] ml-1">من امید عدلی هستم؛</span>
+                متخصص رشد دیجیتال برای فروشگاه‌ها. کمک می‌کنم بفهمید مشتری‌ها کجا شما را پیدا می‌کنند، چرا بعضی‌ها خرید می‌کنند و بعضی‌ها نه، و برای بهتر شدن فروش باید دقیقاً روی چه چیزی کار کنید.
+              </p>
+            </motion.div>
+          </section>
         );
 
-      // 2. الان کسب‌وکارت کجای این مسیره؟ (مسیریابی سه‌گانه)
+      /* ============ 1.5 TRUST BAR (brand marquee) ============ */
+      case 'TRUST_BAR': {
+        const brandLogos = [
+          { name: 'دایان', mono: 'د', shape: 'rounded-[14px]', tint: 0 },
+          { name: 'ایران بروکر', mono: 'IB', ltr: true, shape: 'rounded-full', tint: 1 },
+          { name: 'اقامت ۲۴', mono: '۲۴', shape: 'rounded-[10px] rotate-6', tint: 2 },
+          { name: 'ای ادز', mono: 'e', ltr: true, shape: 'rounded-[18px]', tint: 3 },
+          { name: 'فست‌کلیک', mono: 'ف', shape: 'rounded-full', tint: 0 },
+          { name: 'آهن آنلاین', mono: 'آ', shape: 'rounded-[10px]', tint: 1 },
+          { name: 'بیتستان', mono: 'ب', shape: 'rounded-[16px] -rotate-6', tint: 2 },
+          { name: 'ورسلند', mono: 'و', shape: 'rounded-full', tint: 3 },
+        ];
+        return (
+          <section className="py-10 sm:py-14 space-y-6">
+            <p className="text-center text-[11px] sm:text-xs font-black tracking-wide text-[color:var(--nd-faint)]">
+              برندهایی که به داده اعتماد کردن، نه به شعار
+            </p>
+            <div className="nd-marquee overflow-hidden [mask-image:linear-gradient(to_left,transparent,black_12%,black_88%,transparent)]">
+              <div className="nd-marquee-track items-center gap-12">
+                {[...brandLogos, ...brandLogos].map((b, i) => (
+                  <span key={i} className="group flex items-center gap-3 whitespace-nowrap opacity-70 saturate-50 transition-all duration-300 hover:opacity-100 hover:saturate-100">
+                    <span
+                      className={`w-10 h-10 grid place-items-center text-sm font-black shrink-0 ${b.shape}`}
+                      style={{ background: TINTS[b.tint].bg, color: TINTS[b.tint].fg }}
+                    >
+                      <span className={b.ltr ? 'dir-ltr' : ''}>{b.mono}</span>
+                    </span>
+                    <span className="text-sm sm:text-base font-black tracking-tight text-[color:var(--nd-ink-2)] group-hover:text-[color:var(--nd-accent)] transition-colors">
+                      {b.name}
+                    </span>
+                    <span className="w-1 h-1 rotate-45 rounded-[1px] bg-[color:var(--nd-line-strong)] ms-6" aria-hidden />
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      /* ============ 1.7 PROOF — cinematic dark evidence scene ============ */
+      case 'PROOF':
+        return (
+          <section className="py-6 sm:py-10">
+            <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[36px] sm:rounded-[44px] p-7 sm:p-14 space-y-10`}>
+              <div className="text-center space-y-4 max-w-2xl mx-auto">
+                <span className={`${isDark ? 'nd-glass-dark text-indigo-200' : 'nd-eyebrow'} inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold`}>
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>اثبات با داده، نه شعار</span>
+                </span>
+                <h2 className={`nd-h2 ${isDark ? 'text-white' : ''} text-2xl sm:text-3xl lg:text-[2.6rem]`}>نتیجه‌هایی که تا الان گرفتم</h2>
+                <p className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-sm sm:text-base leading-relaxed`}>این‌ها فقط عدد نیستن؛ نتیجه‌ی کار روی کسب‌وکارهای واقعیه.</p>
+              </div>
+
+              {/* Stats row */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-4">
+                {stats.map((stat, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 18 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-60px' }}
+                    transition={{ duration: 0.55, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                    className="relative text-center space-y-1.5"
+                  >
+                    <RepeaterControls arrayPath="STATS" index={idx} totalCount={stats.length} className="absolute top-0 left-0" />
+                    <div className={`text-3xl sm:text-4xl font-black ${isDark ? 'nd-text-glow' : 'text-[color:var(--nd-accent)]'} dir-ltr text-center`}>
+                      <EditableText path={`STATS.${idx}.value`}>{stat.value}</EditableText>
+                    </div>
+                    <div className={`font-extrabold text-xs sm:text-sm ${isDark ? 'text-slate-200' : 'text-[color:var(--nd-ink)]'}`}>
+                      <EditableText path={`STATS.${idx}.label`}>{stat.label}</EditableText>
+                    </div>
+                    <div className={`text-[11px] font-medium ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}>
+                      <EditableText path={`STATS.${idx}.subtext`}>{stat.subtext}</EditableText>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Two featured case studies */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {homepageStudies.slice(0, 2).map((study, idx) => (
+                  <motion.button
+                    key={study.id || idx}
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-60px' }}
+                    transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                    onClick={() => onSelectCaseStudy(study)}
+                    className={`${isDark ? 'nd-glass-dark hover:bg-white/10' : 'nd-card nd-card-hover'} rounded-[28px] p-6 sm:p-7 text-right flex flex-col gap-4 cursor-pointer transition-colors group`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`nd-chip ${isDark ? 'bg-white/8 border-white/12 text-slate-300' : ''}`}>{study.industryFa}</span>
+                      <span className={`text-[11px] font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}>{study.client}</span>
+                    </div>
+                    <h3 className={`nd-h2 ${isDark ? 'text-white' : ''} text-base sm:text-lg leading-snug`}>{study.title}</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(study.metricsComparison || []).slice(0, 3).map((m: any, mi: number) => (
+                        <div key={mi} className={`rounded-2xl border px-2 py-2.5 text-center ${isDark ? 'bg-white/5 border-white/10' : 'bg-[color:var(--nd-bg)] border-[color:var(--nd-line)]'}`}>
+                          <span className={`block text-sm font-black ${isDark ? 'nd-text-glow' : 'text-[color:var(--nd-accent)]'} dir-ltr`}>{m.growth}</span>
+                          <span className={`block text-[9px] font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'} leading-tight mt-1 line-clamp-1`}>{m.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <span className={`flex items-center justify-between pt-3 border-t text-xs font-extrabold ${isDark ? 'border-white/10 text-indigo-300' : 'border-[color:var(--nd-line)] text-[color:var(--nd-accent)]'}`}>
+                      <span>دیدن کامل این پروژه</span>
+                      <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                    </span>
+                  </motion.button>
+                ))}
+              </div>
+
+              <div className="text-center">
+                <button onClick={() => onNavigate('portfolio')} className={`nd-btn ${isDark ? 'nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10' : 'nd-btn-ghost'} px-7 py-3.5 text-xs sm:text-sm`}>
+                  <span>همه‌ی نمونه‌کارها</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </section>
+        );
+      /* ============ 2. PATH NAV ============ */
       case 'PATH_NAV':
         return (
-          <CinematicSection variant="fade-up" showGlowBeam glowColor="blue" className="space-y-8" id="path-navigation">
-            <div className="text-center space-y-3 max-w-2xl mx-auto">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#3b82f6]/10 border border-[#3b82f6]/25 text-xs font-bold text-[#60a5fa]">
-                <Layers className="w-3.5 h-3.5" />
-                <span>مسیریابی سه‌گانه</span>
-              </div>
-              <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                الان کسب‌وکارت کجای این مسیره؟
-              </h2>
-              <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                روی همونی که به شرایط الانت نزدیک‌تره بزن، تا دقیقاً همون چیزی رو ببینی که بهش نیاز داری.
-              </p>
-            </div>
-
-            <CinematicStagger className="grid grid-cols-1 md:grid-cols-3 gap-6" staggerDelay={0.12}>
-              {pathCards.map((p) => (
-                <CinematicItem key={p.id} className="h-full">
-                  <TiltCard maxTilt={6} glowColor={p.glow}>
-                    <div
+          <section id="path-navigation" className="py-14 sm:py-20 space-y-10">
+            <SectionHead
+              eyebrow="مسیریابی سه‌گانه"
+              icon={<Layers className="w-3.5 h-3.5" />}
+              title="الان کسب‌وکارت کجای این مسیره؟"
+              desc="روی همونی که به شرایط الانت نزدیک‌تره بزن، تا دقیقاً همون چیزی رو ببینی که بهش نیاز داری."
+            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {pathCards.map((p, i) => (
+                <motion.div
+                  key={p.id}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 0.6, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                  className="h-full"
+                >
+                  <TiltCard maxTilt={4} glowColor="rgba(79, 70, 229, 0.12)">
+                    <button
                       onClick={() => handlePathNavClick(p.id)}
-                      className={`p-7 rounded-[28px] flex flex-col justify-between cursor-pointer transition-all duration-300 h-full relative group ${
-                        p.isFeatured
-                          ? isDark 
-                            ? 'glass-card-dark border-2 border-blue-500/50 shadow-[0_10px_35px_rgba(59,130,246,0.2)] hover:border-blue-400' 
-                            : 'glass-card-light border-2 border-blue-500/50 shadow-[0_10px_35px_rgba(59,130,246,0.15)] hover:border-blue-600'
-                          : isDark 
-                            ? 'glass-card-dark glass-card-dark-hover border-white/10' 
-                            : 'glass-card-light glass-card-light-hover border-slate-200'
+                      className={`nd-card nd-card-hover w-full h-full p-7 text-right flex flex-col justify-between gap-6 cursor-pointer relative overflow-hidden ${
+                        p.isFeatured ? 'ring-2 ring-[rgba(79,70,229,0.35)]' : ''
                       }`}
                     >
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <span className={`px-3 py-1 rounded-full text-[11px] font-black border ${
-                            isDark ? 'bg-white/10 border-white/10 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
-                          }`}>
-                            {p.tag}
-                          </span>
-                          <IconBadge3D iconName={p.iconName} theme={theme} size="sm" glowColor="blue" floating={false} />
-                        </div>
-
-                        <h3 className={`text-lg sm:text-xl font-black mb-3 group-hover:text-[#5ce1e6] transition-colors leading-snug ${
-                          isDark ? 'text-white' : 'text-[#1a1240]'
-                        }`}>
-                          {p.title}
-                        </h3>
-
-                        <p className={`text-xs sm:text-sm leading-relaxed mb-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                          {p.desc}
-                        </p>
-                      </div>
-
-                      <div className={`flex items-center justify-between pt-4 border-t ${
-                        isDark ? 'border-white/10' : 'border-slate-200'
-                      } text-xs font-bold text-[#60a5fa] group-hover:text-[#5ce1e6] transition-colors`}>
+                      {p.isFeatured && (
+                        <span className="absolute top-5 left-5 nd-eyebrow bg-[color:var(--nd-mint-soft)] text-[color:var(--nd-success)] border-transparent">
+                          پرترین انتخاب
+                        </span>
+                      )}
+                      <span className="flex items-start justify-between gap-4">
+                        <IconBadge3D iconName={p.iconName} theme={theme} size="sm" glowColor={(['purple', 'blue', 'emerald'] as const)[i % 3]} floating={false} />
+                        <span className="nd-chip">{p.tag}</span>
+                      </span>
+                      <span className="block">
+                        <span className="block nd-h2 text-lg sm:text-xl mb-2.5">{p.title}</span>
+                        <span className="block nd-muted text-xs sm:text-sm leading-relaxed">{p.desc}</span>
+                      </span>
+                      <span className="flex items-center justify-between pt-4 border-t border-[color:var(--nd-line)] text-xs font-extrabold text-[color:var(--nd-accent)]">
                         <span>{p.cta}</span>
-                        <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                      </div>
-                    </div>
+                        <ChevronLeft className="w-4 h-4" />
+                      </span>
+                    </button>
                   </TiltCard>
-                </CinematicItem>
+                </motion.div>
               ))}
-            </CinematicStagger>
-          </CinematicSection>
+            </div>
+          </section>
         );
 
-      // 3. STATS / PROOF
+      /* ============ 3. STATS ============ */
       case 'STATS':
         return (
-          <CinematicSection variant="fade-up" showGlowBeam glowColor="cyan" className="space-y-8" id="stats-section">
+          <section id="stats-section" className="py-14 sm:py-20 space-y-10">
             <SectionEditHeader title="آمار و شاخص‌های کلیدی" arrayPath="STATS" />
-            <div className="text-center space-y-3 max-w-2xl mx-auto">
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-xs font-bold text-emerald-400">
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>نتایج واقعی</span>
-              </div>
-              <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                نتیجه‌هایی که تا الان گرفتم
-              </h2>
-              <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                این‌ها فقط عدد نیستن؛ نتیجه‌ی کار روی کسب‌وکارهای واقعیه.
-              </p>
+            <SectionHead
+              eyebrow="نتایج واقعی"
+              icon={<TrendingUp className="w-3.5 h-3.5" />}
+              title="نتیجه‌هایی که تا الان گرفتم"
+              desc="این‌ها فقط عدد نیستن؛ نتیجه‌ی کار روی کسب‌وکارهای واقعیه."
+            />
+            <div className="nd-card rounded-[28px] sm:rounded-[32px] p-6 sm:p-10 grid grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-6">
+              {stats.map((stat, idx) => (
+                <div key={idx} className="relative text-center lg:text-right space-y-1.5">
+                  <RepeaterControls arrayPath="STATS" index={idx} totalCount={stats.length} className="absolute top-0 left-0" />
+                  <div className="text-3xl sm:text-4xl font-black text-[color:var(--nd-accent)] dir-ltr text-center lg:text-right">
+                    <EditableText path={`STATS.${idx}.value`}>{stat.value}</EditableText>
+                  </div>
+                  <div className="font-extrabold text-xs sm:text-sm text-[color:var(--nd-ink)]">
+                    <EditableText path={`STATS.${idx}.label`}>{stat.label}</EditableText>
+                  </div>
+                  <div className="text-[11px] font-medium text-[color:var(--nd-faint)]">
+                    <EditableText path={`STATS.${idx}.subtext`}>{stat.subtext}</EditableText>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <CinematicStagger className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6" staggerDelay={0.1}>
-              {stats.map((stat, idx) => (
-                <CinematicItem key={idx} className="h-full">
-                  <TiltCard maxTilt={6} glowColor="rgba(92, 225, 230, 0.2)">
-                    <div
-                      className={`p-6 sm:p-7 rounded-[26px] transition-all duration-300 relative overflow-hidden group h-full ${
-                        isDark ? 'glass-card-dark glass-card-dark-hover' : 'glass-card-light glass-card-light-hover'
-                      }`}
-                    >
-                      <RepeaterControls arrayPath="STATS" index={idx} totalCount={stats.length} className="absolute top-2 left-2" />
-
-                      <div className="text-2xl sm:text-3xl lg:text-4xl font-black text-[#5ce1e6] mb-2 dir-ltr text-right">
-                        <EditableText path={`STATS.${idx}.value`}>{stat.value}</EditableText>
-                      </div>
-
-                      <div className={`font-bold text-xs sm:text-sm mb-1 ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                        <EditableText path={`STATS.${idx}.label`}>{stat.label}</EditableText>
-                      </div>
-
-                      <div className="text-[11px] text-slate-400 font-medium">
-                        <EditableText path={`STATS.${idx}.subtext`}>{stat.subtext}</EditableText>
-                      </div>
-                    </div>
-                  </TiltCard>
-                </CinematicItem>
-              ))}
-            </CinematicStagger>
-          </CinematicSection>
+            {/* Tools marquee */}
+            {skills.length > 0 && (
+              <div className="nd-marquee overflow-hidden py-2 [mask-image:linear-gradient(to_left,transparent,black_12%,black_88%,transparent)]">
+                <div className="nd-marquee-track gap-3">
+                  {[...skills, ...skills].map((t, i) => (
+                    <span key={i} className="nd-chip py-2 px-4 text-[11px] whitespace-nowrap dir-ltr">
+                      {t.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
         );
 
-      // 4. SERVICES (سه‌تب: شروع کنیم / بهتر بفروشیم / رشد کنیم)
+      /* ============ 4. SERVICES TABS ============ */
       case 'SERVICES_TABS':
-      case 'SERVICES':
+      case 'SERVICES': {
         const currentTab = tabConfig[activeServiceTab];
-        const currentServices = services.filter(s => currentTab.serviceIds.includes(s.id));
-
+        const currentServices = services.filter((s) => (currentTab.serviceIds as readonly string[]).includes(s.id));
+        const TabIcon = currentTab.icon;
         return (
-          <CinematicSection variant="fade-up" showGlowBeam glowColor="purple" className="space-y-8" id="services-tabs">
-            <div ref={servicesSectionRef} className="space-y-8">
-              <div className="text-center space-y-3 max-w-2xl mx-auto">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#8b5cf6]/10 border border-[#8b5cf6]/30 text-xs font-black text-[#a78bfa]">
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>خدمات تخصصی</span>
-                </div>
-                <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                  خدماتی که در هر مرحله از مسیر بهت کمک می‌کنن
-                </h2>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                  از شروع آنلاین تا رشد فروش، هر بخش رو می‌تونی جدا یا در کنار هم داشته باشی.
-                </p>
-              </div>
+          <section id="services-tabs" className="py-14 sm:py-20 space-y-10">
+            <div ref={servicesSectionRef} className="space-y-10 scroll-mt-28">
+              <SectionHead
+                eyebrow="خدمات تخصصی"
+                icon={<Layers className="w-3.5 h-3.5" />}
+                title="خدماتی که در هر مرحله از مسیر بهت کمک می‌کنن"
+                desc="از شروع آنلاین تا رشد فروش، هر بخش رو می‌تونی جدا یا در کنار هم داشته باشی."
+              />
 
-              {/* Tabs Control */}
+              {/* Segmented tabs */}
               <div className="flex justify-center">
-                <div className={`inline-flex p-1.5 rounded-2xl border ${
-                  isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'
-                }`}>
+                <div className="nd-glass inline-flex p-1.5 rounded-full gap-1">
                   {(['start', 'sell', 'grow'] as const).map((tabKey) => {
                     const cfg = tabConfig[tabKey];
                     const Icon = cfg.icon;
@@ -420,12 +701,8 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                       <button
                         key={tabKey}
                         onClick={() => setActiveServiceTab(tabKey)}
-                        className={`px-5 py-3 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer ${
-                          isActive
-                            ? 'bg-gradient-to-r from-[#2563eb] to-[#3b82f6] text-white shadow-lg shadow-blue-500/25 scale-[1.02]'
-                            : isDark 
-                              ? 'text-slate-400 hover:text-white' 
-                              : 'text-slate-600 hover:text-slate-900'
+                        className={`px-4 sm:px-6 py-2.5 rounded-full text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+                          isActive ? 'bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] shadow-sm' : 'text-[color:var(--nd-muted)] hover:text-[color:var(--nd-ink)]'
                         }`}
                       >
                         <Icon className="w-4 h-4" />
@@ -436,384 +713,467 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                 </div>
               </div>
 
-              {/* Tab Tagline Message */}
-              <motion.div 
-                key={activeServiceTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className={`p-4 rounded-2xl border text-center text-xs sm:text-sm font-bold max-w-xl mx-auto ${
-                  isDark ? 'bg-white/5 border-white/10 text-slate-200' : 'bg-blue-50/60 border-blue-100 text-blue-900'
-                }`}
-              >
-                {currentTab.tagline}
-              </motion.div>
-
-              {/* Services Grid (NO Prices on Homepage as strictly requested) */}
-              <CinematicStagger key={`services-${activeServiceTab}`} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.08}>
-                {currentServices.map((srv, idx) => (
-                  <CinematicItem key={srv.id || idx} className="h-full">
-                    <div
-                      className={`p-6 rounded-[26px] flex flex-col justify-between transition-all duration-300 relative group h-full ${
-                        isDark ? 'glass-card-dark glass-card-dark-hover' : 'glass-card-light glass-card-light-hover'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <IconBadge3D iconName={srv.iconName} theme={theme} size="sm" glowColor="blue" floating={false} />
-                          <span className="text-[11px] font-bold text-slate-400 font-mono">۰{idx + 1}</span>
-                        </div>
-
-                        <h3 className={`text-base sm:text-lg font-black mb-2.5 ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                          {srv.title}
-                        </h3>
-
-                        <p className={`text-xs leading-relaxed mb-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                          {srv.shortDesc}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => onNavigate('services')}
-                        className="w-full py-3 rounded-xl border border-white/10 text-xs font-bold text-[#60a5fa] hover:text-white hover:bg-white/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-4"
-                      >
-                        <span>مشاهده جزئیات کامل</span>
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </CinematicItem>
-                ))}
-              </CinematicStagger>
-
-              {/* Tab Bottom CTA */}
-              <div className="text-center pt-2">
-                <button
-                  onClick={() => onNavigate('contact')}
-                  className="px-7 py-3.5 rounded-2xl bg-[#3b82f6]/15 hover:bg-[#3b82f6]/25 border border-[#3b82f6]/40 text-[#60a5fa] hover:text-white text-xs font-black transition-all inline-flex items-center gap-2 cursor-pointer shadow-lg hover:scale-105"
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeServiceTab}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                  className="space-y-8"
                 >
+                  <p className="text-center text-xs sm:text-sm font-bold text-[color:var(--nd-ink-2)] bg-[color:var(--nd-accent-soft)] border border-[rgba(79,70,229,0.12)] rounded-full px-5 py-3 max-w-xl mx-auto flex items-center gap-2 justify-center">
+                    <TabIcon className="w-4 h-4 text-[color:var(--nd-accent)]" />
+                    {currentTab.tagline}
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {currentServices.map((srv, idx) => (
+                      <motion.div
+                        key={srv.id || idx}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: idx * 0.07, ease: [0.22, 1, 0.36, 1] }}
+                        className="h-full"
+                      >
+                        <div className="nd-card nd-card-hover p-7 h-full flex flex-col justify-between gap-6 group">
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <IconBadge3D iconName={srv.iconName} theme={theme} size="sm" glowColor={(['blue', 'cyan', 'purple', 'emerald', 'gold', 'magenta'] as const)[idx % 6]} floating={false} />
+                              <span className="text-[11px] font-black text-[color:var(--nd-faint)] dir-ltr">0{idx + 1}</span>
+                            </div>
+                            <h3 className="nd-h2 text-base sm:text-lg">{srv.title}</h3>
+                            <p className="nd-muted text-xs sm:text-sm leading-relaxed">{srv.shortDesc}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(srv.tags || []).slice(0, 3).map((t) => (
+                                <span key={t} className="nd-chip dir-ltr">{t}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => onNavigate('services')}
+                            className="w-full py-3 rounded-full border border-[color:var(--nd-line-strong)] text-xs font-extrabold text-[color:var(--nd-ink-2)] hover:bg-[color:var(--nd-ink)] hover:text-white hover:border-[color:var(--nd-ink)] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <span>مشاهده جزئیات کامل</span>
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+
+              <div className="text-center">
+                <button onClick={() => onNavigate('contact')} className="nd-btn nd-btn-accent px-8 py-4 text-xs sm:text-sm">
                   <span>{currentTab.ctaText}</span>
                   <ArrowUpLeft className="w-4 h-4" />
                 </button>
               </div>
             </div>
-          </CinematicSection>
+          </section>
         );
+      }
 
-      // 5. CASE STUDIES (4 Featured Projects)
+      /* ============ 5. CASE STUDIES ============ */
       case 'CASE_STUDIES':
       case 'PORTFOLIO':
         return (
-          <CinematicSection variant="fade-up" showGlowBeam glowColor="cyan" className="space-y-8" id="case-studies">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#5ce1e6]/10 border border-[#5ce1e6]/30 text-xs font-bold text-[#5ce1e6] mb-2">
+          <section id="case-studies" className="py-14 sm:py-20 space-y-10">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+              <div className="space-y-4 max-w-xl">
+                <span className="nd-eyebrow">
                   <Briefcase className="w-3.5 h-3.5" />
                   <span>پروژه‌های واقعی</span>
-                </div>
-                <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                  چند نمونه از پروژه‌هایی که روشون کار کردم
-                </h2>
-                <p className={`text-xs sm:text-sm mt-1 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                  از فروشگاه‌های کوچیک تا برندهای بزرگ‌تر — هرکدوم یه چالش متفاوت داشتن.
-                </p>
+                </span>
+                <h2 className="nd-h2 text-2xl sm:text-3xl lg:text-[2.6rem]">چند نمونه از پروژه‌هایی که روشون کار کردم</h2>
+                <p className="nd-muted text-sm sm:text-base leading-relaxed">از فروشگاه‌های کوچیک تا برندهای بزرگ‌تر — هرکدوم یه چالش متفاوت داشتن.</p>
               </div>
-
-              <button
-                onClick={() => onNavigate('portfolio')}
-                className={`px-5 py-3 rounded-2xl text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer shrink-0 hover:scale-105 ${
-                  isDark ? 'bg-white/5 border-white/15 text-white hover:bg-white/15' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'
-                }`}
-              >
-                <span>همه‌ی نمونه‌کارها</span>
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="flex gap-2">
+                  <button onClick={() => scrollCarousel(-1)} aria-label="قبلی" className="nd-btn nd-btn-ghost w-11 h-11">
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => scrollCarousel(1)} aria-label="بعدی" className="nd-btn nd-btn-ghost w-11 h-11">
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                </div>
+                <button onClick={() => onNavigate('portfolio')} className="nd-btn nd-btn-ghost px-5 py-3 text-xs font-extrabold">
+                  <span>همه‌ی نمونه‌کارها</span>
+                </button>
+              </div>
             </div>
 
-            <CinematicStagger className="grid grid-cols-1 md:grid-cols-2 gap-6" staggerDelay={0.12}>
-              {finalHomepageCaseStudies.map((study, idx) => (
-                <CinematicItem key={study.id || idx} className="h-full">
+            <div ref={carouselRef} className="flex gap-5 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+              {homepageStudies.map((study, idx) => (
+                <motion.button
+                  key={study.id || idx}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 0.6, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                  onClick={() => onSelectCaseStudy(study)}
+                  className="nd-card nd-card-hover snap-start shrink-0 w-[86vw] sm:w-[420px] text-right overflow-hidden group cursor-pointer flex flex-col"
+                >
+                  {/* Cover */}
                   <div
-                    onClick={() => onSelectCaseStudy(study)}
-                    className={`p-7 rounded-[28px] cursor-pointer transition-all duration-300 flex flex-col justify-between group relative h-full ${
-                      isDark ? 'glass-card-dark glass-card-dark-hover' : 'glass-card-light glass-card-light-hover'
-                    }`}
+                    className="relative h-40 sm:h-44 flex items-center justify-center overflow-hidden"
+                    style={{ background: `linear-gradient(140deg, ${study.heroColor}18, ${study.heroColor}30)` }}
                   >
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-[#8b5cf6]/15 border border-[#8b5cf6]/30 text-[#8b5cf6]">
-                          {study.industryFa}
-                        </span>
-                        <IconBadge3D iconName={study.thumbnailIcon} theme={theme} size="sm" glowColor="blue" floating={false} />
-                      </div>
-
-                      <h3 className={`text-base sm:text-lg font-black mb-2.5 group-hover:text-[#5ce1e6] transition-colors leading-snug ${
-                        isDark ? 'text-white' : 'text-[#1a1240]'
-                      }`}>
-                        {study.title}
-                      </h3>
-
-                      <p className={`text-xs leading-relaxed mb-6 line-clamp-2 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                        {study.summary}
-                      </p>
-
-                      {/* Metrics row */}
-                      <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-black/20 border border-white/10 mb-6">
-                        <div className="text-center">
-                          <span className="text-[10px] text-slate-400 block">ROAS</span>
-                          <span className="text-xs font-black text-emerald-400 dir-ltr">{study.metrics.roas}</span>
-                        </div>
-                        <div className="text-center border-x border-white/10">
-                          <span className="text-[10px] text-slate-400 block">نرخ تبدیل</span>
-                          <span className="text-xs font-black text-[#5ce1e6] dir-ltr">{study.metrics.conversionRate}</span>
-                        </div>
-                        <div className="text-center">
-                          <span className="text-[10px] text-slate-400 block">کاهش CAC</span>
-                          <span className="text-xs font-black text-[#8b5cf6] dir-ltr">{study.metrics.cacReduction}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 text-xs font-bold text-[#5ce1e6] group-hover:text-white transition-colors">
-                      <span>دیدن کامل این پروژه</span>
-                      <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                    </div>
+                    <span className="w-16 h-16 rounded-3xl grid place-items-center shadow-sm" style={{ background: `${study.heroColor}22`, color: study.heroColor }}>
+                      {React.createElement(iconFor(study.thumbnailIcon), { className: 'w-7 h-7' })}
+                    </span>
+                    <span className="absolute top-4 right-4 nd-chip bg-white/80 backdrop-blur">{study.industryFa}</span>
+                    <span className="absolute bottom-4 left-4 text-[10px] font-bold text-[color:var(--nd-muted)]">{study.client}</span>
                   </div>
-                </CinematicItem>
+                  {/* Body */}
+                  <div className="p-6 sm:p-7 flex flex-col gap-4 grow">
+                    <h3 className="nd-h2 text-base sm:text-lg leading-snug">{study.title}</h3>
+                    <p className="nd-muted text-xs leading-relaxed line-clamp-2">{study.summary}</p>
+                    <div className="mt-auto grid grid-cols-3 gap-2">
+                      {(study.metricsComparison || []).slice(0, 3).map((m, mi) => (
+                        <div key={mi} className="rounded-2xl bg-[color:var(--nd-bg)] border border-[color:var(--nd-line)] px-2 py-2.5 text-center">
+                          <span className="block text-sm font-black text-[color:var(--nd-accent)] dir-ltr">{m.growth}</span>
+                          <span className="block text-[9px] font-bold text-[color:var(--nd-faint)] leading-tight mt-1 line-clamp-1">{m.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <span className="flex items-center justify-between pt-3 border-t border-[color:var(--nd-line)] text-xs font-extrabold text-[color:var(--nd-accent)]">
+                      <span>دیدن کامل این پروژه</span>
+                      <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                    </span>
+                  </div>
+                </motion.button>
               ))}
-            </CinematicStagger>
-          </CinematicSection>
+            </div>
+          </section>
         );
 
-      // 6. HOW I WORK (۴ مرحله با آیکون‌های اختصاصی)
+      /* ============ 6. HOW I WORK ============ */
       case 'HOW_I_WORK':
         return (
-          <CinematicSection variant="fade-up" showGlowBeam glowColor="purple" className="space-y-8" id="how-i-work">
-            <div className="text-center space-y-3 max-w-2xl mx-auto">
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-xs font-black text-violet-400">
-                <ClipboardCheck className="w-3.5 h-3.5" />
-                <span>فرآیند شفاف</span>
-              </div>
-              <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                همکاری با من چطور پیش می‌ره؟
-              </h2>
-              <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                یه فرآیند ساده و شفاف، از اولین گفتگو تا نتیجه‌ی قابل‌اندازه‌گیری.
-              </p>
-            </div>
-
-            <CinematicStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" staggerDelay={0.1}>
+          <section id="how-i-work" className="py-14 sm:py-20 space-y-12">
+            <SectionHead
+              eyebrow="فرآیند شفاف"
+              icon={<ClipboardCheck className="w-3.5 h-3.5" />}
+              title="همکاری با من چطور پیش می‌ره؟"
+              desc="یه فرآیند ساده و شفاف، از اولین گفتگو تا نتیجه‌ی قابل‌اندازه‌گیری."
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 relative">
               {howIWork.map((stepItem, idx) => (
-                <CinematicItem key={idx} className="h-full">
-                  <div
-                    className={`p-6 rounded-[26px] relative flex flex-col justify-between transition-all duration-300 h-full ${
-                      isDark ? 'glass-card-dark' : 'glass-card-light'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <span className="w-9 h-9 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-sm font-black text-[#5ce1e6] font-mono">
-                          ۰{idx + 1}
-                        </span>
-                        <div className="p-2 rounded-xl bg-white/5 border border-white/10">
-                          {getHowIWorkIcon(stepItem.step)}
-                        </div>
-                      </div>
-
-                      <h3 className={`text-base font-black mb-2.5 ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                        {stepItem.title}
-                      </h3>
-
-                      <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                        {stepItem.desc}
-                      </p>
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 22 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 0.55, delay: idx * 0.09, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative"
+                >
+                  <div className="nd-card p-7 h-full flex flex-col gap-5 nd-card-hover">
+                    <div className="flex items-center justify-between">
+                      <span className="w-11 h-11 rounded-full grid place-items-center text-sm font-black text-white" style={{ background: 'var(--nd-ink)' }}>
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <IconBadge3D iconName={stepItem.icon} theme={theme} size="sm" glowColor={(['blue', 'purple', 'emerald', 'cyan'] as const)[idx % 4]} floating={false} />
+                    </div>
+                    <div className="space-y-2.5">
+                      <h3 className="nd-h2 text-base">{stepItem.title}</h3>
+                      <p className="nd-muted text-xs leading-relaxed">{stepItem.desc}</p>
                     </div>
                   </div>
-                </CinematicItem>
+                  {idx < howIWork.length - 1 && (
+                    <span className="hidden lg:block absolute top-1/2 -left-5 w-5 border-t-2 border-dashed border-[color:var(--nd-line-strong)]" aria-hidden />
+                  )}
+                </motion.div>
               ))}
-            </CinematicStagger>
-
-            <div className="text-center pt-2">
-              <button
-                onClick={() => onNavigate('contact')}
-                className="glow-btn px-8 py-4 rounded-2xl text-xs sm:text-sm font-black text-white inline-flex items-center gap-2 cursor-pointer shadow-xl hover:scale-105 transition-transform"
-              >
+            </div>
+            <div className="text-center">
+              <button onClick={() => onNavigate('contact')} className="nd-btn px-8 py-4 text-xs sm:text-sm">
                 <span>بیایید گفتگوی اولیه رو شروع کنیم</span>
                 <ArrowUpLeft className="w-4 h-4" />
               </button>
             </div>
-          </CinematicSection>
+          </section>
         );
 
-      // 7. WHY OMID (چرا با من کار کنید؟)
+      /* ============ 7. WHY OMID ============ */
       case 'WHY_OMID':
         return (
-          <CinematicSection variant="fade-up" showGlowBeam glowColor="cyan" className="space-y-8" id="why-omid">
-            <div className="text-center space-y-3 max-w-2xl mx-auto">
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs font-black text-[#5ce1e6]">
-                <Target className="w-3.5 h-3.5" />
-                <span>تمایز و رویکرد</span>
-              </div>
-              <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                چرا با من کار کنید؟
-              </h2>
-              <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                چون به‌جای اجرای پراکنده، به کسب‌وکارتون به چشم یه سیستم کامل نگاه می‌کنم.
-              </p>
-            </div>
-
-            <CinematicStagger className="grid grid-cols-1 md:grid-cols-3 gap-6" staggerDelay={0.12}>
-              {whyOmidPoints.map((item, idx) => (
-                <CinematicItem key={idx} className="h-full">
-                  <div
-                    className={`p-7 rounded-[28px] transition-all duration-300 flex flex-col justify-between h-full ${
-                      isDark ? 'glass-card-dark glass-card-dark-hover' : 'glass-card-light glass-card-light-hover'
-                    }`}
+          <section id="why-omid" className="py-14 sm:py-20">
+            <div className="nd-panel rounded-[32px] sm:rounded-[40px] p-7 sm:p-14 space-y-10">
+              <SectionHead
+                eyebrow="تمایز و رویکرد"
+                icon={<Target className="w-3.5 h-3.5" />}
+                title="چرا با من کار کنید؟"
+                desc="چون به‌جای اجرای پراکنده، به کسب‌وکارتون به چشم یه سیستم کامل نگاه می‌کنم."
+              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {whyOmidPoints.map((item: any, idx: number) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-60px' }}
+                    transition={{ duration: 0.55, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                    className="nd-panel-card rounded-[24px] p-7 space-y-4 h-full"
                   >
-                    <div>
-                      <div className="mb-5">
-                        <IconBadge3D iconName={item.icon} theme={theme} size="sm" glowColor="cyan" floating={false} />
-                      </div>
+                    <IconBadge3D iconName={item.icon} theme={theme} size="sm" glowColor={(['cyan', 'gold', 'magenta'] as const)[idx % 3]} floating={false} />
+                    <h3 className="nd-h2 text-base sm:text-lg">{item.title}</h3>
+                    <p className="nd-muted text-xs sm:text-sm leading-relaxed">{item.description || item.desc}</p>
+                  </motion.div>
+                ))}
+              </div>
 
-                      <h3 className={`text-lg font-black mb-3 ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                        {item.title}
-                      </h3>
-
-                      <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                        {item.desc}
-                      </p>
+              {/* Testimonial */}
+              {testimonials[0] && (
+                <div className="nd-surface-bg rounded-[28px] border border-[color:var(--nd-line)] shadow-sm p-7 sm:p-9 flex flex-col sm:flex-row gap-6 items-start max-w-4xl mx-auto">
+                  <Quote className="w-8 h-8 text-[color:var(--nd-accent)] opacity-40 shrink-0 rotate-180" />
+                  <div className="space-y-4">
+                    <p className="text-sm sm:text-base leading-relaxed font-medium text-[color:var(--nd-ink-2)]">{testimonials[0].quote}</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <img src={testimonials[0].avatarUrl} alt={testimonials[0].clientName} className="w-10 h-10 rounded-full object-cover" />
+                      <span>
+                        <span className="block text-xs font-black text-[color:var(--nd-ink)]">{testimonials[0].clientName} — {testimonials[0].company}</span>
+                        <span className="block text-[11px] font-bold text-[color:var(--nd-faint)]">{testimonials[0].clientRole}</span>
+                      </span>
+                      <span className="ms-auto flex items-center gap-1 text-[color:#f59e0b]">
+                        {Array.from({ length: testimonials[0].rating || 5 }).map((_, i) => (
+                          <Star key={i} className="w-3.5 h-3.5 fill-current" />
+                        ))}
+                      </span>
                     </div>
                   </div>
-                </CinematicItem>
-              ))}
-            </CinematicStagger>
-          </CinematicSection>
+                </div>
+              )}
+            </div>
+          </section>
         );
 
-      // 8. EXPERIENCE (مسیری که تا اینجا طی کردم)
+      /* ============ 8. EXPERIENCE ============ */
       case 'EXPERIENCE':
         return (
-          <CinematicSection variant="fade-up" showGlowBeam glowColor="blue" className="space-y-8" id="experience">
-            <div className="text-center space-y-3 max-w-2xl mx-auto">
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-xs font-black text-blue-400">
-                <Briefcase className="w-3.5 h-3.5" />
-                <span>سوابق کاری</span>
-              </div>
-              <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                مسیری که تا اینجا طی کردم
-              </h2>
-              <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                هر پروژه یه چالش واقعی داشت؛ این‌ها نتیجه‌شونه.
-              </p>
-            </div>
-
-            {/* 3 Key Timeline items */}
-            <CinematicStagger className="grid grid-cols-1 md:grid-cols-3 gap-6" staggerDelay={0.1}>
-              {finalHomepageTimeline.map((item, idx) => (
-                <CinematicItem key={idx} className="h-full">
-                  <div
-                    className={`p-6 rounded-[26px] flex flex-col justify-between h-full ${
-                      isDark ? 'glass-card-dark' : 'glass-card-light'
-                    }`}
+          <section id="experience" className="py-14 sm:py-20 space-y-10">
+            <SectionHead
+              eyebrow="سوابق کاری"
+              icon={<Briefcase className="w-3.5 h-3.5" />}
+              title="مسیری که تا اینجا طی کردم"
+              desc="هر پروژه یه چالش واقعی داشت؛ این‌ها نتیجه‌شونه."
+            />
+            <div className="max-w-3xl mx-auto relative">
+              <span className="absolute top-2 bottom-2 right-[19px] w-px bg-[color:var(--nd-line-strong)]" aria-hidden />
+              <div className="space-y-6">
+                {homepageTimeline.map((item: any, idx: number) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, x: 24 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true, margin: '-60px' }}
+                    transition={{ duration: 0.55, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                    className="relative pr-14"
                   >
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-black text-[#5ce1e6] font-mono">{item.year}</span>
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">
-                          {item.company}
-                        </span>
+                    <span className="absolute right-2.5 top-7 w-3.5 h-3.5 rounded-full bg-[color:var(--nd-surface)] border-[3px] border-[color:var(--nd-accent)]" aria-hidden />
+                    <div className="nd-card p-6 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="nd-chip bg-[color:var(--nd-accent-soft)] text-[color:var(--nd-accent)] border-transparent">{item.year}</span>
+                        <span className="nd-chip">{item.company}</span>
                       </div>
-
-                      <h3 className={`text-base font-black mb-2 ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-                        {item.title}
-                      </h3>
-
-                      <p className={`text-xs leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                        {item.description}
+                      <h3 className="nd-h2 text-base">{item.title}</h3>
+                      <p className="nd-muted text-xs leading-relaxed">{item.description}</p>
+                      <p className="text-[11px] font-extrabold text-[color:var(--nd-success)] flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {item.achievement}
                       </p>
                     </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
 
-                    <div className="pt-3 border-t border-white/10 text-[11px] font-bold text-emerald-400">
-                      {item.achievement}
-                    </div>
-                  </div>
-                </CinematicItem>
-              ))}
-            </CinematicStagger>
-
-            {/* Other Collaborations simple row */}
             {otherCollaborations.length > 0 && (
-              <div className={`p-4 rounded-2xl border flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-xs font-bold ${
-                isDark ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
-              }`}>
-                <span className="text-slate-400 font-medium">سایر همکاری‌ها:</span>
-                {otherCollaborations.map((collab, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5">
-                    <span className="text-white font-black">{collab.company}</span>
-                    <span className="text-slate-400 text-[11px]">({collab.role})</span>
-                  </div>
+              <div className="nd-card rounded-full px-6 py-4 flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-xs font-bold max-w-3xl mx-auto">
+                <span className="text-[color:var(--nd-faint)] font-medium">سایر همکاری‌ها:</span>
+                {otherCollaborations.map((collab: any, idx: number) => (
+                  <span key={idx} className="flex items-center gap-1.5">
+                    <span className="font-black text-[color:var(--nd-ink)]">{collab.company}</span>
+                    <span className="text-[color:var(--nd-faint)] text-[11px]">({collab.role})</span>
+                  </span>
                 ))}
               </div>
             )}
 
-            {/* CTA to About */}
-            <div className="text-center pt-2">
-              <button
-                onClick={() => onNavigate('about')}
-                className={`px-6 py-3 rounded-2xl text-xs font-bold border transition-all inline-flex items-center gap-2 cursor-pointer hover:scale-105 ${
-                  isDark ? 'bg-white/5 hover:bg-white/15 border-white/15 text-white' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800'
-                }`}
-              >
+            <div className="text-center">
+              <button onClick={() => onNavigate('about')} className="nd-btn nd-btn-ghost px-6 py-3 text-xs font-extrabold">
                 <span>مسیر کامل حرفه‌ای من</span>
                 <ChevronLeft className="w-4 h-4" />
               </button>
             </div>
-          </CinematicSection>
+          </section>
         );
 
-      // 9. FINAL CTA
+      /* ============ 9. FINAL CTA ============ */
+      /* ============ 8.5 INSIGHTS — lead magnet + latest writing ============ */
+      case 'INSIGHTS': {
+        const posts = (data.BLOG_POSTS || []).slice(0, 3);
+        return (
+          <section className="py-14 sm:py-20">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+              {/* Lead magnet — free mini audit */}
+              <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className="lg:col-span-2"
+              >
+                <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-card'} rounded-[32px] p-7 sm:p-9 h-full flex flex-col gap-5`} style={isDark ? undefined : { background: 'linear-gradient(150deg, var(--nd-accent-soft), var(--nd-sky-soft) 60%, var(--nd-mint-soft))' }}>
+                  <span className={`${isDark ? 'nd-glass-dark text-indigo-200' : 'nd-eyebrow'} inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold w-fit`}>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>بدون هزینه، بدون تعهد</span>
+                  </span>
+                  <h3 className={`nd-h2 ${isDark ? 'text-white' : ''} text-xl sm:text-2xl leading-snug`}>آنالیز سریع و رایگان سایتت</h3>
+                  <p className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-xs sm:text-sm leading-relaxed`}>
+                    آدرس سایتت رو بنویس؛ تا ۴۸ ساعت یه بررسی اولیه از مسیر خرید، سرعت و نقاط ریزشت برات می‌فرستم — همین‌طوری، برای آشنایی.
+                  </p>
+                  <form onSubmit={handlePromptSubmit} className="mt-auto space-y-3">
+                    <input
+                      value={promptValue}
+                      onChange={(e) => setPromptValue(e.target.value)}
+                      placeholder="example.com"
+                      className={`w-full rounded-2xl px-4 py-3.5 text-sm focus:outline-none dir-ltr text-left ${isDark ? 'nd-glass-dark text-white placeholder:text-slate-500 focus:border-indigo-400/60' : 'bg-white border border-[color:var(--nd-line)] text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)] focus:border-[color:var(--nd-accent)]'}`}
+                    />
+                    <button type="submit" className={`nd-btn ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'} w-full py-3.5 text-sm`}>
+                      <span>درخواست آنالیز رایگان</span>
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                  <p className={`text-[10px] font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}>بدون اسپم؛ فقط یه نقشه‌ی راه قابل اجرا.</p>
+                </div>
+              </motion.div>
+
+              {/* Latest writing */}
+              <div className="lg:col-span-3 flex flex-col gap-4">
+                <div className="flex items-end justify-between gap-4">
+                  <div className="space-y-2">
+                    <span className="nd-eyebrow">
+                      <LineChart className="w-3.5 h-3.5" />
+                      <span>نوشت‌های تازه</span>
+                    </span>
+                    <h3 className="nd-h2 text-xl sm:text-2xl">چیزهایی که اخیراً از داده‌ها یاد گرفتم</h3>
+                  </div>
+                  <button onClick={() => (onSelectPost ? onSelectPost('') : onNavigate('blog'))} className="nd-btn nd-btn-ghost px-5 py-2.5 text-xs font-extrabold shrink-0">
+                    <span>همه‌ی نوشت‌ها</span>
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {posts.map((post: any, idx: number) => (
+                  <motion.button
+                    key={post.id || idx}
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-40px' }}
+                    transition={{ duration: 0.5, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                    onClick={() => (onSelectPost ? onSelectPost(post.id) : onNavigate('blog'))}
+                    className="nd-card nd-card-hover p-5 flex items-center gap-4 text-right cursor-pointer group"
+                  >
+                    <IconBadge3D iconName={post.imageIcon} theme={theme} size="sm" glowColor={(['purple', 'blue', 'emerald'] as const)[idx % 3]} floating={false} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-extrabold text-[color:var(--nd-ink)] leading-snug line-clamp-1 group-hover:text-[color:var(--nd-accent)] transition-colors">{post.title}</span>
+                      <span className="block nd-muted text-[11px] font-medium mt-1 line-clamp-1">{post.excerpt}</span>
+                    </span>
+                    <span className="hidden sm:flex flex-col items-end gap-1 shrink-0">
+                      <span className="nd-chip">{post.date}</span>
+                      <span className="text-[10px] font-bold text-[color:var(--nd-faint)]">{post.readTime}</span>
+                    </span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      /* ============ 8.7 FAQ — objection handling ============ */
+      case 'FAQ': {
+        const faqs = [
+          { q: 'قیمت‌ها چطور محاسبه می‌شه؟', a: 'هر خدمت یه بازه قیمت مشخص داره که در صفحه خدمات شفاف نوشته شده. قیمت نهایی بعد از گفتگوی اولیه رایگان و بر اساس بریف واقعی پروژه تعیین می‌شه — بدون هزینه پنهان.' },
+          { q: 'نتیجه رو تضمین می‌کنی؟', a: 'هیچ متخصص صادقی نمی‌تونه عدد دقیق تضمین کنه؛ چون بازار و محصول شما متغیره. تعهد من فرآیند داده‌محور، تست مستمر و گزارش‌دهی شفافه — و نمونه نتایج واقعی در نمونه‌کارها قابل بررسیه.' },
+          { q: 'ریموت کار می‌کنی یا حضوری؟', a: 'هر دو. پایه کار ریموته (مشهد/تهران/هر جای ایران) با جلسات منظم ویدیویی و گزارش‌های هفتگی؛ جلسات حضوری موردی هم در مشهد و تهران امکان‌پذیره.' },
+          { q: 'تفاوتت با آژانس‌های تبلیغاتی چیه؟', a: 'مستقیم با خودم کار می‌کنی، نه یه تیم junior که بعد از قرارداد می‌بینی. هزینه سربار کمتر یعنی قیمت منصفانه‌تر، و تمام توجه روی داده‌های کسب‌وکار شماست.' },
+          { q: 'چقدر طول می‌کشه تا نتیجه ببینم؟', a: 'بسته به کانال: تبلیغات و CRO معمولاً اولین سیگنال‌ها رو در ۴ تا ۸ هفته نشون می‌دن؛ SEO بازه ۳ تا ۶ ماهه داره. از روز اول با نقشه راه می‌دونید هر مرحله چه انتظاری داشته باشید.' },
+        ];
+        return (
+          <section className="py-14 sm:py-20 space-y-10">
+            <SectionHead
+              eyebrow="پرسش‌های پرتکرار"
+              icon={<ClipboardCheck className="w-3.5 h-3.5" />}
+              title="هر سوالی داری، رک جواب می‌دم"
+              desc="چیزهایی که مشتری‌ها قبل از شروع همکاری معمولاً می‌پرسن."
+            />
+            <div className="max-w-3xl mx-auto space-y-3">
+              {faqs.map((f, idx) => (
+                <div key={idx} className="nd-card rounded-[22px] overflow-hidden">
+                  <button
+                    onClick={() => setOpenFaq(openFaq === idx ? -1 : idx)}
+                    className="w-full flex items-center justify-between gap-4 p-5 sm:p-6 text-right cursor-pointer"
+                  >
+                    <span className="text-sm font-extrabold text-[color:var(--nd-ink)]">{f.q}</span>
+                    <span className={`w-8 h-8 rounded-full border border-[color:var(--nd-line-strong)] grid place-items-center shrink-0 transition-transform duration-300 ${openFaq === idx ? 'rotate-45 bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] border-transparent' : 'text-[color:var(--nd-muted)]'}`}>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden><path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                    </span>
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {openFaq === idx && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <p className="px-5 sm:px-6 pb-6 nd-muted text-xs sm:text-sm leading-relaxed">{f.a}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      /* ============ 9. FINAL CTA — dark cinematic close ============ */
       case 'FINAL_CTA':
       case 'CTA':
         return (
-          <CinematicSection variant="scale-up" showGlowBeam glowColor="purple" className="relative z-10" id="final-cta">
-            <div className="p-8 sm:p-14 rounded-[36px] bg-gradient-to-r from-[#1a1240] via-[#2d1b5e] to-[#0f0a2e] border border-white/20 text-center space-y-6 shadow-[0_25px_70px_rgba(139,92,246,0.25)] relative overflow-hidden">
-              <div className="absolute -top-20 -left-20 w-64 h-64 bg-[#8b5cf6]/30 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-[#4c8dff]/30 rounded-full blur-3xl pointer-events-none" />
-
-              <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white leading-tight max-w-2xl mx-auto">
-                آماده‌ای مسیر رشد کسب‌وکارتو پیدا کنی؟
+          <section id="final-cta" className="py-10 sm:py-16">
+            <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} relative rounded-[36px] sm:rounded-[44px] p-9 sm:p-16 text-center space-y-6`}>
+              <div className="absolute w-[30rem] h-[30rem] -top-32 -right-24 rounded-full blur-3xl opacity-40 nd-float-slow" style={{ background: 'radial-gradient(circle, rgba(99,91,255,0.5), transparent 65%)' }} aria-hidden />
+              <div className="absolute w-[26rem] h-[26rem] -bottom-28 -left-20 rounded-full blur-3xl opacity-30 nd-float" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.4), transparent 65%)' }} aria-hidden />
+              <h2 className={`nd-h1 relative ${isDark ? 'text-white' : ''} text-2xl sm:text-4xl lg:text-[3rem] max-w-2xl mx-auto`}>
+                <MaskLines lines={[<span key="1">آماده‌ای مسیر رشد کسب‌وکارتو پیدا کنی؟</span>]} />
               </h2>
-
-              <p className="text-slate-300 text-xs sm:text-base max-w-xl mx-auto">
-                یه گفتگوی کوتاه کافیه تا دقیقاً بفهمیم از کجا باید شروع کنیم.
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
-                <button
-                  onClick={() => onNavigate('contact')}
-                  className="glow-btn px-8 py-4 rounded-2xl text-xs sm:text-sm font-black text-white inline-flex items-center gap-2.5 shadow-2xl cursor-pointer hover:scale-105 transition-transform"
-                >
-                  <span>ببینیم کسب‌وکارتان به چی نیاز دارد</span>
-                  <ArrowUpLeft className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => onNavigate('portfolio')}
-                  className="px-6 py-4 rounded-2xl text-xs sm:text-sm font-bold border border-white/20 bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
-                >
-                  <span>پروژه‌هایی که انجام دادم</span>
-                </button>
+              <p className={`relative ${isDark ? 'text-slate-400' : 'nd-muted'} text-sm sm:text-base max-w-xl mx-auto`}>یه گفتگوی کوتاه کافیه تا دقیقاً بفهمیم از کجا باید شروع کنیم.</p>
+              <div className="relative flex flex-wrap items-center justify-center gap-3 pt-2">
+                <Magnetic>
+                  <button onClick={() => onNavigate('contact')} className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 px-8 py-4 text-xs sm:text-sm">
+                    <span>ببینیم کسب‌وکارتان به چی نیاز دارد</span>
+                    <ArrowUpLeft className="w-4 h-4" />
+                  </button>
+                </Magnetic>
+                <a href={personal.whatsappUrl} target="_blank" rel="noreferrer" className={`nd-btn ${isDark ? 'nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10' : 'nd-btn-ghost'} px-6 py-4 text-xs sm:text-sm`}>
+                  <MessageCircle className={`w-4 h-4 ${isDark ? 'text-emerald-300' : 'text-[color:var(--nd-success)]'}`} />
+                  <span>گفتگو در واتساپ</span>
+                </a>
               </div>
             </div>
-          </CinematicSection>
+          </section>
         );
-
       default:
         return null;
     }
   };
 
   return (
-    <div className="space-y-20 md:space-y-28 py-6">
+    <div className="space-y-6 md:space-y-10 py-4">
       {homeSections.map((sec) => (
         <SectionWrapper key={sec.id} pageKey="home" sectionName={sec.name}>
           {renderSectionByName(sec.name)}

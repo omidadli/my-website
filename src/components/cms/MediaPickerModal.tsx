@@ -74,11 +74,11 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 text-right dir-rtl font-sans">
-      <div className="bg-[#120a38] border-2 border-[#8b5cf6] rounded-3xl p-6 max-w-2xl w-full shadow-[0_0_50px_rgba(139,92,246,0.3)] text-white space-y-5 max-h-[90vh] flex flex-col">
+      <div className="bg-[color:var(--nd-surface)] border-2 border-[color:var(--nd-accent)] rounded-3xl p-6 max-w-2xl w-full shadow-xl text-[color:var(--nd-ink)] space-y-5 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-400 text-slate-950 font-black">
+            <div className="p-2.5 rounded-2xl bg-[color:var(--nd-accent)] text-white font-black">
               <ImageIcon className="w-5 h-5" />
             </div>
             <div>
@@ -102,7 +102,7 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
             onClick={() => setActiveTab('select')}
             className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 ${
               activeTab === 'select'
-                ? 'bg-[#8b5cf6] text-white shadow-lg'
+                ? 'bg-[color:var(--nd-accent)] text-white shadow-lg'
                 : 'bg-white/5 text-slate-300 hover:bg-white/10'
             }`}
           >
@@ -115,7 +115,7 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
             onClick={() => setActiveTab('upload')}
             className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 ${
               activeTab === 'upload'
-                ? 'bg-[#8b5cf6] text-white shadow-lg'
+                ? 'bg-[color:var(--nd-accent)] text-white shadow-lg'
                 : 'bg-white/5 text-slate-300 hover:bg-white/10'
             }`}
           >
@@ -134,7 +134,7 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="جستجو بر اساس عنوان یا تگ..."
-                className="w-full bg-[#0a0520] border border-white/20 rounded-xl px-10 py-2.5 text-xs text-white focus:outline-none focus:border-[#5ce1e6]"
+                className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-xl px-10 py-2.5 text-xs text-white focus:outline-none focus:border-[color:var(--nd-accent)]"
               />
               <Search className="w-4 h-4 text-slate-400 absolute top-3 right-3" />
             </div>
@@ -154,7 +154,7 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
                       onClick={() => setSelectedUrl(item.url)}
                       className={`group relative rounded-2xl overflow-hidden border-2 cursor-pointer transition-all ${
                         isSelected
-                          ? 'border-amber-400 ring-4 ring-amber-400/30 scale-[1.02]'
+                          ? 'border-[color:var(--nd-accent)] ring-4 ring-[color:var(--nd-accent-soft)] scale-[1.02]'
                           : 'border-white/10 hover:border-white/40'
                       }`}
                     >
@@ -182,7 +182,7 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
                       </div>
 
                       {isSelected && (
-                        <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-lg">
+                        <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-[color:var(--nd-accent)] text-white flex items-center justify-center font-black shadow-lg">
                           <Check className="w-4 h-4" />
                         </div>
                       )}
@@ -197,8 +197,8 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
         {/* Tab 2: Upload new */}
         {activeTab === 'upload' && (
           <div className="space-y-4 overflow-y-auto pr-1 flex-1">
-            <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-[#8b5cf6]/50 hover:border-[#8b5cf6] rounded-2xl cursor-pointer transition-all bg-white/5 hover:bg-white/10 text-center">
-              <Upload className="w-10 h-10 text-[#5ce1e6] animate-pulse" />
+            <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-[color:var(--nd-accent)]/50 hover:border-[color:var(--nd-accent)] rounded-2xl cursor-pointer transition-all bg-white/5 hover:bg-white/10 text-center">
+              <Upload className="w-10 h-10 text-[color:var(--nd-accent)] animate-pulse" />
               <div>
                 <span className="font-bold text-sm text-white block">برای آپلود تصویر کلیک کنید</span>
                 <span className="text-xs text-slate-400">فرمت‌های مجاز: JPG, PNG, WEBP, SVG</span>
@@ -212,8 +212,8 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
             </label>
 
             {sizeWarning && (
-              <div className="p-3.5 rounded-2xl bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+              <div className="p-3.5 rounded-2xl bg-[color:var(--nd-peach-soft)] border border-transparent text-[#d97706] text-xs font-bold flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-[color:var(--nd-accent)] shrink-0" />
                 <span>
                   هشدار حجم فایل: حجم تصویر ({fileSizeKb} KB) بیشتر از ۱ مگابایت است. پیشنهاد می‌شود جهت حفظ سرعت بالایش سایت، تصویر را فشرده کنید.
                 </span>
@@ -235,12 +235,12 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
                         type="text"
                         value={uploadedTitle}
                         onChange={(e) => setUploadedTitle(e.target.value)}
-                        className="w-full bg-[#0a0520] border border-white/20 rounded-lg p-2 text-white font-bold"
+                        className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-lg p-2 text-white font-bold"
                       />
                     </div>
                     <div className="flex items-center gap-4 text-[11px] text-slate-300">
-                      <span>حجم: <strong className="text-amber-300">{fileSizeKb} KB</strong></span>
-                      <span>ابعاد: <strong className="text-[#5ce1e6]">{dimensions}</strong></span>
+                      <span>حجم: <strong className="text-[color:var(--nd-accent)]">{fileSizeKb} KB</strong></span>
+                      <span>ابعاد: <strong className="text-[color:var(--nd-accent)]">{dimensions}</strong></span>
                     </div>
                   </div>
                 </div>
@@ -267,7 +267,7 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
                 onSelect(selectedUrl);
                 onClose();
               }}
-              className="px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-lg disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              className="px-6 py-2.5 rounded-xl bg-[color:var(--nd-accent)] hover:opacity-90 text-white font-black text-xs shadow-lg disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
               <span>تأیید و انتخاب تصویر</span>
@@ -277,7 +277,7 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
               type="button"
               disabled={!uploadedPreview}
               onClick={handleConfirmUpload}
-              className="px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-lg disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              className="px-6 py-2.5 rounded-xl bg-[color:var(--nd-accent)] hover:opacity-90 text-white font-black text-xs shadow-lg disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
               <Upload className="w-4 h-4" />
               <span>ذخیره در کتابخانه و اعمال</span>
