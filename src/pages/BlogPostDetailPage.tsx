@@ -16,7 +16,7 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
   const isDark = theme === 'dark';
   const { data, addBlogComment } = useContent();
   const blogPosts = data.BLOG_POSTS || [];
-  const post = blogPosts.find((p) => p.id === postId);
+  const post = blogPosts.find((p) => p.id === postId || (!!p.slug && p.slug === postId));
 
   const [commentName, setCommentName] = useState('');
   const [commentEmail, setCommentEmail] = useState('');

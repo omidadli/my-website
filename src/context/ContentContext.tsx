@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../services/api';
 import * as initialData from '../data/content';
 
@@ -888,10 +888,23 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setActiveEditModal(null);
   };
 
+  // Visitors never see drafts — admin sees everything.
+  const publicData = useMemo(() => {
+    if (isAdmin) return data;
+    const noDrafts = <T extends { status?: string }>(arr?: T[]): T[] => (arr || []).filter((i) => i?.status !== 'draft');
+    return {
+      ...data,
+      BLOG_POSTS: noDrafts(data.BLOG_POSTS),
+      SERVICES: noDrafts(data.SERVICES),
+      PRODUCTS: noDrafts(data.PRODUCTS),
+      CASE_STUDIES: noDrafts(data.CASE_STUDIES),
+    };
+  }, [data, isAdmin]);
+
   return (
     <ContentContext.Provider
       value={{
-        data,
+        data: publicData,
         isAdmin,
         setIsAdmin,
         pinCode,
