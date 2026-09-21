@@ -6,6 +6,7 @@ import { RepeaterControls } from '../components/cms/RepeaterControls';
 import { SectionEditHeader } from '../components/cms/SectionEditHeader';
 import { SectionWrapper } from '../components/cms/SectionWrapper';
 import { IsometricDashboard } from '../components/3D/IsometricDashboard';
+import { IconBadge3D } from '../components/3D/3DIconBadge';
 import { TiltCard } from '../components/3D/TiltCard';
 import {
   ChevronLeft,
@@ -110,6 +111,7 @@ const IconTile: React.FC<{ name: string; tint: { bg: string; fg: string }; size?
 /* ------------------------------------------------------------------ */
 export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectCaseStudy, onSelectPost }) => {
   const { data } = useContent();
+  const isDark = theme === 'dark';
 
   const [activeServiceTab, setActiveServiceTab] = useState<'start' | 'sell' | 'grow'>('sell');
   const [promptValue, setPromptValue] = useState('');
@@ -238,10 +240,16 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
           <section id="hero-section" className="relative">
             {/* ---------- Cinematic dark stage (full-bleed) ---------- */}
             <div
-              onMouseMove={handleStageMove}
-              className="nd-stage nd-hairline-top relative left-1/2 -translate-x-1/2 w-screen rounded-b-[44px] -mt-28 sm:-mt-32"
+              onMouseMove={isDark ? handleStageMove : undefined}
+              className={
+                isDark
+                  ? 'nd-stage nd-hairline-top relative left-1/2 -translate-x-1/2 w-screen rounded-b-[44px] -mt-28 sm:-mt-32'
+                  : 'relative'
+              }
             >
-              {/* oversized outline watermark */}
+              {/* dark-theme cinematic decorations */}
+              {isDark && (
+                <>
               <span className="nd-watermark" aria-hidden>رشد</span>
 
               {/* pointer spotlight */}
@@ -266,38 +274,48 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
               <span className="nd-particle" style={{ top: '38%', right: '82%', animationDelay: '-2.4s' }} aria-hidden />
               <span className="nd-particle" style={{ top: '64%', right: '24%', animationDelay: '-4.8s' }} aria-hidden />
               <span className="nd-particle" style={{ top: '74%', right: '68%', animationDelay: '-6.2s' }} aria-hidden />
+                </>
+              )}
 
-              <div className="relative max-w-5xl mx-auto px-4 sm:px-8 pt-36 sm:pt-40 pb-16 sm:pb-20 text-center space-y-8">
+              <div className={`relative max-w-5xl mx-auto px-4 sm:px-8 text-center space-y-8 ${isDark ? 'pt-36 sm:pt-40 pb-16 sm:pb-20' : 'pt-8 sm:pt-14 pb-10'}`}>
                 {/* Trust pill */}
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                  className="nd-glass-dark inline-flex items-center gap-3 rounded-full ps-2 pe-4 py-1.5"
+                  className={`${isDark ? 'nd-glass-dark' : 'nd-glass'} inline-flex items-center gap-3 rounded-full ps-2 pe-4 py-1.5`}
                 >
                   <span className="flex">
-                    <img src={personal.avatar} alt={personal.name} className="w-7 h-7 rounded-full object-cover ring-2 ring-white/30" />
-                    <span className="-ms-2 w-7 h-7 rounded-full ring-2 ring-white/30 grid place-items-center text-[10px] font-black text-white" style={{ background: 'linear-gradient(135deg,#4f46e5,#38bdf8)' }}>
+                    <img src={personal.avatar} alt={personal.name} className={`w-7 h-7 rounded-full object-cover ring-2 ${isDark ? 'ring-white/30' : 'ring-white'}`} />
+                    <span className={`-ms-2 w-7 h-7 rounded-full ring-2 grid place-items-center text-[10px] font-black text-white ${isDark ? 'ring-white/30' : 'ring-white'}`} style={{ background: 'linear-gradient(135deg,#4f46e5,#38bdf8)' }}>
                       ۵+
                     </span>
                   </span>
-                  <span className="text-xs font-extrabold text-slate-200">
+                  <span className={`text-xs font-extrabold ${isDark ? 'text-slate-200' : 'text-[color:var(--nd-ink-2)]'}`}>
                     همراه برندهای فروش‌محور · {personal.experienceYears} تجربه
                   </span>
-                  <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-300">
+                  <span className={`hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold ${isDark ? 'text-emerald-300' : 'text-[color:var(--nd-success)]'}`}>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     {personal.availability}
                   </span>
                 </motion.div>
 
                 {/* Headline — cinematic mask reveal */}
-                <h1 className="nd-h1 text-white text-[2.2rem] leading-[1.28] sm:text-5xl sm:leading-[1.22] lg:text-[3.7rem] lg:leading-[1.18]">
+                <h1 className={`nd-h1 ${isDark ? 'text-white' : ''} text-[2.2rem] leading-[1.28] sm:text-5xl sm:leading-[1.22] lg:text-[3.7rem] lg:leading-[1.18]`}>
                   <MaskLines
                     delay={0.1}
                     lines={[
                       <span key="1">فروشگاهتان را آنلاین شروع کنید،</span>,
                       <span key="2">
-                        <span className="nd-text-glow nd-shine">بهتر بفروشید</span> و رشد کنید.
+                        {isDark ? (
+                          <span className="nd-text-glow nd-shine">بهتر بفروشید</span>
+                        ) : (
+                          <span className="relative inline-block text-[color:var(--nd-accent)]">
+                            <span className="absolute inset-x-[-6px] bottom-[4px] h-3.5 sm:h-4 rounded-md bg-[rgba(99,102,241,0.16)] -rotate-1" aria-hidden />
+                            <span className="relative">بهتر بفروشید</span>
+                          </span>
+                        )}{' '}
+                        و رشد کنید.
                       </span>,
                     ]}
                   />
@@ -308,7 +326,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.7, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  className="text-slate-400 text-sm sm:text-lg leading-relaxed max-w-2xl mx-auto"
+                  className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-sm sm:text-lg leading-relaxed max-w-2xl mx-auto`}
                 >
                   فرقی نمی‌کنه تازه می‌خواید وارد دنیای آنلاین بشید یا همین حالا فروشگاه و سایت دارید؛ از طراحی سایت و راه‌اندازی پیج و محتوا تا تبلیغات، تحلیل و افزایش فروش، کمکتون می‌کنم مسیر درست رشدتون رو پیدا کنید و اجراش کنید.
                 </motion.p>
@@ -319,29 +337,29 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                  className="nd-glass-dark rounded-[26px] p-3 sm:p-4 max-w-2xl mx-auto text-right"
+                  className={`${isDark ? 'nd-glass-dark' : 'nd-card'} rounded-[26px] p-3 sm:p-4 max-w-2xl mx-auto text-right`}
                 >
                   <div className="flex items-center gap-3 px-2 sm:px-3 pt-2 pb-3">
-                    <Search className="w-5 h-5 shrink-0 text-slate-500" />
+                    <Search className={`w-5 h-5 shrink-0 ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`} />
                     <input
                       value={promptValue}
                       onChange={(e) => setPromptValue(e.target.value)}
                       placeholder="نیازت رو بنویس؛ مثلاً: بازدید میاد ولی فروش نه…"
-                      className="w-full bg-transparent text-sm sm:text-base font-medium text-white placeholder:text-slate-500 focus:outline-none"
+                      className={`w-full bg-transparent text-sm sm:text-base font-medium focus:outline-none ${isDark ? 'text-white placeholder:text-slate-500' : 'text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)]'}`}
                     />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-3 px-1">
+                  <div className={`flex flex-wrap items-center gap-2 border-t pt-3 px-1 ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
                     {promptSuggestions.map((s) => (
                       <button
                         key={s}
                         type="button"
                         onClick={() => setPromptValue(s)}
-                        className="nd-chip bg-white/5 border-white/10 text-slate-300 hover:text-white hover:border-indigo-400/50 transition-colors cursor-pointer"
+                        className={`nd-chip transition-colors cursor-pointer ${isDark ? 'bg-white/5 border-white/10 text-slate-300 hover:text-white hover:border-indigo-400/50' : 'hover:text-[color:var(--nd-accent)] hover:border-[rgba(79,70,229,0.4)]'}`}
                       >
                         {s}
                       </button>
                     ))}
-                    <button type="submit" className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 ms-auto px-5 py-2.5 text-xs sm:text-sm">
+                    <button type="submit" className={`nd-btn ms-auto px-5 py-2.5 text-xs sm:text-sm ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'}`}>
                       <span>تحلیل رایگان نیازت</span>
                       <Send className="w-4 h-4" />
                     </button>
@@ -356,12 +374,12 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   className="flex flex-wrap items-center justify-center gap-3"
                 >
                   <Magnetic>
-                    <button onClick={() => onNavigate('contact')} className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 px-7 py-4 text-xs sm:text-sm">
+                    <button onClick={() => onNavigate('contact')} className={`nd-btn px-7 py-4 text-xs sm:text-sm ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'}`}>
                       <span>ببینیم کسب‌وکارتان به چی نیاز دارد</span>
                       <ArrowUpLeft className="w-4 h-4" />
                     </button>
                   </Magnetic>
-                  <button onClick={() => onNavigate('portfolio')} className="nd-btn nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10 px-6 py-4 text-xs sm:text-sm">
+                  <button onClick={() => onNavigate('portfolio')} className={`nd-btn px-6 py-4 text-xs sm:text-sm ${isDark ? 'nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10' : 'nd-btn-ghost'}`}>
                     <span>پروژه‌هایی که انجام دادم</span>
                     <ChevronLeft className="w-4 h-4" />
                   </button>
@@ -371,7 +389,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.7, delay: 0.72 }}
-                  className="flex flex-wrap items-center justify-center gap-2 text-[11px] sm:text-xs font-bold text-slate-500"
+                  className={`flex flex-wrap items-center justify-center gap-2 text-[11px] sm:text-xs font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}
                 >
                   <span>طراحی سایت</span><span>·</span>
                   <span>محتوا و شبکه‌های اجتماعی</span><span>·</span>
@@ -387,32 +405,32 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   className="relative max-w-4xl mx-auto"
                   style={{ x: dashX, y: dashY }}
                 >
-                  <div className="nd-conic-ring" aria-hidden />
-                  <div className="relative nd-glass-dark rounded-[28px] sm:rounded-[32px] p-3 sm:p-4">
+                  {isDark && <div className="nd-conic-ring" aria-hidden />}
+                  <div className={`relative rounded-[28px] sm:rounded-[32px] p-3 sm:p-4 ${isDark ? 'nd-glass-dark' : 'nd-card'}`}>
                     <div className="flex items-center gap-2 px-2 pb-3">
                       <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80" />
                       <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80" />
                       <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/80" />
-                      <span className="ms-3 flex-1 h-7 rounded-full bg-white/5 border border-white/10 grid place-items-center text-[10px] font-bold text-slate-500 dir-ltr">
+                      <span className={`ms-3 flex-1 h-7 rounded-full grid place-items-center text-[10px] font-bold dir-ltr ${isDark ? 'bg-white/5 border border-white/10 text-slate-500' : 'bg-[color:var(--nd-bg)] border border-[color:var(--nd-line)] text-[color:var(--nd-faint)]'}`}>
                         {personal.website}
                       </span>
                     </div>
-                    <div className="rounded-[18px] sm:rounded-[22px] overflow-hidden border border-white/10" style={{ background: 'linear-gradient(180deg,#141428,#0d0d1a)' }}>
-                      <IsometricDashboard theme="dark" />
+                    <div className={`rounded-[18px] sm:rounded-[22px] overflow-hidden border ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`} style={{ background: isDark ? 'linear-gradient(180deg,#141428,#0d0d1a)' : 'linear-gradient(180deg,#f7f6ff,#eef4ff)' }}>
+                      <IsometricDashboard theme={isDark ? 'dark' : 'light'} />
                     </div>
                   </div>
 
                   {stats.slice(0, 2).map((s, i) => (
                     <div
                       key={i}
-                      className={`nd-glass-dark absolute hidden lg:flex items-center gap-2.5 rounded-2xl px-4 py-3 ${i === 0 ? '-right-10 top-8 nd-float' : '-left-12 bottom-10 nd-float-slow'}`}
+                      className={`${isDark ? 'nd-glass-dark' : 'nd-card'} absolute hidden lg:flex items-center gap-2.5 rounded-2xl px-4 py-3 ${i === 0 ? '-right-10 top-8 nd-float' : '-left-12 bottom-10 nd-float-slow'}`}
                     >
-                      <span className="w-9 h-9 rounded-xl grid place-items-center" style={{ background: 'rgba(255,255,255,0.08)', color: '#a5b4fc' }}>
+                      <span className="w-9 h-9 rounded-xl grid place-items-center" style={isDark ? { background: 'rgba(255,255,255,0.08)', color: '#a5b4fc' } : { background: 'var(--nd-accent-soft)', color: '#4f46e5' }}>
                         {React.createElement(iconFor(s.icon), { className: 'w-4 h-4' })}
                       </span>
                       <span>
-                        <span className="block text-sm font-black text-white dir-ltr text-right">{s.value}</span>
-                        <span className="block text-[10px] font-bold text-slate-400">{s.label}</span>
+                        <span className={`block text-sm font-black dir-ltr text-right ${isDark ? 'text-white' : 'text-[color:var(--nd-ink)]'}`}>{s.value}</span>
+                        <span className={`block text-[10px] font-bold ${isDark ? 'text-slate-400' : 'text-[color:var(--nd-muted)]'}`}>{s.label}</span>
                       </span>
                     </div>
                   ))}
@@ -420,7 +438,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
 
                 {/* Scroll cue */}
                 <div className="flex justify-center pt-2">
-                  <ChevronLeft className="w-5 h-5 text-slate-500 nd-scroll-cue rotate-[-90deg]" />
+                  <ChevronLeft className={`w-5 h-5 nd-scroll-cue rotate-[-90deg] ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`} />
                 </div>
               </div>
             </div>
@@ -431,7 +449,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-60px' }}
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="relative z-10 nd-card max-w-3xl mx-auto -mt-10 sm:-mt-12 p-6 sm:p-8 flex flex-col sm:flex-row items-start gap-5"
+              className={`relative z-10 nd-card max-w-3xl mx-auto p-6 sm:p-8 flex flex-col sm:flex-row items-start gap-5 ${isDark ? '-mt-10 sm:-mt-12' : 'mt-6'}`}
             >
               <img src={personal.avatar} alt={personal.name} className="w-16 h-16 rounded-2xl object-cover shadow-sm shrink-0" />
               <p className="text-sm sm:text-base leading-relaxed text-[color:var(--nd-ink-2)]">
@@ -485,14 +503,14 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       case 'PROOF':
         return (
           <section className="py-6 sm:py-10">
-            <div className="nd-stage nd-hairline-top rounded-[36px] sm:rounded-[44px] p-7 sm:p-14 space-y-10">
+            <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[36px] sm:rounded-[44px] p-7 sm:p-14 space-y-10`}>
               <div className="text-center space-y-4 max-w-2xl mx-auto">
-                <span className="nd-glass-dark inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold text-indigo-200">
+                <span className={`${isDark ? 'nd-glass-dark text-indigo-200' : 'nd-eyebrow'} inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold`}>
                   <TrendingUp className="w-3.5 h-3.5" />
                   <span>اثبات با داده، نه شعار</span>
                 </span>
-                <h2 className="nd-h2 text-white text-2xl sm:text-3xl lg:text-[2.6rem]">نتیجه‌هایی که تا الان گرفتم</h2>
-                <p className="text-slate-400 text-sm sm:text-base leading-relaxed">این‌ها فقط عدد نیستن؛ نتیجه‌ی کار روی کسب‌وکارهای واقعیه.</p>
+                <h2 className={`nd-h2 ${isDark ? 'text-white' : ''} text-2xl sm:text-3xl lg:text-[2.6rem]`}>نتیجه‌هایی که تا الان گرفتم</h2>
+                <p className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-sm sm:text-base leading-relaxed`}>این‌ها فقط عدد نیستن؛ نتیجه‌ی کار روی کسب‌وکارهای واقعیه.</p>
               </div>
 
               {/* Stats row */}
@@ -507,13 +525,13 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     className="relative text-center space-y-1.5"
                   >
                     <RepeaterControls arrayPath="STATS" index={idx} totalCount={stats.length} className="absolute top-0 left-0" />
-                    <div className="text-3xl sm:text-4xl font-black nd-text-glow dir-ltr text-center">
+                    <div className={`text-3xl sm:text-4xl font-black ${isDark ? 'nd-text-glow' : 'text-[color:var(--nd-accent)]'} dir-ltr text-center`}>
                       <EditableText path={`STATS.${idx}.value`}>{stat.value}</EditableText>
                     </div>
-                    <div className="font-extrabold text-xs sm:text-sm text-slate-200">
+                    <div className={`font-extrabold text-xs sm:text-sm ${isDark ? 'text-slate-200' : 'text-[color:var(--nd-ink)]'}`}>
                       <EditableText path={`STATS.${idx}.label`}>{stat.label}</EditableText>
                     </div>
-                    <div className="text-[11px] font-medium text-slate-500">
+                    <div className={`text-[11px] font-medium ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}>
                       <EditableText path={`STATS.${idx}.subtext`}>{stat.subtext}</EditableText>
                     </div>
                   </motion.div>
@@ -530,22 +548,21 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     viewport={{ once: true, margin: '-60px' }}
                     transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => onSelectCaseStudy(study)}
-                    className="nd-glass-dark rounded-[28px] p-6 sm:p-7 text-right flex flex-col gap-4 cursor-pointer hover:bg-white/10 transition-colors group"
-                  >
+                    className={`${isDark ? 'nd-glass-dark hover:bg-white/10' : 'nd-card nd-card-hover'} rounded-[28px] p-6 sm:p-7 text-right flex flex-col gap-4 cursor-pointer transition-colors group`}>
                     <div className="flex items-center justify-between">
-                      <span className="nd-chip bg-white/8 border-white/12 text-slate-300">{study.industryFa}</span>
-                      <span className="text-[11px] font-bold text-slate-500">{study.client}</span>
+                      <span className={`nd-chip ${isDark ? 'bg-white/8 border-white/12 text-slate-300' : ''}`}>{study.industryFa}</span>
+                      <span className={`text-[11px] font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}>{study.client}</span>
                     </div>
-                    <h3 className="nd-h2 text-white text-base sm:text-lg leading-snug">{study.title}</h3>
+                    <h3 className={`nd-h2 ${isDark ? 'text-white' : ''} text-base sm:text-lg leading-snug`}>{study.title}</h3>
                     <div className="grid grid-cols-3 gap-2">
                       {(study.metricsComparison || []).slice(0, 3).map((m: any, mi: number) => (
-                        <div key={mi} className="rounded-2xl bg-white/5 border border-white/10 px-2 py-2.5 text-center">
-                          <span className="block text-sm font-black nd-text-glow dir-ltr">{m.growth}</span>
-                          <span className="block text-[9px] font-bold text-slate-500 leading-tight mt-1 line-clamp-1">{m.label}</span>
+                        <div key={mi} className={`rounded-2xl border px-2 py-2.5 text-center ${isDark ? 'bg-white/5 border-white/10' : 'bg-[color:var(--nd-bg)] border-[color:var(--nd-line)]'}`}>
+                          <span className={`block text-sm font-black ${isDark ? 'nd-text-glow' : 'text-[color:var(--nd-accent)]'} dir-ltr`}>{m.growth}</span>
+                          <span className={`block text-[9px] font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'} leading-tight mt-1 line-clamp-1`}>{m.label}</span>
                         </div>
                       ))}
                     </div>
-                    <span className="flex items-center justify-between pt-3 border-t border-white/10 text-xs font-extrabold text-indigo-300">
+                    <span className={`flex items-center justify-between pt-3 border-t text-xs font-extrabold ${isDark ? 'border-white/10 text-indigo-300' : 'border-[color:var(--nd-line)] text-[color:var(--nd-accent)]'}`}>
                       <span>دیدن کامل این پروژه</span>
                       <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
                     </span>
@@ -554,7 +571,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
               </div>
 
               <div className="text-center">
-                <button onClick={() => onNavigate('portfolio')} className="nd-btn nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10 px-7 py-3.5 text-xs sm:text-sm">
+                <button onClick={() => onNavigate('portfolio')} className={`nd-btn ${isDark ? 'nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10' : 'nd-btn-ghost'} px-7 py-3.5 text-xs sm:text-sm`}>
                   <span>همه‌ی نمونه‌کارها</span>
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -595,7 +612,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                         </span>
                       )}
                       <span className="flex items-start justify-between gap-4">
-                        <IconTile name={p.iconName} tint={TINTS[i % TINTS.length]} />
+                        <IconBadge3D iconName={p.iconName} theme={theme} size="sm" glowColor={(['purple', 'blue', 'emerald'] as const)[i % 3]} floating={false} />
                         <span className="nd-chip">{p.tag}</span>
                       </span>
                       <span className="block">
@@ -722,7 +739,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                         <div className="nd-card nd-card-hover p-7 h-full flex flex-col justify-between gap-6 group">
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                              <IconTile name={srv.iconName} tint={TINTS[idx % TINTS.length]} />
+                              <IconBadge3D iconName={srv.iconName} theme={theme} size="sm" glowColor={(['blue', 'cyan', 'purple', 'emerald', 'gold', 'magenta'] as const)[idx % 6]} floating={false} />
                               <span className="text-[11px] font-black text-[color:var(--nd-faint)] dir-ltr">0{idx + 1}</span>
                             </div>
                             <h3 className="nd-h2 text-base sm:text-lg">{srv.title}</h3>
@@ -857,7 +874,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                       <span className="w-11 h-11 rounded-full grid place-items-center text-sm font-black text-white" style={{ background: 'var(--nd-ink)' }}>
                         {String(idx + 1).padStart(2, '0')}
                       </span>
-                      <IconTile name={stepItem.icon} tint={TINTS[idx % TINTS.length]} size="sm" />
+                      <IconBadge3D iconName={stepItem.icon} theme={theme} size="sm" glowColor={(['blue', 'purple', 'emerald', 'cyan'] as const)[idx % 4]} floating={false} />
                     </div>
                     <div className="space-y-2.5">
                       <h3 className="nd-h2 text-base">{stepItem.title}</h3>
@@ -900,7 +917,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     transition={{ duration: 0.55, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
                     className="nd-panel-card rounded-[24px] p-7 space-y-4 h-full"
                   >
-                    <IconTile name={item.icon} tint={TINTS[idx % TINTS.length]} />
+                    <IconBadge3D iconName={item.icon} theme={theme} size="sm" glowColor={(['cyan', 'gold', 'magenta'] as const)[idx % 3]} floating={false} />
                     <h3 className="nd-h2 text-base sm:text-lg">{item.title}</h3>
                     <p className="nd-muted text-xs sm:text-sm leading-relaxed">{item.description || item.desc}</p>
                   </motion.div>
@@ -1008,13 +1025,13 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                 transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                 className="lg:col-span-2"
               >
-                <div className="nd-stage nd-hairline-top rounded-[32px] p-7 sm:p-9 h-full flex flex-col gap-5">
-                  <span className="nd-glass-dark inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold text-indigo-200 w-fit">
+                <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-card'} rounded-[32px] p-7 sm:p-9 h-full flex flex-col gap-5`} style={isDark ? undefined : { background: 'linear-gradient(150deg, var(--nd-accent-soft), var(--nd-sky-soft) 60%, var(--nd-mint-soft))' }}>
+                  <span className={`${isDark ? 'nd-glass-dark text-indigo-200' : 'nd-eyebrow'} inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold w-fit`}>
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>بدون هزینه، بدون تعهد</span>
                   </span>
-                  <h3 className="nd-h2 text-white text-xl sm:text-2xl leading-snug">آنالیز سریع و رایگان سایتت</h3>
-                  <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+                  <h3 className={`nd-h2 ${isDark ? 'text-white' : ''} text-xl sm:text-2xl leading-snug`}>آنالیز سریع و رایگان سایتت</h3>
+                  <p className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-xs sm:text-sm leading-relaxed`}>
                     آدرس سایتت رو بنویس؛ تا ۴۸ ساعت یه بررسی اولیه از مسیر خرید، سرعت و نقاط ریزشت برات می‌فرستم — همین‌طوری، برای آشنایی.
                   </p>
                   <form onSubmit={handlePromptSubmit} className="mt-auto space-y-3">
@@ -1022,14 +1039,14 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                       value={promptValue}
                       onChange={(e) => setPromptValue(e.target.value)}
                       placeholder="example.com"
-                      className="w-full nd-glass-dark rounded-2xl px-4 py-3.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-400/60 dir-ltr text-left"
+                      className={`w-full rounded-2xl px-4 py-3.5 text-sm focus:outline-none dir-ltr text-left ${isDark ? 'nd-glass-dark text-white placeholder:text-slate-500 focus:border-indigo-400/60' : 'bg-white border border-[color:var(--nd-line)] text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)] focus:border-[color:var(--nd-accent)]'}`}
                     />
-                    <button type="submit" className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 w-full py-3.5 text-sm">
+                    <button type="submit" className={`nd-btn ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'} w-full py-3.5 text-sm`}>
                       <span>درخواست آنالیز رایگان</span>
                       <Send className="w-4 h-4" />
                     </button>
                   </form>
-                  <p className="text-[10px] font-bold text-slate-500">بدون اسپم؛ فقط یه نقشه‌ی راه قابل اجرا.</p>
+                  <p className={`text-[10px] font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}>بدون اسپم؛ فقط یه نقشه‌ی راه قابل اجرا.</p>
                 </div>
               </motion.div>
 
@@ -1058,7 +1075,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     onClick={() => (onSelectPost ? onSelectPost(post.id) : onNavigate('blog'))}
                     className="nd-card nd-card-hover p-5 flex items-center gap-4 text-right cursor-pointer group"
                   >
-                    <IconTile name={post.imageIcon} tint={TINTS[idx % TINTS.length]} size="sm" />
+                    <IconBadge3D iconName={post.imageIcon} theme={theme} size="sm" glowColor={(['purple', 'blue', 'emerald'] as const)[idx % 3]} floating={false} />
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-extrabold text-[color:var(--nd-ink)] leading-snug line-clamp-1 group-hover:text-[color:var(--nd-accent)] transition-colors">{post.title}</span>
                       <span className="block nd-muted text-[11px] font-medium mt-1 line-clamp-1">{post.excerpt}</span>
@@ -1128,13 +1145,13 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       case 'CTA':
         return (
           <section id="final-cta" className="py-10 sm:py-16">
-            <div className="nd-stage nd-hairline-top rounded-[36px] sm:rounded-[44px] p-9 sm:p-16 text-center space-y-6">
+            <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} relative rounded-[36px] sm:rounded-[44px] p-9 sm:p-16 text-center space-y-6`}>
               <div className="absolute w-[30rem] h-[30rem] -top-32 -right-24 rounded-full blur-3xl opacity-40 nd-float-slow" style={{ background: 'radial-gradient(circle, rgba(99,91,255,0.5), transparent 65%)' }} aria-hidden />
               <div className="absolute w-[26rem] h-[26rem] -bottom-28 -left-20 rounded-full blur-3xl opacity-30 nd-float" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.4), transparent 65%)' }} aria-hidden />
-              <h2 className="nd-h1 relative text-white text-2xl sm:text-4xl lg:text-[3rem] max-w-2xl mx-auto">
+              <h2 className={`nd-h1 relative ${isDark ? 'text-white' : ''} text-2xl sm:text-4xl lg:text-[3rem] max-w-2xl mx-auto`}>
                 <MaskLines lines={[<span key="1">آماده‌ای مسیر رشد کسب‌وکارتو پیدا کنی؟</span>]} />
               </h2>
-              <p className="relative text-slate-400 text-sm sm:text-base max-w-xl mx-auto">یه گفتگوی کوتاه کافیه تا دقیقاً بفهمیم از کجا باید شروع کنیم.</p>
+              <p className={`relative ${isDark ? 'text-slate-400' : 'nd-muted'} text-sm sm:text-base max-w-xl mx-auto`}>یه گفتگوی کوتاه کافیه تا دقیقاً بفهمیم از کجا باید شروع کنیم.</p>
               <div className="relative flex flex-wrap items-center justify-center gap-3 pt-2">
                 <Magnetic>
                   <button onClick={() => onNavigate('contact')} className="nd-btn bg-white text-[#17171c] hover:bg-slate-200 px-8 py-4 text-xs sm:text-sm">
@@ -1142,8 +1159,8 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     <ArrowUpLeft className="w-4 h-4" />
                   </button>
                 </Magnetic>
-                <a href={personal.whatsappUrl} target="_blank" rel="noreferrer" className="nd-btn nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10 px-6 py-4 text-xs sm:text-sm">
-                  <MessageCircle className="w-4 h-4 text-emerald-300" />
+                <a href={personal.whatsappUrl} target="_blank" rel="noreferrer" className={`nd-btn ${isDark ? 'nd-glass-dark bg-white/5 border-white/15 text-white hover:bg-white/10' : 'nd-btn-ghost'} px-6 py-4 text-xs sm:text-sm`}>
+                  <MessageCircle className={`w-4 h-4 ${isDark ? 'text-emerald-300' : 'text-[color:var(--nd-success)]'}`} />
                   <span>گفتگو در واتساپ</span>
                 </a>
               </div>

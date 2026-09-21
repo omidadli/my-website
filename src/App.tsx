@@ -24,9 +24,9 @@ import { AdminPage } from './pages/AdminPage';
 function MainLayout() {
   const [theme, setTheme] = useState<Theme>(() => {
     try {
-      return (localStorage.getItem('nd-theme') as Theme) || 'light';
+      return (localStorage.getItem('nd-theme') as Theme) || 'dark';
     } catch {
-      return 'light';
+      return 'dark';
     }
   });
   const [currentPage, setCurrentPage] = useState<Page>('home');

@@ -43,7 +43,6 @@ export const defaultNavigationMenu: NavigationMenuItem[] = [
 export const defaultPageSections: Record<string, PageSectionItem[]> = {
   home: [
     { id: 'sec-hero', name: 'HERO', label: 'صحنه سینمایی اصلی (Hero)', isHidden: false },
-    { id: 'sec-trust-bar', name: 'TRUST_BAR', label: 'نوار اعتماد (برندها)', isHidden: false },
     { id: 'sec-path-nav', name: 'PATH_NAV', label: 'مسیریابی سه‌گانه (الان کجای مسیره؟)', isHidden: false },
     { id: 'sec-proof', name: 'PROOF', label: 'صحنه اثبات با داده (آمار + کیس‌های منتخب)', isHidden: false },
     { id: 'sec-services', name: 'SERVICES_TABS', label: 'خدمات سه‌مرحله‌ای (تب‌بندی شده)', isHidden: false },

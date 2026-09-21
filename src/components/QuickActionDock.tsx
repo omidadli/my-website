@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Page, Theme } from '../types';
-import { useContent } from '../context/ContentContext';
-import { MessageCircle, Send, Phone, ArrowUp } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Home, Briefcase, Package, GraduationCap, Phone } from 'lucide-react';
 
 interface QuickActionDockProps {
   theme: Theme;
@@ -10,78 +8,55 @@ interface QuickActionDockProps {
   onNavigate: (page: Page) => void;
 }
 
+const ITEMS: { page: Page; label: string; icon: React.FC<{ className?: string }> }[] = [
+  { page: 'home', label: 'خانه', icon: Home },
+  { page: 'services', label: 'خدمات تخصصی', icon: Briefcase },
+  { page: 'products', label: 'محصولات', icon: Package },
+  { page: 'blog', label: 'آموزش', icon: GraduationCap },
+  { page: 'contact', label: 'تماس', icon: Phone },
+];
+
 /**
- * Floating glass dock — the four fastest ways to reach Omid, plus back-to-top.
- * Appears after the visitor scrolls past the hero.
+ * Bottom navigation dock — the beloved raised-active-item bar,
+ * rebuilt on the ND glass system so it belongs to both themes.
  */
-export const QuickActionDock: React.FC<QuickActionDockProps> = () => {
-  const { data } = useContent();
-  const personal = data.PERSONAL_INFO;
-  const [visible, setVisible] = useState(false);
-  const [showTop, setShowTop] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => {
-      setVisible(window.scrollY > 320);
-      setShowTop(window.scrollY > 900);
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const actions = [
-    { id: 'whatsapp', label: 'واتساپ', href: personal.whatsappUrl, icon: MessageCircle, color: '#0f9d6e' },
-    { id: 'telegram', label: 'تلگرام', href: personal.telegramUrl, icon: Send, color: '#1d6fd8' },
-    { id: 'phone', label: 'تماس تلفنی', href: `tel:${personal.phone}`, icon: Phone, color: '#4f46e5' },
-  ];
-
+export const QuickActionDock: React.FC<QuickActionDockProps> = ({ currentPage = 'home', onNavigate }) => {
   return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 24 }}
-          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40"
-        >
-          <div className="nd-glass rounded-full flex items-center gap-1 px-2 py-2 shadow-[var(--nd-shadow-md)]">
-            {actions.map((a) => (
-              <a
-                key={a.id}
-                href={a.href}
-                target={a.id === 'phone' ? undefined : '_blank'}
-                rel="noreferrer"
-                title={a.label}
-                aria-label={a.label}
-                className="group relative w-11 h-11 rounded-full grid place-items-center transition-colors hover:bg-[color:var(--nd-line)]"
+    <nav
+      aria-label="ناوبری پایین"
+      className="fixed bottom-4 sm:bottom-6 inset-x-0 z-40 flex justify-center px-3 pointer-events-none"
+    >
+      <div className="nd-glass pointer-events-auto rounded-[26px] px-2.5 py-2 flex items-end gap-0.5 sm:gap-1 shadow-[var(--nd-shadow-md)]">
+        {ITEMS.map((item) => {
+          const active = currentPage === item.page;
+          return (
+            <button
+              key={item.page}
+              onClick={() => onNavigate(item.page)}
+              aria-current={active ? 'page' : undefined}
+              className="relative flex flex-col items-center gap-1 w-14 sm:w-16 pt-1.5 pb-1 rounded-2xl cursor-pointer group"
+            >
+              <span
+                className={`grid place-items-center rounded-full transition-all duration-300 ease-out ${
+                  active
+                    ? 'w-11 h-11 -mt-6 text-white shadow-[0_10px_26px_-6px_rgba(99,102,241,0.65)] ring-4 ring-[color:var(--nd-bg)]'
+                    : 'w-9 h-9 text-[color:var(--nd-muted)] group-hover:text-[color:var(--nd-ink)] group-hover:-translate-y-0.5'
+                }`}
+                style={active ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' } : undefined}
               >
-                <a.icon className="w-5 h-5" style={{ color: a.color }} />
-                <span className="absolute -top-9 right-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity nd-chip bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] border-transparent whitespace-nowrap pointer-events-none">
-                  {a.label}
-                </span>
-              </a>
-            ))}
-            <AnimatePresence>
-              {showTop && (
-                <motion.button
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 44 }}
-                  exit={{ opacity: 0, width: 0 }}
-                  transition={{ duration: 0.25 }}
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  title="بازگشت به بالا"
-                  aria-label="بازگشت به بالا"
-                  className="h-11 rounded-full grid place-items-center overflow-hidden hover:bg-[color:var(--nd-line)] cursor-pointer"
-                >
-                  <ArrowUp className="w-5 h-5 text-[color:var(--nd-ink-2)]" />
-                </motion.button>
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+                <item.icon className="w-5 h-5" />
+              </span>
+              <span
+                className={`text-[9.5px] font-extrabold transition-colors ${
+                  active ? 'text-[color:var(--nd-accent)]' : 'text-[color:var(--nd-faint)] group-hover:text-[color:var(--nd-ink-2)]'
+                }`}
+              >
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 };
