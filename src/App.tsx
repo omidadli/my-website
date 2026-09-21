@@ -22,7 +22,7 @@ import { ProductsPage } from './pages/ProductsPage';
 import { AdminPage } from './pages/AdminPage';
 
 function MainLayout() {
-  const [theme] = useState<Theme>('dark');
+  const [theme] = useState<Theme>('light');
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<CaseStudy | null>(null);
   const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(null);
@@ -77,11 +77,11 @@ function MainLayout() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Lock document root to dark class
+  // Lock document root to the new light design system
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.add('dark');
-    root.classList.remove('light');
+    root.classList.add('light');
+    root.classList.remove('dark');
   }, []);
 
   const handleNavigate = (page: Page) => {
@@ -110,7 +110,7 @@ function MainLayout() {
   };
 
   return (
-    <div className="min-h-screen relative flex flex-col transition-colors duration-500 font-['Vazirmatn',sans-serif] bg-[#0a0624] text-[#eae6ff] overflow-x-hidden">
+    <div className="min-h-screen relative flex flex-col transition-colors duration-500 font-['Vazirmatn',sans-serif] nd-bg overflow-x-hidden">
       {/* Animated Motion Graphic Preloader Splash Screen */}
       {showSplash && (
         <SplashScreen onComplete={handleSplashComplete} />
@@ -120,11 +120,11 @@ function MainLayout() {
       <CustomCursor />
 
       {/* Background Interactive Beam & Grid */}
-      <BackgroundBlobs theme="dark" />
+      <BackgroundBlobs theme="light" />
 
       {/* Glassmorphic Navigation Header */}
       <Navbar
-        theme="dark"
+        theme="light"
         currentPage={currentPage}
         onNavigate={handleNavigate}
         onReplaySplash={handleReplaySplash}
@@ -132,7 +132,7 @@ function MainLayout() {
       />
 
       {/* Main Content Area with Cinematic Motion Page Transitions */}
-      <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-8 relative z-10 pb-28">
+      <main className="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-8 relative z-10 pb-10 pt-28 sm:pt-32">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentPage}
@@ -229,11 +229,11 @@ function MainLayout() {
       />
 
       {/* Bottom Floating Quick Action Dock */}
-      <QuickActionDock theme={theme} currentPage={currentPage} onNavigate={handleNavigate} />
+      <QuickActionDock theme="light" currentPage={currentPage} onNavigate={handleNavigate} />
 
       {/* Footer */}
       <Footer
-        theme={theme}
+        theme="light"
         onNavigate={handleNavigate}
         onOpenAdminModal={() => setIsAdminModalOpen(true)}
       />

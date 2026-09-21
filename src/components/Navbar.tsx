@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
-import { Theme, Page } from '../types';
-import { Menu, X, ArrowUpLeft } from 'lucide-react';
-import { Logo } from './Logo';
+import React, { useState, useEffect } from 'react';
+import { Page, Theme } from '../types';
 import { useContent } from '../context/ContentContext';
+import { Menu, X, ArrowUpLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface NavbarProps {
-  theme?: Theme;
-  onToggleTheme?: () => void;
+  theme: Theme;
   currentPage: Page;
   onNavigate: (page: Page) => void;
   onReplaySplash?: () => void;
@@ -14,159 +13,124 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  theme,
   currentPage,
   onNavigate,
 }) => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const isDark = theme === 'dark';
-  const { data, isAdmin } = useContent();
+  const { data } = useContent();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const rawNavItems = data.NAVIGATION_MENU || [];
-  const customPages = data.CUSTOM_PAGES || [];
+  const navItems = [...rawNavItems].sort((a, b) => a.order - b.order).filter((i) => !i.isHidden);
 
-  // Combine standard nav items and active custom pages
-  const visibleNavItems = rawNavItems
-    .filter((item) => !item.isHidden || isAdmin)
-    .sort((a, b) => a.order - b.order);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
-  const handleNavClick = (pageSlug: string) => {
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [currentPage]);
+
+  const go = (pageSlug: string) => {
     onNavigate(pageSlug as Page);
-    setMobileMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setMobileOpen(false);
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full px-4 sm:px-8 py-3">
-      <div className={`max-w-7xl mx-auto rounded-3xl transition-all duration-300 backdrop-blur-2xl border px-4 sm:px-6 py-3 flex items-center justify-between ${
-        isDark 
-          ? 'glass-card-dark border-white/15' 
-          : 'glass-card-light border-white/80'
-      }`}>
-        {/* Logo & Brand */}
-        <button 
-          onClick={() => handleNavClick('home')}
-          className="flex items-center gap-3 text-right group focus:outline-none cursor-pointer"
-        >
-          <div className="relative p-1.5 rounded-2xl bg-white/5 border border-white/10 group-hover:border-[#5ce1e6]/50 transition-all duration-300 shadow-lg shadow-cyan-500/10 flex items-center justify-center">
-            <Logo className="w-9 h-9" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#5ce1e6] animate-pulse" />
-          </div>
-
-          <div>
-            <div className={`font-black text-base sm:text-lg leading-tight ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
-              {data.PERSONAL_INFO?.name || 'امید عدلی'}
-            </div>
-            <div className="text-[11px] font-medium text-slate-400">
-              {data.PERSONAL_INFO?.title || 'متخصص دیجیتال مارکتینگ و بهینه‌سازی نرخ تبدیل'}
-            </div>
-          </div>
-        </button>
-
-        {/* Desktop Navigation Links */}
-        <nav className={`hidden lg:flex items-center gap-0.5 xl:gap-1 p-1 rounded-full border backdrop-blur-md ${
-          isDark 
-            ? 'glass-card-dark bg-white/[0.04] border-white/10' 
-            : 'glass-card-light bg-white/50 border-slate-200/60'
-        }`}>
-          {visibleNavItems.map((item) => {
-            const active = currentPage === item.pageSlug;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.pageSlug)}
-                className={`px-2.5 xl:px-3 py-1.5 rounded-full text-[11px] xl:text-xs font-bold transition-all duration-300 relative whitespace-nowrap cursor-pointer ${
-                  active
-                    ? 'text-white bg-gradient-to-r from-[#2563eb] to-[#3b82f6] shadow-md shadow-blue-500/25'
-                    : isDark 
-                      ? 'text-slate-300 hover:text-white hover:bg-white/10' 
-                      : 'text-slate-700 hover:text-[#1a1240] hover:bg-slate-100'
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-
-          {/* Render custom pages if any */}
-          {customPages.map((cp) => (
-            <button
-              key={cp.id}
-              onClick={() => handleNavClick(cp.slug)}
-              className={`px-2.5 xl:px-3 py-1.5 rounded-full text-[11px] xl:text-xs font-bold transition-all duration-300 cursor-pointer ${
-                currentPage === cp.slug
-                  ? 'text-white bg-amber-500'
-                  : 'text-amber-300 hover:bg-white/10'
-              }`}
-            >
-              {cp.title}
-            </button>
-          ))}
-        </nav>
-
-        {/* Right Actions: Contact CTA Pill */}
-        <div className="hidden sm:flex items-center gap-2 xl:gap-3">
-          <button
-            onClick={() => handleNavClick('contact')}
-            className="glow-btn px-4 xl:px-5 py-2.5 rounded-full text-xs font-bold text-white flex items-center gap-2 group cursor-pointer"
-          >
-            <span>مشاوره و تماس</span>
-            <ArrowUpLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5 group-hover:-translate-y-0.5" />
+    <header className="fixed top-0 inset-x-0 z-50 px-3 sm:px-6 pt-3 sm:pt-5">
+      <div
+        className={`max-w-6xl mx-auto nd-glass rounded-full transition-all duration-500 ${
+          scrolled ? 'shadow-[var(--nd-shadow-md)]' : ''
+        }`}
+      >
+        <div className="flex items-center gap-2 ps-2 pe-2 sm:ps-3 sm:pe-2.5 py-2">
+          {/* Brand */}
+          <button onClick={() => go('home')} className="flex items-center gap-2.5 shrink-0 cursor-pointer me-1 sm:me-3">
+            <span className="w-9 h-9 rounded-xl grid place-items-center text-white font-black text-sm shadow-sm" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c6cf0)' }}>
+              ع
+            </span>
+            <span className="hidden md:block text-right leading-tight">
+              <span className="block text-[13px] font-black text-[color:var(--nd-ink)]">امید عدلی</span>
+              <span className="block text-[9.5px] font-bold text-[color:var(--nd-faint)]">Performance Marketing & CRO</span>
+            </span>
           </button>
-        </div>
 
-        {/* Mobile Menu Button */}
-        <div className="flex sm:hidden items-center gap-2">
+          {/* Desktop links */}
+          <nav className="hidden lg:flex items-center gap-0.5 mx-auto">
+            {navItems.map((item) => {
+              const active = currentPage === item.pageSlug;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => go(item.pageSlug)}
+                  className={`px-3.5 xl:px-4 py-2 rounded-full text-[12px] font-extrabold transition-all cursor-pointer ${
+                    active
+                      ? 'bg-[color:var(--nd-ink)] text-white shadow-sm'
+                      : 'text-[color:var(--nd-muted)] hover:text-[color:var(--nd-ink)] hover:bg-black/[0.04]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          <span className="flex-1 lg:hidden" />
+
+          {/* CTA */}
           <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className={`p-2 rounded-xl border backdrop-blur-md transition-all duration-200 ${
-              isDark 
-                ? 'glass-card-dark bg-white/[0.06] border-white/15 text-white hover:bg-white/[0.12]' 
-                : 'glass-card-light bg-white/70 border-slate-200 text-slate-800 hover:bg-white'
-            }`}
+            onClick={() => go('contact')}
+            className="nd-btn nd-btn-accent hidden sm:inline-flex px-5 py-2.5 text-[12px] shrink-0"
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            <span>گفتگوی رایگان</span>
+            <ArrowUpLeft className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Mobile toggle */}
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-label="منو"
+            className="lg:hidden nd-btn nd-btn-ghost w-10 h-10 shrink-0"
+          >
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Drawer Menu */}
-      {mobileMenuOpen && (
-        <div className={`sm:hidden mt-3 p-5 rounded-3xl backdrop-blur-2xl border transition-all duration-300 ${
-          isDark 
-            ? 'glass-card-dark border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.6)] text-white' 
-            : 'glass-card-light border-white/80 shadow-[0_20px_50px_rgba(76,141,255,0.15)] text-slate-900'
-        }`}>
-          <div className="flex flex-col gap-2">
-            {visibleNavItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.pageSlug)}
-                className={`w-full text-right py-3 px-4 rounded-2xl text-sm font-bold transition-all duration-200 ${
-                  currentPage === item.pageSlug
-                    ? 'bg-gradient-to-r from-[#2563eb] to-[#3b82f6] text-white shadow-md shadow-blue-500/20'
-                    : isDark 
-                      ? 'text-slate-200 hover:text-white hover:bg-white/[0.08] border border-transparent hover:border-white/10' 
-                      : 'text-slate-700 hover:text-slate-950 hover:bg-white/80 border border-transparent hover:border-slate-200'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-
-            <div className="pt-3 border-t border-white/10 mt-2 space-y-2">
-              <button
-                onClick={() => handleNavClick('contact')}
-                className="w-full glow-btn py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
-              >
-                <span>درخواست مشاوره اختصاصی</span>
-                <ArrowUpLeft className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Mobile sheet */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="lg:hidden max-w-6xl mx-auto mt-2 nd-glass rounded-[28px] p-4 space-y-1"
+          >
+            {navItems.map((item) => {
+              const active = currentPage === item.pageSlug;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => go(item.pageSlug)}
+                  className={`w-full text-right px-4 py-3 rounded-2xl text-sm font-extrabold transition-colors cursor-pointer ${
+                    active ? 'bg-[color:var(--nd-ink)] text-white' : 'text-[color:var(--nd-ink-2)] hover:bg-black/[0.04]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+            <button onClick={() => go('contact')} className="nd-btn nd-btn-accent w-full py-3.5 text-sm mt-2">
+              <span>گفتگوی رایگان</span>
+              <ArrowUpLeft className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 };
-
