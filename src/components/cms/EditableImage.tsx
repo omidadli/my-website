@@ -8,6 +8,10 @@ interface EditableImageProps {
   className?: string;
   alt?: string;
   fallbackSrc?: string;
+  /** Legacy aliases kept for backward compatibility with older pages. */
+  defaultSrc?: string;
+  src?: string;
+  aspectRatio?: string;
 }
 
 export const EditableImage: React.FC<EditableImageProps> = ({

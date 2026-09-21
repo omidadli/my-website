@@ -49,16 +49,16 @@ export const FAQSection: React.FC<FAQSectionProps> = ({ theme }) => {
   };
 
   return (
-    <section className="space-y-8 my-16">
+    <section className="space-y-8 my-4">
       <div className="text-center space-y-3 max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-[#8b5cf6]/20 to-[#4c8dff]/20 border border-[#8b5cf6]/30 text-xs font-black text-[#8b5cf6]">
+        <span className={isDark ? 'nd-glass-dark inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold text-indigo-200' : 'nd-eyebrow inline-flex'}>
           <HelpCircle className="w-3.5 h-3.5" />
           <span>سوالات متداول</span>
-        </div>
-        <h2 className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black leading-tight ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
+        </span>
+        <h2 className={`nd-h2 text-xl sm:text-3xl leading-tight ${isDark ? 'text-white' : ''}`}>
           سوالاتی که ممکنه قبل از شروع داشته باشید
         </h2>
-        <p className={`text-xs sm:text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+        <p className={`text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'nd-muted'}`}>
           شفافیت در مدل کاری و انتظارات متقابل، کلید موفقیت همکاری‌های بلندمدت است.
         </p>
       </div>
@@ -69,39 +69,36 @@ export const FAQSection: React.FC<FAQSectionProps> = ({ theme }) => {
           return (
             <div
               key={index}
-              className={`rounded-3xl border transition-all duration-300 overflow-hidden ${
-                isDark 
-                  ? isOpen ? 'bg-white/10 border-[#5ce1e6]/40 shadow-xl' : 'bg-white/5 border-white/10 hover:border-white/20' 
-                  : isOpen ? 'bg-white border-indigo-300 shadow-md' : 'bg-white/80 border-slate-200 hover:border-slate-300'
-              }`}
+              className={`nd-card overflow-hidden transition-all duration-300 ${isOpen ? (isDark ? 'shadow-2xl' : 'shadow-xl') : ''}`}
             >
               <button
                 onClick={() => toggleIndex(index)}
-                className="w-full p-6 text-right flex items-center justify-between gap-4 cursor-pointer focus:outline-none"
+                aria-expanded={isOpen}
+                className="w-full p-5 sm:p-6 text-right flex items-center justify-between gap-4 cursor-pointer"
               >
-                <div className="flex items-center gap-3">
-                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#8b5cf6]/20 text-[#8b5cf6]">
+                <span className="flex items-center gap-3">
+                  <span className={`nd-chip shrink-0 text-[10px] ${isOpen ? 'bg-[color:var(--nd-accent-soft)] text-[color:var(--nd-accent)] border-transparent' : ''}`}>
                     {faq.category}
                   </span>
-                  <h3 className={`font-black text-sm sm:text-base ${isDark ? 'text-white' : 'text-[#1a1240]'}`}>
+                  <h3 className={`font-extrabold text-sm sm:text-base ${isDark ? 'text-white' : ''}`}>
                     {faq.question}
                   </h3>
-                </div>
-
-                <div className={`p-2 rounded-full transition-transform duration-300 ${
-                  isOpen ? 'rotate-180 bg-[#5ce1e6]/20 text-[#5ce1e6]' : 'text-slate-400'
-                }`}>
+                </span>
+                <span
+                  className={`p-2 rounded-full transition-transform duration-300 shrink-0 ${
+                    isOpen ? 'rotate-180 bg-[color:var(--nd-accent)] text-white' : isDark ? 'text-slate-400 bg-white/5' : 'text-[color:var(--nd-muted)] bg-[color:var(--nd-bg-soft)]'
+                  }`}
+                >
                   <ChevronDown className="w-4 h-4" />
-                </div>
+                </span>
               </button>
-
-              {isOpen && (
-                <div className="px-6 pb-6 text-xs sm:text-sm leading-relaxed text-slate-300 border-t border-white/10 pt-4">
-                  <p className={isDark ? 'text-slate-200' : 'text-slate-700'}>
-                    {faq.answer}
-                  </p>
+              <div className={`grid transition-all duration-300 ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                  <div className={`px-6 pb-6 pt-1 border-t text-xs sm:text-sm leading-relaxed ${isDark ? 'border-white/10 text-slate-300' : 'border-[color:var(--nd-line)] nd-muted'}`}>
+                    <p>{faq.answer}</p>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           );
         })}

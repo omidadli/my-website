@@ -229,6 +229,8 @@ export interface PageSectionItem {
   name: string;
   label: string;
   isHidden: boolean;
+  /** Optional per-section visual overrides (spacing, alignment, background). */
+  style?: any;
 }
 
 export interface VersionSnapshot {

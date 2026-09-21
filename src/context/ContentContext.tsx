@@ -122,6 +122,7 @@ export interface ContentState {
   BLOG_COMMENTS: BlogComment[];
   PRODUCTS: typeof initialData.PRODUCTS;
   PROJECTS_PAGE_DATA: typeof initialData.PROJECTS_PAGE_DATA;
+  PRODUCTS_PAGE_DATA: typeof initialData.PRODUCTS_PAGE_DATA;
   BLOG_PAGE_DATA: typeof initialData.BLOG_PAGE_DATA;
   ONGOING_PROJECTS: typeof initialData.ONGOING_PROJECTS;
   BUSINESS_ANALYSIS_DATA: typeof initialData.BUSINESS_ANALYSIS_DATA;
@@ -132,6 +133,8 @@ export interface ContentState {
   SELECT_PROJECTS: typeof initialData.SELECT_PROJECTS;
   EDUCATION_AND_COURSES: typeof initialData.EDUCATION_AND_COURSES;
   HOW_I_WORK_STEPS: typeof initialData.HOW_I_WORK_STEPS;
+  HOMEPAGE_HOW_I_WORK_STEPS: typeof initialData.HOMEPAGE_HOW_I_WORK_STEPS;
+  WHY_OMID_POINTS: typeof initialData.WHY_OMID_POINTS;
   CUSTOM_PAGES: CustomPage[];
   GLOBAL_SEO: GlobalSeoConfig;
   PAGE_SEO: Record<string, PageSeoConfig>;
@@ -153,6 +156,7 @@ const defaultContentState: ContentState = {
   BLOG_COMMENTS: initialData.INITIAL_BLOG_COMMENTS || [],
   PRODUCTS: initialData.PRODUCTS,
   PROJECTS_PAGE_DATA: initialData.PROJECTS_PAGE_DATA,
+  PRODUCTS_PAGE_DATA: initialData.PRODUCTS_PAGE_DATA,
   BLOG_PAGE_DATA: initialData.BLOG_PAGE_DATA,
   ONGOING_PROJECTS: initialData.ONGOING_PROJECTS,
   BUSINESS_ANALYSIS_DATA: initialData.BUSINESS_ANALYSIS_DATA,
@@ -163,6 +167,8 @@ const defaultContentState: ContentState = {
   SELECT_PROJECTS: initialData.SELECT_PROJECTS,
   EDUCATION_AND_COURSES: initialData.EDUCATION_AND_COURSES,
   HOW_I_WORK_STEPS: initialData.HOW_I_WORK_STEPS,
+  HOMEPAGE_HOW_I_WORK_STEPS: initialData.HOMEPAGE_HOW_I_WORK_STEPS,
+  WHY_OMID_POINTS: initialData.WHY_OMID_POINTS,
   CUSTOM_PAGES: [],
   GLOBAL_SEO: defaultGlobalSeo,
   PAGE_SEO: {},
@@ -296,7 +302,10 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
           STATS: initialData.STATS,
           TIMELINE: initialData.TIMELINE,
           HOW_I_WORK_STEPS: initialData.HOW_I_WORK_STEPS,
+          HOMEPAGE_HOW_I_WORK_STEPS: initialData.HOMEPAGE_HOW_I_WORK_STEPS,
+          WHY_OMID_POINTS: initialData.WHY_OMID_POINTS,
           PROJECTS_PAGE_DATA: { ...initialData.PROJECTS_PAGE_DATA, ...(parsed.PROJECTS_PAGE_DATA || {}) },
+          PRODUCTS_PAGE_DATA: { ...initialData.PRODUCTS_PAGE_DATA, ...(parsed.PRODUCTS_PAGE_DATA || {}) },
           BLOG_PAGE_DATA: { ...initialData.BLOG_PAGE_DATA, ...(parsed.BLOG_PAGE_DATA || {}) },
           BLOG_POSTS: parsed.BLOG_POSTS || initialData.BLOG_POSTS,
           ONGOING_PROJECTS: parsed.ONGOING_PROJECTS || initialData.ONGOING_PROJECTS,

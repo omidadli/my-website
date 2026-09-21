@@ -96,6 +96,22 @@ function MainLayout() {
     document.body.style.color = theme === 'dark' ? '#f2f1fa' : '#17171c';
   }, [theme]);
 
+  // Per-page document title (SEO + tab clarity)
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      home: 'امید عدلی | متخصص پرفورمنس مارکتینگ و CRO',
+      services: 'خدمات | امید عدلی',
+      portfolio: 'نمونه‌کارها و کیس‌استادی‌ها | امید عدلی',
+      about: 'درباره من | امید عدلی',
+      blog: 'وبلاگ و مقالات | امید عدلی',
+      contact: 'تماس و شروع همکاری | امید عدلی',
+      projects: 'پروژه‌ها | امید عدلی',
+      products: 'محصولات | امید عدلی',
+      admin: 'پنل مدیریت | امید عدلی',
+    };
+    document.title = titles[currentPage] || 'امید عدلی | متخصص پرفورمنس مارکتینگ و CRO';
+  }, [currentPage]);
+
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
     setSelectedCaseStudy(null);

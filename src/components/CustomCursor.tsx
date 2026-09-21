@@ -70,11 +70,10 @@ export const CustomCursor: React.FC = () => {
       />
       <div
         ref={ringRef}
-        className="nd-cursor-ring absolute top-0 left-0 rounded-full border transition-[width,height,border-color,opacity] duration-300"
+        className={`nd-cursor-ring absolute top-0 left-0 rounded-full border transition-[width,height,border-color,opacity] duration-300 ${isHovered ? 'nd-cursor-ring-hover' : ''}`}
         style={{
           width: isHovered ? 46 : 30,
           height: isHovered ? 46 : 30,
-          borderColor: isHovered ? 'rgba(79,70,229,0.55)' : 'rgba(23,23,28,0.22)',
           borderWidth: 1.5,
           opacity: isVisible ? 1 : 0,
         }}

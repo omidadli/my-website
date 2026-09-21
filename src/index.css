@@ -666,3 +666,41 @@ h1, h2, h3, h4, h5, h6 {
 .nd-cursor-dot { mix-blend-mode: multiply; }
 .nd-cursor-ring { mix-blend-mode: multiply; }
 [data-theme='dark'] .nd-cursor-dot { mix-blend-mode: normal; }
+
+/* ---- Cursor ring: theme-aware borders (moved out of inline styles) ---- */
+.nd-cursor-ring {
+  border-color: rgba(23, 23, 28, 0.24);
+}
+[data-theme='dark'] .nd-cursor-ring {
+  border-color: rgba(242, 241, 250, 0.28);
+}
+.nd-cursor-ring-hover {
+  border-color: rgba(79, 70, 229, 0.6);
+}
+[data-theme='dark'] .nd-cursor-ring-hover {
+  border-color: rgba(165, 180, 252, 0.7);
+}
+
+/* ---- Global focus & selection polish ---- */
+:focus-visible {
+  outline: 2px solid var(--nd-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--nd-accent);
+  color: #fff;
+}
+[data-theme='light'] ::selection {
+  background: rgba(79, 70, 229, 0.9);
+  color: #fff;
+}
+
+/* ---- Respect reduced motion globally ---- */
+@media (prefers-reduced-motion: reduce) {
+  .nd-particle,
+  .nd-marquee-track {
+    animation: none !important;
+  }
+}

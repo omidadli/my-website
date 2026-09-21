@@ -9,6 +9,10 @@ interface EditableTextProps {
   multiline?: boolean;
   children?: React.ReactNode;
   fallbackText?: string;
+  /** Optional legacy alias for fallback content (used by some pages). */
+  defaultValue?: string;
+  /** Optional edit-label hint (used by admin tooling). */
+  label?: string;
 }
 
 export const EditableText: React.FC<EditableTextProps> = ({
