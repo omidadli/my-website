@@ -19,6 +19,10 @@ export default defineConfig(() => {
       },
     },
     server: {
+      proxy: {
+        // Local CMS API → run `npx wrangler pages dev dist --port 8788` alongside the dev server.
+        '/api': { target: 'http://127.0.0.1:8788', changeOrigin: true },
+      },
       port: 3000,
       host: '0.0.0.0',
       allowedHosts: true as const,

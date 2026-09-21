@@ -1,0 +1,14 @@
+# Cloudflare Pages configuration for the personal-site CMS.
+# Fill in your real D1 database_id (from: npx wrangler d1 list) and R2 bucket name.
+
+name = "my-website"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "REPLACE_WITH_YOUR_D1_NAME"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "REPLACE_WITH_YOUR_R2_BUCKET"

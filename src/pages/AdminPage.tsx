@@ -43,7 +43,8 @@ import {
   ListTree
 } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
-import { Page, CustomPage, CustomBlock } from '../types';
+import { api } from '../services/api';
+import { Page, CustomPage, CustomBlock, PageSeoConfig } from '../types';
 import { TreeEditor } from '../components/admin/TreeEditor';
 
 interface AdminPageProps {
@@ -57,7 +58,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
     pinCode, 
     changePin, 
     loginAdmin, 
-    logoutAdmin, 
+    logoutAdmin,
+    persistence, 
     updateField, 
     addItem, 
     removeItem, 
@@ -80,8 +82,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   } = useContent();
 
   // Login form state
-  const [pinInput, setPinInput] = useState('');
-  const [loginError, setLoginError] = useState(false);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // CMS active tab
   const [activeTab, setActiveTab] = useState<
@@ -123,14 +127,24 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   const [expandedPostIdx, setExpandedPostIdx] = useState<number | null>(0);
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginAdmin(pinInput)) {
-      setLoginError(false);
-      setPinInput('');
+    setLoginBusy(true);
+    const ok = persistence === 'cloud'
+      ? await loginAdmin(loginUser.trim(), loginPass)
+      : await loginAdmin(loginPass || loginUser.trim());
+    setLoginBusy(false);
+    if (ok) {
+      setLoginError('');
+      setLoginUser('');
+      setLoginPass('');
       showToast('خوش آمدید! ورود به پیشخوان مدیریت با موفقیت انجام شد.');
     } else {
-      setLoginError(true);
+      setLoginError(
+        persistence === 'cloud'
+          ? 'نام کاربری یا رمز عبور اشتباه است.'
+          : 'رمز محلی وارد شده اشتباه است.'
+      );
     }
   };
 
@@ -178,72 +192,98 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
     showToast(`برگه جدید "${newPage.title}" با موفقیت ایجاد شد.`);
   };
 
-  const handleAddMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setMediaList([reader.result, ...mediaList]);
-          showToast('تصویر جدید با موفقیت به کتابخانه رسانه اضافه شد.');
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    e.target.value = '';
+    if (persistence === 'cloud') {
+      const item = await api.uploadMedia(file, file.name, file.name);
+      if (item) {
+        addMediaItem(item.url, item.title, item.sizeKb, undefined, ['cloud', 'r2']);
+        showToast('تصویر با موفقیت در فضای ابری (R2) ذخیره شد.');
+      } else {
+        showToast('آپلود ناموفق بود — اتصال یا اجازه‌ی ورود را بررسی کنید.');
+      }
+      return;
     }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        setMediaList([reader.result, ...mediaList]);
+        addMediaItem(reader.result, file.name, Math.round(file.size / 1024));
+        showToast('تصویر جدید با موفقیت به کتابخانه رسانه اضافه شد.');
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
-  // If NOT logged in, show WordPress Login Box
+  // If NOT logged in → secure login (username + password via Cloudflare API; local PIN fallback in dev)
   if (!isAdmin) {
     return (
-      <div className="min-h-[85vh] flex items-center justify-center py-12 px-4 dir-rtl font-sans">
-        <div className="max-w-md w-full bg-[#120a38]/90 border-2 border-[#8b5cf6] rounded-3xl p-8 shadow-[0_0_50px_rgba(139,92,246,0.3)] backdrop-blur-2xl text-white space-y-6">
+      <div className="min-h-[85vh] flex items-center justify-center py-12 px-4 dir-rtl">
+        <div className="nd-card max-w-md w-full p-8 sm:p-10 space-y-6">
           <div className="text-center space-y-3">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#8b5cf6] to-[#5ce1e6] p-0.5 mx-auto shadow-lg flex items-center justify-center">
-              <div className="w-full h-full bg-[#0e072b] rounded-[14px] flex items-center justify-center text-amber-400">
-                <Lock className="w-8 h-8" />
-              </div>
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-[color:var(--nd-accent)] text-white flex items-center justify-center shadow-md">
+              <Lock className="w-8 h-8" />
             </div>
-            <h1 className="text-2xl font-black gradient-text">ورود به سیستم مدیریت وب‌سایت (CMS)</h1>
-            <p className="text-xs text-slate-300">
-              لطفاً پین‌کد مدیریتی را وارد کنید (پین‌کد پیش‌فرض: <code className="bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono font-bold">1234</code>)
+            <h1 className="nd-h2 text-xl sm:text-2xl">ورود به پیشخوان مدیریت</h1>
+            <p className={`text-xs leading-relaxed ${persistence === 'cloud' ? 'nd-muted' : 'nd-muted'}`}>
+              {persistence === 'cloud'
+                ? 'نام کاربری و رمز عبوری را وارد کنید که در Secrets پنل Cloudflare تنظیم کرده‌اید.'
+                : 'حالت توسعه (بدون اتصال به Cloudflare): رمز محلی مدیریت را وارد کنید.'}
             </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
+            {persistence === 'cloud' && (
+              <div>
+                <label className="block text-xs font-extrabold mb-1.5 text-[color:var(--nd-ink-2)]">نام کاربری</label>
+                <input
+                  type="text"
+                  autoComplete="username"
+                  dir="ltr"
+                  value={loginUser}
+                  onChange={(e) => { setLoginUser(e.target.value); setLoginError(''); }}
+                  placeholder="username"
+                  className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-2xl px-4 py-3 text-sm font-bold text-[color:var(--nd-ink)] focus:outline-none focus:border-[color:var(--nd-accent)] transition-colors"
+                  autoFocus
+                />
+              </div>
+            )}
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">پین‌کد ورود:</label>
+              <label className="block text-xs font-extrabold mb-1.5 text-[color:var(--nd-ink-2)]">رمز عبور</label>
               <input
                 type="password"
-                value={pinInput}
-                onChange={(e) => {
-                  setPinInput(e.target.value);
-                  setLoginError(false);
-                }}
-                placeholder="• • • •"
-                className="w-full bg-[#0a0520] border-2 border-white/20 focus:border-amber-400 rounded-2xl px-4 py-3 text-center text-xl tracking-[0.5em] font-mono text-white focus:outline-none transition-all dir-ltr"
-                autoFocus
+                autoComplete="current-password"
+                dir="ltr"
+                value={loginPass}
+                onChange={(e) => { setLoginPass(e.target.value); setLoginError(''); }}
+                placeholder="••••••••"
+                className="w-full bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] rounded-2xl px-4 py-3 text-sm font-bold text-[color:var(--nd-ink)] focus:outline-none focus:border-[color:var(--nd-accent)] transition-colors"
+                autoFocus={persistence !== 'cloud'}
               />
             </div>
 
             {loginError && (
-              <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/50 text-rose-300 text-xs font-bold text-center animate-bounce">
-                پین‌کد وارد شده اشتباه است. پین‌کد پیش‌فرض 1234 می‌باشد.
+              <div className="p-3 rounded-xl bg-[#fee2e2] text-[#b91c1c] text-xs font-extrabold text-center">
+                {loginError}
               </div>
             )}
 
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-sm shadow-xl hover:shadow-amber-400/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+              disabled={loginBusy}
+              className="nd-btn w-full py-3.5 text-sm nd-btn-accent disabled:opacity-50"
             >
               <ShieldCheck className="w-5 h-5" />
-              <span>ورود به پیشخوان مدیریت</span>
+              <span>{loginBusy ? 'در حال بررسی…' : 'ورود به پیشخوان'}</span>
             </button>
           </form>
 
-          <div className="pt-4 border-t border-white/10 text-center">
+          <div className="pt-4 border-t border-[color:var(--nd-line)] text-center">
             <button
               onClick={() => onNavigate('home')}
-              className="text-xs text-slate-400 hover:text-white transition-colors"
+              className="text-xs nd-muted hover:text-[color:var(--nd-accent)] transition-colors cursor-pointer"
             >
               بازگشت به صفحه اصلی سایت
             </button>
@@ -1539,23 +1579,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            if (typeof reader.result === 'string') {
-                              addMediaItem({
-                                url: reader.result,
-                                title: file.name,
-                                alt: file.name
-                              });
-                              showToast('تصویر جدید با موفقیت ذخیره گردید.');
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
+                      onChange={handleAddMedia}
                       className="hidden"
                     />
                   </label>
@@ -1571,7 +1595,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                           className="w-full h-full object-cover"
                         />
                         <button
-                          onClick={() => {
+                          onClick={async () => {
+                            if (media.url.startsWith('/api/media/file/')) {
+                              await api.deleteMedia(decodeURIComponent(media.url.replace('/api/media/file/', '')));
+                            }
                             removeMediaItem(media.id);
                             showToast('تصویر از کتابخانه رسانه حذف شد.');
                           }}
@@ -1637,8 +1664,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                   <div className="sm:col-span-2">
                     <label className="block text-slate-300 font-bold mb-1">توضیحات متای پیش‌فرض (Default Meta Description):</label>
                     <textarea
-                      value={data.GLOBAL_SEO?.defaultDescription || ''}
-                      onChange={(e) => updateField('GLOBAL_SEO.defaultDescription', e.target.value)}
+                      value={data.GLOBAL_SEO?.defaultMetaDesc || ''}
+                      onChange={(e) => updateField('GLOBAL_SEO.defaultMetaDesc', e.target.value)}
                       className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white min-h-[70px] text-xs"
                     />
                   </div>
@@ -1647,8 +1674,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                     <label className="block text-slate-300 font-bold mb-1">کلمات کلیدی اصلی (Keywords - جداشده با کاما):</label>
                     <input
                       type="text"
-                      value={(data.GLOBAL_SEO?.keywords || []).join(', ')}
-                      onChange={(e) => updateField('GLOBAL_SEO.keywords', e.target.value.split(',').map(s => s.trim()))}
+                      value={data.GLOBAL_SEO?.defaultKeywords || ''}
+                      onChange={(e) => updateField('GLOBAL_SEO.defaultKeywords', e.target.value)}
                       className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white text-xs"
                     />
                   </div>
@@ -1678,7 +1705,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                 </div>
 
                 {(() => {
-                  const pSeo = (data.PAGE_SEO && data.PAGE_SEO[selectedSeoPage]) || { title: '', description: '', keywords: [] };
+                  const pSeo: PageSeoConfig = (data.PAGE_SEO && data.PAGE_SEO[selectedSeoPage]) || { title: '', metaDescription: '', keywords: '' };
                   return (
                     <div className="space-y-3 text-xs">
                       <div>
@@ -1694,8 +1721,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                       <div>
                         <label className="block text-slate-300 font-bold mb-1">توضیحات این برگه (Meta Description):</label>
                         <textarea
-                          value={pSeo.description}
-                          onChange={(e) => updatePageSeo(selectedSeoPage, { ...pSeo, description: e.target.value })}
+                          value={pSeo.metaDescription || ''}
+                          onChange={(e) => updatePageSeo(selectedSeoPage, { ...pSeo, metaDescription: e.target.value })}
                           className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white min-h-[60px]"
                         />
                       </div>
@@ -1704,8 +1731,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                         <label className="block text-slate-300 font-bold mb-1">کلمات کلیدی برگه (Keywords):</label>
                         <input
                           type="text"
-                          value={(pSeo.keywords || []).join(', ')}
-                          onChange={(e) => updatePageSeo(selectedSeoPage, { ...pSeo, keywords: e.target.value.split(',').map(s => s.trim()) })}
+                          value={pSeo.keywords || ''}
+                          onChange={(e) => updatePageSeo(selectedSeoPage, { ...pSeo, keywords: e.target.value })}
                           className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2.5 text-white"
                         />
                       </div>
@@ -1740,26 +1767,26 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                       <div className="flex items-center gap-2 flex-1 min-w-[200px]">
                         <input
                           type="text"
-                          value={nav.title}
-                          onChange={(e) => updateField(`NAVIGATION_MENU.${nIdx}.title`, e.target.value)}
+                          value={nav.label}
+                          onChange={(e) => updateField(`NAVIGATION_MENU.${nIdx}.label`, e.target.value)}
                           className="bg-[#0a0520] border border-white/20 rounded-xl px-3 py-1.5 font-bold text-white text-xs w-36"
                         />
                         <input
                           type="text"
-                          value={nav.path}
-                          onChange={(e) => updateField(`NAVIGATION_MENU.${nIdx}.path`, e.target.value)}
+                          value={nav.pageSlug}
+                          onChange={(e) => updateField(`NAVIGATION_MENU.${nIdx}.pageSlug`, e.target.value)}
                           className="bg-[#0a0520] border border-white/20 rounded-xl px-3 py-1.5 font-mono text-slate-300 text-xs dir-ltr w-36"
                         />
                       </div>
 
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => updateField(`NAVIGATION_MENU.${nIdx}.isVisible`, !nav.isVisible)}
+                          onClick={() => updateField(`NAVIGATION_MENU.${nIdx}.isHidden`, !nav.isHidden)}
                           className={`px-3 py-1.5 rounded-xl font-bold transition-all text-xs ${
-                            nav.isVisible ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-700/50 text-slate-400'
+                            !nav.isHidden ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-700/50 text-slate-400'
                           }`}
                         >
-                          {nav.isVisible ? 'نمایش در منو' : 'مخفی'}
+                          {!nav.isHidden ? 'نمایش در منو' : 'مخفی'}
                         </button>
 
                         <button
@@ -1803,14 +1830,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
-                        value={data.THEME_CONFIG?.primaryColor || '#8b5cf6'}
-                        onChange={(e) => updateField('THEME_CONFIG.primaryColor', e.target.value)}
+                        value={data.THEME_CONFIG?.accentColor || '#4f46e5'}
+                        onChange={(e) => updateField('THEME_CONFIG.accentColor', e.target.value)}
                         className="w-10 h-10 rounded-xl bg-transparent border-0 cursor-pointer"
                       />
                       <input
                         type="text"
-                        value={data.THEME_CONFIG?.primaryColor || '#8b5cf6'}
-                        onChange={(e) => updateField('THEME_CONFIG.primaryColor', e.target.value)}
+                        value={data.THEME_CONFIG?.accentColor || '#4f46e5'}
+                        onChange={(e) => updateField('THEME_CONFIG.accentColor', e.target.value)}
                         className="w-full bg-[#0a0520] border border-white/20 rounded-xl p-2 font-mono text-white dir-ltr"
                       />
                     </div>
@@ -1949,7 +1976,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                   {(data.VERSION_HISTORY || []).map((snap) => (
                     <div key={snap.id} className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between text-xs">
                       <div>
-                        <span className="font-bold text-white block">{snap.description}</span>
+                        <span className="font-bold text-white block">{snap.label}</span>
                         <span className="text-[10px] text-slate-400 font-mono dir-ltr">{new Date(snap.timestamp).toLocaleString('fa-IR')}</span>
                       </div>
 

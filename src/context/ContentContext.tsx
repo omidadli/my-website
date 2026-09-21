@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { api } from '../services/api';
 import * as initialData from '../data/content';
 
 import { 
@@ -230,7 +231,9 @@ interface ContentContextType {
   setIsAdmin: (val: boolean) => void;
   pinCode: string;
   changePin: (newPin: string) => void;
-  loginAdmin: (pin: string) => boolean;
+  loginAdmin: (username: string, password?: string) => Promise<boolean>;
+  /** 'cloud' when the Cloudflare D1 API is live, otherwise local-only mode. */
+  persistence: 'local' | 'cloud';
   logoutAdmin: () => void;
   updateField: (path: string, newValue: any) => void;
   addItem: (arrayPath: string, templateItem?: any) => void;
@@ -334,6 +337,43 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('OMID_ADLI_ADMIN_ACTIVE', isAdmin ? 'true' : 'false');
   }, [isAdmin]);
 
+  // ---------- Cloud (Cloudflare D1) persistence ----------
+  const [persistence, setPersistence] = useState<'local' | 'cloud'>('local');
+  const cloudReady = useRef(false);
+
+  // On mount: detect API, pull remote content, restore admin session from token.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const hasApi = await api.probe();
+      if (!hasApi || cancelled) return;
+      setPersistence('cloud');
+      const remote = await api.getContent();
+      if (!cancelled && remote?.data) {
+        setData({ ...defaultContentState, ...remote.data });
+      }
+      if (!cancelled && api.getToken()) {
+        const ok = await api.verify();
+        if (!cancelled) setIsAdmin(ok);
+      }
+      cloudReady.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounced push of every content change to D1 (only while logged in).
+  useEffect(() => {
+    if (persistence !== 'cloud' || !cloudReady.current || !isAdmin) return;
+    const t = setTimeout(() => {
+      api.saveContent(data).then((res) => {
+        if (!res.ok) console.warn('Cloud save failed:', res.error);
+      });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [data, persistence, isAdmin]);
+
   // Activity logger helper
   const logActivity = (action: string, details?: string) => {
     const newEntry: AuditLogEntry = {
@@ -431,10 +471,21 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     logActivity('تغییر پین‌کد ادمین', 'رمز عبور ورود به پیشخوان مدیریت بروزرسانی شد.');
   };
 
-  const loginAdmin = (pin: string) => {
-    if (pin === pinCode) {
+  const loginAdmin = async (username: string, password?: string): Promise<boolean> => {
+    if (persistence === 'cloud') {
+      const res = await api.login(username, password || '');
+      if (res.ok) {
+        setIsAdmin(true);
+        logActivity('ورود موفق', `کاربر «${username}» از طریق سرویس ابری وارد پیشخوان شد.`);
+        return true;
+      }
+      logActivity('ورود ناموفق', 'نام کاربری یا رمز عبور اشتباه بود (سرویس ابری).');
+      return false;
+    }
+    // Local dev fallback (no Cloudflare backend running): legacy PIN mode.
+    if (!password && username === pinCode) {
       setIsAdmin(true);
-      logActivity('ورود موفق', 'کاربر ادمین وارد پیشخوان شد.');
+      logActivity('ورود موفق', 'کاربر ادمین وارد پیشخوان شد (حالت محلی).');
       return true;
     }
     logActivity('ورود ناموفق', 'تلاش برای ورود با رمز اشتباه.');
@@ -442,6 +493,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const logoutAdmin = () => {
+    api.logout();
     setIsAdmin(false);
     logActivity('خروج از سیستم', 'کاربر ادمین از سیستم خارج گردید.');
   };
@@ -846,6 +898,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         changePin,
         loginAdmin,
         logoutAdmin,
+        persistence,
         updateField,
         addItem,
         removeItem,

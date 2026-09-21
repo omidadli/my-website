@@ -40,6 +40,9 @@ export interface ProductItem {
   badge?: string;
   actionText?: string;
   price?: string;
+  slug?: string;
+  status?: 'published' | 'draft';
+  seo?: PageSeoConfig;
 }
 
 export interface OngoingProjectItem {
@@ -69,6 +72,9 @@ export interface ServiceItem {
   deliverables: string[];
   tags: string[];
   packages?: PricingPackage[];
+  slug?: string;
+  status?: 'published' | 'draft';
+  seo?: PageSeoConfig;
 }
 
 export interface MetricComparison {
@@ -101,6 +107,9 @@ export interface CaseStudy {
   results: string;
   tags: string[];
   date: string;
+  slug?: string;
+  status?: 'published' | 'draft';
+  seo?: PageSeoConfig;
 }
 
 export interface Testimonial {
@@ -163,6 +172,9 @@ export interface BlogPost {
   tableOfContents?: TableOfContentItem[];
   sections?: BlogPostSection[];
   tags?: string[];
+  slug?: string;
+  status?: 'published' | 'draft';
+  seo?: PageSeoConfig;
   viewsCount?: number;
   commentsCount?: number;
 }
@@ -186,6 +198,7 @@ export interface MediaItem {
   id: string;
   url: string;
   title: string;
+  alt?: string;
   sizeKb?: number;
   dimensions?: string;
   createdAt: string;
