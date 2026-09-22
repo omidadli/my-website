@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { mascot } from './mascotBus';
+import { journeyAct, directorSetContext, directorGetContext } from './director';
 import { Page } from '../../types';
 
 /**
@@ -54,7 +55,7 @@ export function mascotCue(scene: string, text: string, ms = 4200, force = false,
   rate.lastText = text;
   rate.lastAt = now;
   window.dispatchEvent(new CustomEvent<MascotCue>('mascot:cues', { detail: { scene, text, ms, askName } }));
-  mascot.scene(scene, ms);
+  journeyAct({ pose: scene as never, hold: ms / 1000 });
 }
 
 /** Force a scene, no bubble (chat wiring). */
@@ -106,6 +107,15 @@ export function useMascotEvents(currentPage: Page) {
   const nameRef = useRef(getName());
   const pageRef = useRef(currentPage);
   pageRef.current = currentPage;
+  directorSetContext({ name: nameRef.current, page: currentPage });
+  useEffect(() => {
+    directorSetContext({ page: currentPage });
+  }, [currentPage]);
+  useEffect(() => {
+    const onName = () => directorSetContext({ name: getName() });
+    window.addEventListener('nd:mascot-name', onName);
+    return () => window.removeEventListener('nd:mascot-name', onName);
+  }, []);
 
   useEffect(() => {
     const onName = (e: Event) => {

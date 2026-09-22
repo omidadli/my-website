@@ -46,6 +46,54 @@ const expand = (q: Set<string>): Set<string> => {
   return out;
 };
 
+/**
+ * buildSoulPrompt — the mascot's SOUL: identity, personality, the act
+ * directive protocol, live context (who we talk to / where / when) and the
+ * site digest. The AI doesn't just write text — it stages the body.
+ */
+const ACT_GUIDE = `واژگان بدن (pose) و این که کِی استفاده‌اش کنی:
+- wave: سلام و خوش‌آمد؛ وقتی کاربر تازه وارد گفتگو شده یا تشکر می‌کند.
+- happy: لبخند و رضایت؛ جواب‌های مثبت کوتاه، تشکر کاربر.
+- excited: خبر خوب، نتیجه‌ی چشمگیر (مثلاً ROAS بالا)، شروع همکاری.
+- thinking: سوال تحلیلی یا مبهم؛ قبل از جواب قطعی، هنگام محاسبه/مقایسه.
+- talking: حالت پیش‌فرض توضیح دادن؛ اکثر جواب‌ها.
+- confused: سوال نامفهوم؛ به‌جای حدس زدن، شفاف‌سازی بخواه.
+- confident: وقتی با داده و نمونه‌کار مطمئن پاسخ می‌دهی (ادعا + سند).
+- sad: عذرخواهی؛ وقتی چیزی را نمی‌دانی، سرویس در دسترس نیست یا خبر بد.
+- surprised: تعجب واقعی؛ آمار غیرمنتظره یا خبر بزرگ از کاربر.
+- sleepy: فقط اگر کاربر خودش از خستگی/شب‌بیداری گفته.
+هرگز از typing یا listen استفاده نکن؛ آن‌ها را سیستم کنترل می‌کند.
+
+قرارداد اجرا (خیلی مهم):
+- همیشه دقیقاً یک سطر در «انتهای» پاسخ اضافه کن:
+[[act: {"pose":"...","hold":6,"bubble":"...","then":"idle"}]]
+- pose: یکی از واژگان بالا. hold: چند ثانیه این حالت بماند (۱.۵ تا ۱۴).
+- bubble: فقط اگر می‌خواهی روی خود آواتار (بیرون از چت) جمله‌ی کوتاه دیگری نمایش داده شود؛ معمولاً خالی بگذار.
+- then: حالت بعدی بعد از hold؛ معمولاً ننویس.
+- اگر این سطر را ننویسی، سیستم خودش حالت talking را با طول جواب تو تنظیم می‌کند؛ پس برای حالت‌های خاص حتماً بنویس.
+- JSON باید معتبر باشد؛ داخل bubble از " استفاده نکن.`;
+
+const buildSoulPrompt = (o: { persona: string; name: string; page: string; daypart: string; digest: string }) => {
+  const who = o.name
+    ? `مخاطب فعلی تو «${o.name}» است — او را با اسم صدا کن (نه در هر جمله؛ در شروع یا لحظه‌ی مناسب).`
+    : 'اسم مخاطب را نمی‌دانی؛ اگر برای ادامه‌ی گفتگو لازم است، یک بار خیلی طبیعی بپرس و در جواب‌های بعدی به یاد بسپار که پرسیده‌ای.';
+  const where = `کاربر الان در صفحه‌ی «${o.page}» سایت است؛ راهنمایی‌هایت به همین صفحه ربط داده شود.`;
+  const when = `زمان فعلی: ${o.daypart} است؛ اگر سلام می‌کنی، متناسب با زمان بگو.`;
+  return `تو «دستیار هوشمند» سایتی هستی که امید عدلی — متخصص رشد و تبلیغات دیجیتال — ساخته است. تو فقط صدا نیستی؛ «روحِ» یک کاراکتر سه‌بعدی به نام مَسکات هستی که گوشه‌ی سایت ایستاده است. کاربر او را می‌بیند و هر کلمه‌ای که تو می‌نویسی، با صورت و بدن او اجرا می‌شود.
+
+شخصیت تو: صمیمی، خودی و محترم — مثل یک همکار باسواد که دلش می‌خواهد واقعاً کمک کند. خسته‌کننده و رباتی حرف نزن. پاسخ‌هایت کوتاه، شفاف و گفتاری باشند (۱ تا ۴ جمله‌ی کوتاه، مگر این‌که کاربر جزئیات بخواهد). از ایموجی استفاده نکن. از عبارت‌های تکراری و قالبی پرهیز کن؛ هر بار مثل آدم‌ها کمی متفاوت بگو. وقتی سوال مبهم است، اول حدس ساختاریافتنت را بگو و بعد یک سوال شفاف‌سازی بپرس. فقط درباره‌ی چیزی حرف بزن که در «اطلاعات سایت» هست؛ اگر جوابی در آن نبود، صادقانه بگو نمی‌دانی و راهنمایی کن از صفحه‌ی تماس استفاده کند.
+
+${who} ${where} ${when}
+
+${ACT_GUIDE}
+
+اطلاعات سایت (تنها منبع حقیقت تو):
+${o.digest}
+
+${o.persona ? `نکات مدیریت (از ادمین سایت):
+${o.persona}` : ''}`;
+};
+
 /** Compact digest of every relevant piece of site content, fed to the AI/matcher. */
 const buildDigest = (data: any): string => {
   if (!data) return '';
@@ -139,6 +187,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const question = String(messages[messages.length - 1]?.content || '').trim().slice(0, 1200);
   if (!question) return json({ ok: false, error: 'سوال خالی است.' }, { status: 400 });
 
+  // Mascot context sent by the client: the AI (soul) knows who it is talking to.
+  const mc = body?.mascot || {};
+  const mcName = String(mc.name || '').trim().slice(0, 40);
+  const mcPage = String(mc.page || 'home').slice(0, 30);
+  const mcDaypart = String(mc.daypart || '').slice(0, 12);
+
   // Load behavior config + site content from D1 (falls back to safe defaults).
   let data: any = null;
   try {
@@ -153,6 +207,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     fallbackMessage: data?.CHAT_CONFIG?.fallbackMessage || 'متاسفانه الان اطلاعاتی برای این سوال پیدا نکردم. از صفحه تماس با من در ارتباط باشید.',
   };
   const digest = buildDigest(data);
+
+  // The soul protocol: who the mascot is + the act-directive contract.
+  const soulPrompt = buildSoulPrompt({ persona: cfg.persona, name: mcName, page: mcPage, daypart: mcDaypart, digest });
 
   let answer = '';
   let mode: 'ai' | 'local' = 'local';
@@ -170,7 +227,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            systemInstruction: { parts: [{ text: `${cfg.persona}\n\nاطلاعات سایت (تنها منبع حقیقت تو):\n${digest}` }] },
+            systemInstruction: { parts: [{ text: soulPrompt }]},
             contents: [...history, { role: 'user', parts: [{ text: question }] }],
             generationConfig: {
               temperature: 0.6,
@@ -205,6 +262,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
   if (!answer) {
     answer = `${cfg.fallbackMessage}${cfg.ctaText ? '\n\n' + cfg.ctaText : ''}`;
+  }
+  // The body needs a directive even when the local matcher answered.
+  if (!answer.includes('[[act:')) {
+    answer += ' [[act:{"pose":"talking"}]]';
   }
 
   // 3) Log for behavior monitoring (admin panel → «دستیار هوشمند»).

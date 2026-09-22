@@ -5,6 +5,7 @@ import { Theme } from '../../types';
 import { useContent } from '../../context/ContentContext';
 import { api } from '../../services/api';
 import { mascotAct } from './useMascotEvents';
+import { applyAIRawAnswer, directorGetContext } from './director';
 import { MascotFigure } from './MascotAvatar';
 
 interface AssistantPanelProps {
@@ -86,13 +87,17 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
     setInput('');
     setBusy(true);
     mascotAct('typing'); // he is "writing" the answer on his laptop
-    const res = await api.sendChat(next.map((m) => ({ role: m.role, content: m.content })));
+    const ctx = directorGetContext();
+    const res = await api.sendChat(
+      next.map((m) => ({ role: m.role, content: m.content })),
+      { name: ctx.name, page: ctx.page, daypart: ctx.daypart }
+    );
     setBusy(false);
     if (res.ok && res.answer) {
-      setMessages((prev) => [...prev, { role: 'model', content: res.answer! }]);
-      // he "reads the answer out loud": mouth/hand loop ≈ answer length
-      const talkMs = Math.min(13000, Math.max(3600, 2600 + res.answer.length * 16));
-      mascotAct('talk', talkMs);
+      // the AI's act directive drives the body (pose/hold/bubble);
+      // fallback: talking loop sized to the answer
+      const { text } = applyAIRawAnswer(res.answer);
+      setMessages((prev) => [...prev, { role: 'model', content: text }]);
     } else {
       setError(res.error || 'پاسخ دریافت نشد؛ دوباره تلاش کنید.');
       mascotAct('oops'); // surprised → apologetic → idle

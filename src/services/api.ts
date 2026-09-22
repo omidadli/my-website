@@ -202,12 +202,15 @@ export const api = {
   },
 
   /** AI consultant conversation. */
-  async sendChat(messages: { role: 'user' | 'model'; content: string }[]): Promise<{ ok: boolean; answer?: string; mode?: 'ai' | 'local'; error?: string }> {
+  async sendChat(
+    messages: { role: 'user' | 'model'; content: string }[],
+    mascotContext?: { name?: string; page?: string; daypart?: string }
+  ): Promise<{ ok: boolean; answer?: string; mode?: 'ai' | 'local'; error?: string }> {
     try {
       const r = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({ messages, mascot: mascotContext }),
       });
       const j = await r.json().catch(() => ({}));
       return r.ok && j?.ok ? { ok: true, answer: j.answer, mode: j.mode } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
