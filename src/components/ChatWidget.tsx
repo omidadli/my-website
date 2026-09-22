@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Theme } from '../types';
 import { useContent } from '../context/ContentContext';
 import { api } from '../services/api';
+import { mascot } from './mascot/mascotBus';
 import { MessageCircle, X, Send, Bot, Sparkles } from 'lucide-react';
 
 interface ChatWidgetProps {
@@ -38,6 +39,13 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
     api.probe().then(setAvailable);
   }, []);
 
+  // Mascot avatar acts as the chat's face: clicking it opens the chat.
+  useEffect(() => {
+    const openChat = () => setOpen(true);
+    window.addEventListener('nd:open-chat', openChat);
+    return () => window.removeEventListener('nd:open-chat', openChat);
+  }, []);
+
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy, open]);
@@ -62,12 +70,15 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
     setMessages(next);
     setInput('');
     setBusy(true);
+    mascot.set('thinking'); // avatar shows it's working on the answer
     const res = await api.sendChat(next.map((m) => ({ role: m.role, content: m.content })));
     setBusy(false);
     if (res.ok && res.answer) {
       setMessages((prev) => [...prev, { role: 'model', content: res.answer! }]);
+      mascot.set('talking'); // avatar mouths the reply
     } else {
       setError(res.error || 'پاسخ دریافت نشد؛ دوباره تلاش کنید.');
+      mascot.set('sad');
     }
   };
 
@@ -76,7 +87,15 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
       {/* Launcher — bottom-left, clear of the nav dock */}
       <button
         type="button"
-        onClick={() => { setOpen(!open); if (!open) greet(); }}
+        onClick={() => {
+          setOpen(!open);
+          if (!open) {
+            greet();
+            mascot.set('happy');
+          } else {
+            mascot.set('idle');
+          }
+        }}
         aria-label={open ? 'بستن دستیار هوشمند' : 'باز کردن دستیار هوشمند'}
         className={`fixed bottom-24 sm:bottom-7 left-3 sm:left-5 z-[60] rounded-full grid place-items-center shadow-xl transition-all duration-300 cursor-pointer ${
           open ? 'scale-90 rotate-90' : 'hover:scale-105'
@@ -115,7 +134,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({ theme }) => {
                 آنلاین — پاسخ از داده‌های سایت
               </span>
             </span>
-            <button type="button" onClick={() => setOpen(false)} className={`p-1.5 rounded-lg cursor-pointer ${isDark ? 'hover:bg-white/10 text-slate-400' : 'hover:bg-[color:var(--nd-line)] nd-muted'}`} aria-label="بستن">
+            <button type="button" onClick={() => { setOpen(false); mascot.set('idle'); }} className={`p-1.5 rounded-lg cursor-pointer ${isDark ? 'hover:bg-white/10 text-slate-400' : 'hover:bg-[color:var(--nd-line)] nd-muted'}`} aria-label="بستن">
               <X className="w-4 h-4" />
             </button>
           </div>

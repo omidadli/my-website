@@ -22,7 +22,8 @@ import { AdminPage } from './pages/AdminPage';
 import { CustomPageView } from './pages/CustomPageView';
 import { SEOHead } from './components/SEOHead';
 import { ChatWidget } from './components/ChatWidget';
-import { EyeTrackingAvatar } from './components/EyeTrackingAvatar';
+import { MascotAvatar } from './components/mascot/MascotAvatar';
+import { useMascotEvents } from './components/mascot/useMascotEvents';
 
 function MainLayout() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -39,6 +40,9 @@ function MainLayout() {
   const [isThemeTransitioning, setIsThemeTransitioning] = useState<boolean>(false);
 
   const { isAdmin, setIsAdmin, data } = useContent();
+
+  // Wire the avatar assistant to real site events (greetings, idle nudges, …)
+  useMascotEvents(currentPage);
 
   const handleToggleTheme = useCallback(() => {
     // Add temporary transitioning class for smooth CSS token interpolation
@@ -323,8 +327,8 @@ function MainLayout() {
       <AdminFloatingBar />
       <ChatWidget theme={theme} />
 
-      {/* Eye-tracking avatar (decorative, bottom-right) */}
-      {currentPage !== 'admin' && <EyeTrackingAvatar />}
+      {/* Mascot assistant — avatar reacts to site events, clicks open the chat */}
+      {currentPage !== 'admin' && <MascotAvatar />}
 
       {/* Admin PIN Login Modal */}
       <AdminLoginModal
