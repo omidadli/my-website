@@ -790,16 +790,20 @@ html.theme-transitioning *::after {
 }
 
 /* ==========================================================================
-   Mascot v3 — full-body sprites + GIF-style frame sequences + chat panel
-   Corner avatar = launcher. Scene director (mascotBus) drives glyph frames:
-   typing loop (3 frames), talking loop (3 frames), 2-step scenes...
+   Mascot v4 — GIF-style frame acting, flush with the bottom edge
+   - corner avatar = chat launcher; hides (body.chat-open) while panel open
+   - looping scenes (typing/talk/listen) cycle frames like a GIF; body bobs
+   - compact+dim while the user scrolls so sections stay readable
    ========================================================================== */
 
 .mascot-root {
-  width: clamp(112px, 12vw, 176px);
+  width: clamp(112px, 12vw, 172px);
+  pointer-events: none;
+  transition: opacity 0.3s var(--nd-ease), transform 0.3s var(--nd-ease);
 }
 
 .mascot-stage {
+  pointer-events: auto;
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
@@ -809,8 +813,27 @@ html.theme-transitioning *::after {
   filter: drop-shadow(0 0 1.5px color-mix(in srgb, var(--nd-accent) 80%, transparent));
 }
 
+/* chat panel is open → the mascot "walked into" the chat */
+body.chat-open .mascot-root {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+
+/* user is scrolling → step back so content stays readable */
+.mascot-root.mascot-compact {
+  opacity: 0.45;
+}
+.mascot-root.mascot-compact .mascot-figure {
+  transform: scale(0.8);
+  transform-origin: 100% 100%;
+}
+.mascot-figure {
+  transition: transform 0.35s var(--nd-ease);
+}
+
 .mascot-sway {
-  transform-origin: 50% 88%;
+  transform-origin: 50% 92%;
   animation: mascot-sway 7s ease-in-out infinite;
 }
 
@@ -833,18 +856,18 @@ html.theme-transitioning *::after {
   will-change: transform;
 }
 
-/* frame stack — first frame lays out, the rest overlay; active fades in */
+/* frame stack — first frame lays out, the rest overlay; active shows */
 .mascot-img {
   display: block;
   width: 100%;
   height: auto;
   position: relative;
   opacity: 0;
-  transition: opacity 0.14s ease;
+  transition: opacity 0.16s ease;
   user-select: none;
   -webkit-user-drag: none;
-  -webkit-mask-image: linear-gradient(to bottom, #000 90%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
 }
 
 .mascot-img + .mascot-img {
@@ -857,6 +880,11 @@ html.theme-transitioning *::after {
 .mascot-img.is-active {
   opacity: 1;
   z-index: 2;
+}
+
+/* GIF runs: near-instant swaps (no ghost trails) */
+.mascot-figure[data-anim='1'] .mascot-img {
+  transition: opacity 0.05s linear;
 }
 
 .mascot-pupil {
@@ -879,21 +907,69 @@ html.theme-transitioning *::after {
 }
 
 .mascot-shadow {
-  height: 10px;
-  width: 72%;
-  margin: -4px auto 0;
+  height: 9px;
+  width: 70%;
+  margin: -3px auto 0;
   border-radius: 999px;
-  background: radial-gradient(closest-side, rgba(23, 23, 28, 0.28), transparent);
+  background: radial-gradient(closest-side, rgba(23, 23, 28, 0.24), transparent);
 }
 
 [data-theme='dark'] .mascot-shadow {
-  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.6), transparent);
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+}
+
+/* ---------- acting: body language while a loop scene plays ---------- */
+.mascot-figure[data-scene='typing'] .mascot-body {
+  animation: mascot-typebob 0.58s ease-in-out infinite;
+}
+
+@keyframes mascot-typebob {
+  0%,
+  100% {
+    margin-top: 0;
+  }
+  50% {
+    margin-top: -1.5px;
+  }
+}
+
+.mascot-figure[data-scene='talk'] .mascot-body {
+  animation: mascot-talklean 1.15s ease-in-out infinite;
+}
+
+@keyframes mascot-talklean {
+  0%,
+  100% {
+    margin-left: 0;
+    rotate: 0deg;
+  }
+  50% {
+    margin-left: -1px;
+    rotate: 0.8deg;
+  }
+}
+
+.mascot-figure[data-scene='listen'] .mascot-body {
+  animation: mascot-nod 1.8s ease-in-out infinite;
+}
+
+@keyframes mascot-nod {
+  0%,
+  100% {
+    margin-top: 0;
+  }
+  35% {
+    margin-top: 1.2px;
+  }
+  70% {
+    margin-top: 0.4px;
+  }
 }
 
 /* ---------- speech bubble ---------- */
 .mascot-bubble {
   position: absolute;
-  bottom: calc(100% + 12px);
+  bottom: calc(100% - 12px);
   right: 6px;
   max-width: min(250px, 62vw);
   padding: 0.55rem 0.8rem;
@@ -924,7 +1000,7 @@ html.theme-transitioning *::after {
 }
 
 /* ==========================================================================
-   Assistant chat panel — avatar video bar + messages + FAQs + input
+   Assistant chat panel — flush with the bottom edge, video bar on top
    ========================================================================== */
 
 .mascot-chat {
@@ -933,7 +1009,6 @@ html.theme-transitioning *::after {
   backdrop-filter: blur(18px);
 }
 
-/* avatar stage (video bar) */
 .mascot-chat-stage {
   background:
     radial-gradient(120% 90% at 78% 110%, color-mix(in srgb, var(--nd-accent) 22%, transparent), transparent 60%),
@@ -951,11 +1026,15 @@ html.theme-transitioning *::after {
 
 .mascot-chat-avatar {
   position: absolute;
-  bottom: -6%;
+  bottom: -5%;
   left: 50%;
   transform: translateX(-50%);
-  width: 132px;
+  width: 138px;
   animation: mascot-sway 7s ease-in-out infinite;
+}
+
+.mascot-chat-status {
+  z-index: 2;
 }
 
 .mascot-chat-scroll {
@@ -965,13 +1044,16 @@ html.theme-transitioning *::after {
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .mascot-sway,
-  .mascot-chat-avatar {
+  .mascot-chat-avatar,
+  .mascot-figure[data-scene] .mascot-body {
     animation: none !important;
   }
   .mascot-pupil {
     display: none;
   }
-  .mascot-img {
-    transition: none;
+  .mascot-img,
+  .mascot-root,
+  .mascot-figure {
+    transition: none !important;
   }
 }

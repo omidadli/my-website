@@ -21,10 +21,15 @@ interface ChatMsg {
 /**
  * AssistantPanel — the mascot's own chat window.
  *
- * Layout: avatar "video bar" on top (the character reacts live — typing on
- * his laptop while the AI writes, talking while the answer lands), messages
- * in the middle, quick FAQs + input at the bottom. Wired to the same
- * Cloudflare/Gemini assistant API as the old chat widget.
+ * Layout: avatar "video bar" on top (live scene — the SAME scene the corner
+ * mascot plays, via the shared bus), messages, FAQ quick chips + input.
+ *
+ * AI-state ↔ acting contract (100% mapping):
+ *   user is typing          → `listen` (nods along)
+ *   user sent a question    → `typing` loop (he writes the answer on his laptop)
+ *   answer arrived          → `talk` loop for ~answer-length, then idle
+ *   API error               → `oops` (surprised → apologetic)
+ *   panel closed            → `greet` from the corner again
  */
 export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onClose }) => {
   const isDark = theme === 'dark';
@@ -38,6 +43,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
   const [error, setError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api.probe().then(setAvailable);
@@ -49,10 +55,20 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
 
   useEffect(() => {
     if (open) {
-      const t = setTimeout(() => inputRef.current?.focus(), 350);
+      greet();
+      const t = setTimeout(() => inputRef.current?.focus(), 380);
       return () => clearTimeout(t);
     }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // clear pending listen-act on unmount
+  useEffect(() => {
+    return () => {
+      if (listenTimer.current) clearTimeout(listenTimer.current);
+    };
+  }, []);
 
   const greet = () => {
     if (messages.length === 0 && cfg?.greeting) {
@@ -63,20 +79,23 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
   const send = async (text: string) => {
     const q = text.trim();
     if (!q || busy) return;
+    if (listenTimer.current) clearTimeout(listenTimer.current);
     setError('');
     const next: ChatMsg[] = [...messages, { role: 'user', content: q }];
     setMessages(next);
     setInput('');
     setBusy(true);
-    mascotAct('typing'); // he "writes" the answer on his laptop
+    mascotAct('typing'); // he is "writing" the answer on his laptop
     const res = await api.sendChat(next.map((m) => ({ role: m.role, content: m.content })));
     setBusy(false);
     if (res.ok && res.answer) {
       setMessages((prev) => [...prev, { role: 'model', content: res.answer! }]);
-      mascotAct('talk', 5000); // he "reads it out" — mouth animation
+      // he "reads the answer out loud": mouth/hand loop ≈ answer length
+      const talkMs = Math.min(13000, Math.max(3600, 2600 + res.answer.length * 16));
+      mascotAct('talk', talkMs);
     } else {
       setError(res.error || 'پاسخ دریافت نشد؛ دوباره تلاش کنید.');
-      mascotAct('oops'); // surprised → apologetic
+      mascotAct('oops'); // surprised → apologetic → idle
     }
   };
 
@@ -92,8 +111,8 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
           transition={{ type: 'spring', stiffness: 320, damping: 28 }}
           role="dialog"
           aria-label="دستیار هوشمند"
-          className={`mascot-chat fixed bottom-4 right-4 z-[70] flex flex-col overflow-hidden rounded-[26px] shadow-2xl sm:bottom-7 sm:right-7 ${
-            isDark ? 'bg-[#12121d] border border-white/12' : 'bg-[color:var(--nd-surface)] border border-[color:var(--nd-line)]'
+          className={`mascot-chat fixed bottom-24 right-2 z-[70] flex flex-col overflow-hidden rounded-[26px] shadow-2xl sm:bottom-28 sm:right-5 ${
+            isDark ? 'border border-b-0 border-white/12 bg-[#12121d]' : 'border border-b-0 border-[color:var(--nd-line)] bg-[color:var(--nd-surface)]'
           }`}
         >
           {/* ---- avatar video bar ---- */}
@@ -104,18 +123,18 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
               <MascotFigure />
             </div>
             <span
-              className={`absolute top-3 right-3 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+              className={`mascot-chat-status absolute right-3 top-3 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
                 isDark ? 'bg-black/35 text-emerald-300' : 'bg-white/75 text-emerald-600'
               }`}
             >
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-              {busy ? 'در حال نوشتن پاسخ...' : 'آنلاین'}
+              {busy ? 'دارم جواب رو می‌نویسم...' : 'آنلاین'}
             </span>
             <button
               type="button"
               onClick={onClose}
               aria-label="بستن گفتگو"
-              className={`absolute top-2.5 left-2.5 cursor-pointer rounded-full p-1.5 transition-colors ${
+              className={`absolute left-2.5 top-2.5 cursor-pointer rounded-full p-1.5 transition-colors ${
                 isDark ? 'text-slate-300 hover:bg-white/10' : 'text-[color:var(--nd-ink-2)] hover:bg-black/5'
               }`}
             >
@@ -199,7 +218,9 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
               value={input}
               onChange={(e) => {
                 setInput(e.target.value);
-                if (e.target.value.length === 1) mascotAct('talk', 2600); // he "listens"
+                // user is writing → the mascot nods along (rate-limited)
+                if (listenTimer.current) clearTimeout(listenTimer.current);
+                listenTimer.current = setTimeout(() => mascotAct('listen', 2600), 500);
               }}
               placeholder="سوالت رو بنویس..."
               className={`h-10 flex-1 rounded-xl px-3.5 text-xs font-bold outline-none transition-colors ${
@@ -222,4 +243,4 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
       )}
     </AnimatePresence>
   );
-}
+};

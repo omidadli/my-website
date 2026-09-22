@@ -1,113 +1,30 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { mascot } from './mascotBus';
+import { mascot, SCENES } from './mascotBus';
 import { MascotCue } from './useMascotEvents';
 import sprites from './sprites.json';
 
 /**
- * Mascot figure — shared visual engine.
+ * Mascot figure — the living character.
  *
- * Reactions play as GIF-like animations built from frame sequences (2–3 WebP
- * frames per glyph):
- *   typing  → 3 frames behind a laptop (fast loop while the AI "writes")
- *   talking → 3 frames of mouth/hand motion (loop while the answer lands)
- *   greet   → wave frame, then excited frame …
+ * Acting = GIF-style frame sequences driven by the scene director
+ * (mascotBus). Looping scenes cycle their frames forever until replaced;
+ * finite scenes play once and fall back to idle. On single-frame scenes the
+ * pupils additionally track the cursor (per-sprite iris coordinates measured
+ * with FaceMesh).
  *
- * `MascotFigure` renders the character (frame sequencer + cursor-tracking
- * pupils + body parallax). It's used twice: pinned in the bottom-right corner
- * (`MascotAvatar`) and as the live "video bar" inside the chat panel — both
- * stay in sync through the global mascot bus.
+ * Used twice — pinned to the bottom edge (`MascotAvatar`) and as the live
+ * video bar inside the chat panel — both perfectly in sync via the bus.
  */
 
 type Eye = { cx: number; cy: number; r: number };
 type SpriteMeta = { src: string; w: number; h: number; eyes: Eye[] | null };
 const META = sprites as unknown as Record<string, SpriteMeta>;
 
-/** scene name → glyph frame sequence (loop:true on a step = hold/loop there) */
-const GLYPHS: Record<string, Array<{ f: string; ms: number; loop?: boolean }>> = {
-  'pose:idle': [{ f: 'idle', ms: 0, loop: true }],
-  'pose:wave': [{ f: 'wave', ms: 0, loop: true }],
-  'pose:happy': [{ f: 'happy', ms: 0, loop: true }],
-  'pose:excited': [{ f: 'excited', ms: 0, loop: true }],
-  'pose:thinking': [{ f: 'thinking', ms: 0, loop: true }],
-  'pose:sad': [{ f: 'sad', ms: 0, loop: true }],
-  'pose:surprised': [{ f: 'surprised', ms: 0, loop: true }],
-  'pose:confused': [{ f: 'confused', ms: 0, loop: true }],
-  'pose:confident': [{ f: 'confident', ms: 0, loop: true }],
-  'pose:sleepy': [{ f: 'sleepy', ms: 0, loop: true }],
-  'pose:typing': [
-    { f: 'typing-1', ms: 160 },
-    { f: 'typing-2', ms: 150 },
-    { f: 'typing-3', ms: 160 },
-    { f: 'typing-2', ms: 150, loop: true },
-  ],
-  'pose:talking': [
-    { f: 'talking', ms: 150 },
-    { f: 'talking-b', ms: 170 },
-    { f: 'talking-c', ms: 130 },
-    { f: 'talking-b', ms: 170, loop: true },
-  ],
-
-  greet: [
-    { f: 'wave', ms: 1500 },
-    { f: 'excited', ms: 1400 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-  celebrate: [
-    { f: 'excited', ms: 1600 },
-    { f: 'happy', ms: 1400 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-  laugh: [
-    { f: 'happy', ms: 2400 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-  oops: [
-    { f: 'surprised', ms: 1400 },
-    { f: 'sad', ms: 2600 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-  puzzled: [
-    { f: 'confused', ms: 2800 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-  flex: [
-    { f: 'confident', ms: 3000 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-  sleepy: [
-    { f: 'sleepy', ms: 4200 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-  think: [{ f: 'thinking', ms: 0, loop: true }],
-  typing: [
-    { f: 'typing-1', ms: 160 },
-    { f: 'typing-2', ms: 150 },
-    { f: 'typing-3', ms: 160 },
-    { f: 'typing-2', ms: 150, loop: true },
-  ],
-  talk: [
-    { f: 'talking', ms: 150 },
-    { f: 'talking-b', ms: 170 },
-    { f: 'talking-c', ms: 130 },
-    { f: 'talking-b', ms: 170, loop: true },
-  ],
-  sad: [
-    { f: 'sad', ms: 4200 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-  surprised: [
-    { f: 'surprised', ms: 2200 },
-    { f: 'idle', ms: 0, loop: true },
-  ],
-};
-
-// single-frame glyphs → cursor-tracking pupils allowed
-const STATIC_FRAMES = new Set(['idle', 'wave', 'excited', 'thinking', 'sad', 'surprised', 'confused']);
-// artwork already handles the acting (sunglasses / shut eyes / looking at the screen)
-const NO_PUPILS = new Set(['confident', 'happy', 'sleepy', 'typing-1', 'typing-2', 'typing-3', 'talking', 'talking-b', 'talking-c']);
-
-const ALL_FRAMES = Array.from(new Set(Object.values(GLYPHS).flat().map((g) => g.f)));
+// frames where pupils may track the cursor (single-frame, eyes-open art)
+const PUPIL_FRAMES = new Set(['idle', 'wave', 'excited', 'thinking', 'surprised', 'confused']);
+// art that already acts with its own eyes (sunglasses / shut eyes / looking down)
+const ALL_FRAMES = Array.from(new Set(Object.values(SCENES).flatMap((s) => s.frames.map((f) => f.f))));
 
 const BODY_X = 0.014;
 const BODY_Y = 0.008;
@@ -115,44 +32,58 @@ const BODY_R = 1.6;
 const DEAD_ZONE = 22;
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
-/** The living character. Used in the corner widget AND inside the chat panel. */
 export function MascotFigure({ corner = false }: { corner?: boolean }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const pupilRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
-  const [frameIdx, setFrameIdx] = useState(ALL_FRAMES.indexOf('idle'));
-  const frameIdxRef = useRef(frameIdx);
+  const [scene, setScene] = useState('idle');
+  const [def, setDef] = useState(SCENES.idle);
+  const [frameIdx, setFrameIdx] = useState(0);
+  const frameIdxRef = useRef(0);
   frameIdxRef.current = frameIdx;
-  const frameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const seqRef = useRef<{ seq: Array<{ f: string; ms: number; loop?: boolean }>; i: number }>({
-    seq: GLYPHS['pose:idle'],
-    i: 0,
-  });
+  const defRef = useRef(def);
+  defRef.current = def;
 
   // ------------------------------------------------ frame sequencer
   useEffect(() => {
-    const play = (i: number) => {
-      const { seq } = seqRef.current;
-      seqRef.current.i = i;
-      const step = seq[i];
-      setFrameIdx(ALL_FRAMES.indexOf(step.f));
-      if (frameTimer.current) clearTimeout(frameTimer.current);
-      frameTimer.current = setTimeout(() => {
-        const s = seqRef.current;
-        if (s.i + 1 < s.seq.length) play(s.i + 1);
-      }, step.ms || 60);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const playAt = (i: number) => {
+      const d = defRef.current;
+      const step = d.frames[i];
+      if (!step) return;
+      setFrameIdx(i);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (d.loop) playAt((i + 1) % d.frames.length);
+        else if (i + 1 < d.frames.length) playAt(i + 1);
+      }, Math.max(60, step.ms));
     };
-
     const unsub = mascot.subscribe((name) => {
-      const seq = GLYPHS[name] ?? GLYPHS['pose:idle'];
-      seqRef.current = { seq, i: 0 };
-      play(0);
+      const d = SCENES[name] ?? SCENES.idle;
+      setDef(d);
+      defRef.current = d;
+      setScene(name);
+      playAt(0);
     });
     return () => {
       unsub();
-      if (frameTimer.current) clearTimeout(frameTimer.current);
+      if (timer) clearTimeout(timer);
     };
+  }, []);
+
+  // warm the frame cache so the first loop doesn't stutter
+  useEffect(() => {
+    const warm = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
+    const run = () => {
+      ALL_FRAMES.forEach((f) => {
+        const im = new Image();
+        im.src = META[f].src;
+        im.decode?.().catch(() => undefined);
+      });
+    };
+    if (warm) warm(run);
+    else setTimeout(run, 1500);
   }, []);
 
   // ------------------------------------------------ eye/body animation
@@ -170,10 +101,11 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
     let saccade = { x: 0, y: 0, until: 0, next: 2400 };
 
     const tick = (now: number) => {
-      const frame = ALL_FRAMES[frameIdxRef.current];
+      const frame = defRef.current.frames[frameIdxRef.current]?.f ?? 'idle';
       const meta = META[frame];
+      const trackable = PUPIL_FRAMES.has(frame) && meta?.eyes;
 
-      if (!NO_PUPILS.has(frame) && meta?.eyes && mouse) {
+      if (trackable && mouse) {
         const rect = root.getBoundingClientRect();
         const fx = rect.left + rect.width / 2;
         const fy = rect.top + rect.height * (meta.eyes[0]?.cy ?? 0.3);
@@ -195,7 +127,7 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
 
       let sx = 0;
       let sy = 0;
-      if (!NO_PUPILS.has(frame)) {
+      if (trackable) {
         if (now > saccade.next && now > saccade.until) {
           saccade = {
             x: (Math.random() - 0.5) * 0.2,
@@ -218,7 +150,7 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
       const gy = cur.y * 0.72 + fast.y * 0.28 + sy;
 
       const w = root.getBoundingClientRect().width;
-      if (!NO_PUPILS.has(frame) && meta?.eyes) {
+      if (trackable) {
         const rr = (meta.eyes[0]?.r ?? 0.016) * w;
         const ex = gx * 1.3 * rr;
         const ey = gy * 1.3 * rr * 0.85;
@@ -251,10 +183,11 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
     };
   }, []);
 
-  const activeFrame = ALL_FRAMES[frameIdx];
+  const activeFrame = def.frames[frameIdx]?.f ?? 'idle';
+  const isMultiFrame = def.frames.length > 1;
 
   return (
-    <div ref={rootRef} className={`mascot-figure ${corner ? 'mascot-figure--corner' : ''}`}>
+    <div ref={rootRef} className={`mascot-figure ${corner ? 'mascot-figure--corner' : ''}`} data-scene={scene} data-anim={isMultiFrame ? '1' : '0'}>
       <div className="mascot-body" ref={bodyRef}>
         {ALL_FRAMES.map((f) => (
           <img
@@ -268,7 +201,7 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
             className={`mascot-img ${f === activeFrame ? 'is-active' : ''}`}
           />
         ))}
-        {ALL_FRAMES.filter((f) => STATIC_FRAMES.has(f)).map((p) =>
+        {ALL_FRAMES.filter((f) => PUPIL_FRAMES.has(f)).map((p) =>
           ((META[p].eyes ?? []) as Eye[]).map((eye, i) => (
             <span
               key={`${p}-${i}`}
@@ -290,8 +223,11 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
   );
 }
 
-/** Corner widget: the clickable mascot + speech bubbles. */
+/** Corner widget: clickable mascot flush with the bottom edge + speech bubbles. */
 export function MascotAvatar() {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const compactTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [bubble, setBubble] = useState<{ id: number; text: string; shown: string } | null>(null);
   const bubbleId = useRef(0);
   const bubbleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -328,18 +264,36 @@ export function MascotAvatar() {
     };
   }, [showBubble]);
 
+  // while the user scrolls: shrink + fade the mascot so it never fights
+  // with section readability; restore ~500ms after scrolling stops
+  useEffect(() => {
+    let last = 0;
+    const onScroll = () => {
+      const root = rootRef.current;
+      if (!root) return;
+      const now = Date.now();
+      if (now - last > 90) root.classList.add('mascot-compact');
+      last = now;
+      if (compactTimer.current) clearTimeout(compactTimer.current);
+      compactTimer.current = setTimeout(() => root.classList.remove('mascot-compact'), 550);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (compactTimer.current) clearTimeout(compactTimer.current);
+    };
+  }, []);
+
   const lastHover = useRef(0);
   const onHover = () => {
     const now = Date.now();
     if (now - lastHover.current < 30000) return;
     lastHover.current = now;
-    if (mascot.currentScene === 'idle' || mascot.currentScene.startsWith('pose:')) {
-      mascot.scene('greet', 2800);
-    }
+    if (mascot.currentScene === 'idle') mascot.scene('greet');
   };
 
   return (
-    <div className="mascot-root fixed bottom-4 right-4 z-[50] sm:bottom-7 sm:right-7">
+    <div ref={rootRef} className="mascot-root fixed bottom-0 right-2 z-[50] sm:right-5">
       <AnimatePresence>
         {bubble && (
           <motion.div

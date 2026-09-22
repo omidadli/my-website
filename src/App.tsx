@@ -223,7 +223,7 @@ function MainLayout() {
 
       {/* Main Content Area with Cinematic Motion Page Transitions */}
       <main
-        className={`flex-grow w-full relative z-10 pb-10 ${
+        className={`flex-grow w-full relative z-10 pb-28 sm:pb-24 ${
           currentPage === 'home' ? '' : 'max-w-6xl mx-auto px-4 sm:px-8 pt-28 sm:pt-32'
         }`}
       >
@@ -325,7 +325,7 @@ function MainLayout() {
 
       {/* Admin Floating Toolbar */}
       <AdminFloatingBar />
-      <ChatWidget theme={theme} />
+      {currentPage !== 'admin' && <ChatWidget theme={theme} />}
 
       {/* Mascot assistant — avatar reacts to site events, clicks open the chat */}
       {currentPage !== 'admin' && <MascotAvatar />}

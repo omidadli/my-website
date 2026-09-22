@@ -1,94 +1,90 @@
 /**
- * mascotBus — the mascot's "brain": a global scene director that any part of
- * the app can drive.
+ * mascotBus — single source of truth for the mascot's acting.
  *
- * A SCENE = a short choreography (sprite/glyph frames + optional speech line
- * + duration). Scenes can be simple (a single pose) or sequenced ("wave" for
- * 2.6s, then back to idle). Any component can request one:
+ * A SCENE = a frame sequence (sprite glyphs) + timing. Finite scenes
+ * auto-return to `idle` when the sequence ends; looping scenes keep cycling
+ * until replaced (with a safety ttl), so the AI-chat layer fully controls
+ * long-running acts like `typing` and `talk`.
  *
- *   mascot.scene('greet')
- *   mascot.speak('excited', 'خیالت راحت!', 3200)
- *
- * The avatar component subscribes and renders whatever scene is active.
+ *   mascot.scene('greet')            → wave → excited → happy → idle
+ *   mascot.scene('typing')           → loops until you play something else
+ *   mascot.scene('talk', 6000)       → mouth/hand loop for ~6s → idle
  */
 
-export type MascotPose =
-  | 'idle'
-  | 'wave'
-  | 'happy'
-  | 'excited'
-  | 'thinking'
-  | 'talking'
-  | 'sad'
-  | 'surprised'
-  | 'confused'
-  | 'confident'
-  | 'sleepy'
-  | 'typing';
-
-export interface MascotScene {
-  /** steps: each step holds a pose for `ms` milliseconds */
-  steps: Array<{ pose: MascotPose; ms: number }>;
-  /** loop the last step until the scene is replaced (used for typing/talking) */
-  loopLast?: boolean;
+export type MascotStep = { f: string; ms: number };
+export interface MascotSceneDef {
+  frames: MascotStep[];
+  /** keep cycling through frames until replaced */
+  loop?: boolean;
+  /** safety: a looping scene auto-returns to idle after this long */
+  ttl?: number;
 }
 
-const SCENES: Record<string, MascotScene> = {
-  idle: { steps: [{ pose: 'idle', ms: 60000 }] },
+export const SCENES: Record<string, MascotSceneDef> = {
+  idle: { frames: [{ f: 'idle', ms: 1000 }], loop: true },
+
+  // finite one-shot scenes (auto → idle)
+  wave: { frames: [{ f: 'wave', ms: 2600 }] },
   greet: {
-    steps: [
-      { pose: 'wave', ms: 1500 },
-      { pose: 'excited', ms: 1400 },
-      { pose: 'idle', ms: Infinity },
+    frames: [
+      { f: 'wave', ms: 1500 },
+      { f: 'excited', ms: 1600 },
+      { f: 'happy', ms: 1800 },
     ],
   },
   celebrate: {
-    steps: [
-      { pose: 'excited', ms: 1600 },
-      { pose: 'happy', ms: 1400 },
-      { pose: 'idle', ms: Infinity },
+    frames: [
+      { f: 'excited', ms: 1600 },
+      { f: 'happy', ms: 1500 },
     ],
   },
-  laugh: {
-    steps: [
-      { pose: 'happy', ms: 2400 },
-      { pose: 'idle', ms: Infinity },
-    ],
-  },
-  think: { steps: [{ pose: 'thinking', ms: 14000 }], loopLast: true },
-  typing: { steps: [{ pose: 'typing', ms: 14000 }], loopLast: true },
-  talk: { steps: [{ pose: 'talking', ms: 14000 }], loopLast: true },
-  oops: {
-    steps: [
-      { pose: 'surprised', ms: 1400 },
-      { pose: 'sad', ms: 2600 },
-      { pose: 'idle', ms: Infinity },
-    ],
-  },
-  sad: { steps: [{ pose: 'sad', ms: 4200 }] },
-  puzzled: {
-    steps: [
-      { pose: 'confused', ms: 2800 },
-      { pose: 'idle', ms: Infinity },
-    ],
-  },
-  flex: {
-    steps: [
-      { pose: 'confident', ms: 3000 },
-      { pose: 'idle', ms: Infinity },
-    ],
-  },
-  sleepy: {
-    steps: [
-      { pose: 'sleepy', ms: 4200 },
-      { pose: 'idle', ms: Infinity },
-    ],
-  },
+  laugh: { frames: [{ f: 'happy', ms: 2600 }] },
   surprised: {
-    steps: [
-      { pose: 'surprised', ms: 2200 },
-      { pose: 'idle', ms: Infinity },
+    frames: [
+      { f: 'surprised', ms: 2200 },
+      { f: 'idle', ms: 0 },
     ],
+  },
+  sad: { frames: [{ f: 'sad', ms: 4000 }] },
+  puzzled: { frames: [{ f: 'confused', ms: 2600 }] },
+  flex: { frames: [{ f: 'confident', ms: 3000 }] },
+  sleepy: { frames: [{ f: 'sleepy', ms: 3800 }] },
+  oops: {
+    frames: [
+      { f: 'surprised', ms: 1300 },
+      { f: 'sad', ms: 2600 },
+    ],
+  },
+
+  // looping scenes (driven by the chat layer / cues, with safety ttls)
+  think: { frames: [{ f: 'thinking', ms: 900 }], loop: true, ttl: 20000 },
+  typing: {
+    frames: [
+      { f: 'typing-1', ms: 150 },
+      { f: 'typing-2', ms: 140 },
+      { f: 'typing-3', ms: 150 },
+      { f: 'typing-2', ms: 140 },
+    ],
+    loop: true,
+    ttl: 60000,
+  },
+  talk: {
+    frames: [
+      { f: 'talking', ms: 150 },
+      { f: 'talking-b', ms: 170 },
+      { f: 'talking-c', ms: 130 },
+      { f: 'talking-b', ms: 170 },
+    ],
+    loop: true,
+    ttl: 20000,
+  },
+  listen: {
+    frames: [
+      { f: 'talking-b', ms: 900 },
+      { f: 'idle', ms: 900 },
+    ],
+    loop: true,
+    ttl: 15000,
   },
 };
 
@@ -97,7 +93,7 @@ type Listener = (scene: string) => void;
 class MascotBus {
   private listeners = new Set<Listener>();
   private timers: ReturnType<typeof setTimeout>[] = [];
-  private current = 'idle';
+  private current: string = 'idle';
 
   get currentScene(): string {
     return this.current;
@@ -111,33 +107,21 @@ class MascotBus {
     };
   }
 
-  /** Play a named scene. If `minMs` is given, keep it at least that long. */
-  scene(name: string, minMs?: number) {
-    const sc = SCENES[name] ?? SCENES.idle;
+  /** Play a scene. `ttl` overrides a looping scene's safety timer. */
+  scene(name: string, ttl?: number) {
+    const def = SCENES[name] ?? SCENES.idle;
     this.current = name;
     this.timers.forEach(clearTimeout);
     this.timers = [];
     this.listeners.forEach((fn) => fn(name));
 
-    let t = 0;
-    sc.steps.forEach((step) => {
-      if (step.ms !== Infinity) {
-        this.timers.push(setTimeout(() => undefined, 0));
-        t += step.ms;
-      }
-    });
-
-    // schedule end-of-scene → idle (unless the last step is a hold/loop)
-    const lastHold = sc.steps[sc.steps.length - 1].ms === Infinity;
-    const total = lastHold ? (minMs ?? 0) : Math.max(t, minMs ?? 0);
-    if (total > 0 && total < 60000) {
+    const total = def.frames.reduce((a, s) => a + s.ms, 0);
+    if (!def.loop && total > 0) {
       this.timers.push(setTimeout(() => this.scene('idle'), total));
+    } else if (def.loop) {
+      const guard = ttl ?? def.ttl;
+      if (guard) this.timers.push(setTimeout(() => this.scene('idle'), guard));
     }
-  }
-
-  /** Convenience: hold a single pose glyph for a given duration. */
-  pose(p: MascotPose, ms: number) {
-    this.scene(`pose:${p}`, ms);
   }
 }
 

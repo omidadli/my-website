@@ -5,9 +5,11 @@ import { mascot } from './mascot/mascotBus';
 
 /**
  * AssistantChat — mounts the mascot's chat panel. The old standalone chat
- * launcher is gone: the corner avatar IS the launcher now (click → panel).
+ * launcher is gone: the corner avatar IS the launcher (click → panel).
+ * While the panel is open the corner mascot hides (body.chat-open) — it has
+ * "walked into" the chat's video bar — and waves goodbye on close.
  */
-export const ChatWidget: React.FC<{ theme: Theme }> = ({ theme }) => {
+export const ChatWidget: React.FC<{ theme: Theme; isHidden?: boolean }> = ({ theme, isHidden = false }) => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -19,6 +21,12 @@ export const ChatWidget: React.FC<{ theme: Theme }> = ({ theme }) => {
     return () => window.removeEventListener('nd:open-chat', openChat);
   }, []);
 
+  useEffect(() => {
+    document.body.classList.toggle('chat-open', open);
+    if (!open) mascot.scene('greet');
+    return () => document.body.classList.remove('chat-open');
+  }, [open]);
+
   // Escape closes the panel
   useEffect(() => {
     if (!open) return;
@@ -29,11 +37,6 @@ export const ChatWidget: React.FC<{ theme: Theme }> = ({ theme }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  return (
-    <>
-      <AssistantPanel theme={theme} open={open} onClose={() => setOpen(false)} />
-      {/* while the panel is open, the corner avatar "walks into" the chat — hide it */}
-      <style>{open ? '.mascot-root{opacity:0;pointer-events:none;transform:translateY(8px);transition:all .25s ease}' : '.mascot-root{opacity:1;transition:all .25s ease}'}</style>
-    </>
-  );
+  if (isHidden) return null;
+  return <AssistantPanel theme={theme} open={open} onClose={() => setOpen(false)} />;
 };
