@@ -789,3 +789,87 @@ html.theme-transitioning *::after {
               box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
+
+/* ==========================================================================
+   Eye-tracking avatar widget (bottom-right corner)
+   Transparent cutout portrait; pupils follow the cursor (see
+   EyeTrackingAvatar.tsx). Decorative only: pointer-events are disabled.
+   ========================================================================== */
+
+.eta-root {
+  width: clamp(76px, 8.5vw, 118px);
+}
+
+.eta-sway {
+  position: relative;
+  animation: eta-sway 7s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+@keyframes eta-sway {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(-1.4deg);
+  }
+}
+
+/* soft accent halo behind the portrait — reads in both themes */
+.eta-glow {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 130%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--nd-accent) 34%, transparent),
+    transparent 72%
+  );
+  filter: blur(6px);
+  opacity: 0.85;
+}
+
+.eta-head {
+  position: relative;
+  will-change: transform;
+}
+
+.eta-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 12px 20px rgba(23, 23, 28, 0.18));
+}
+
+[data-theme='dark'] .eta-img {
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.5));
+}
+
+[data-theme='dark'] .eta-glow {
+  opacity: 1;
+}
+
+.eta-pupil {
+  position: absolute;
+  left: var(--px);
+  top: var(--py);
+  width: var(--pd);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  transform: translate(-50%, -50%) translate3d(var(--ex, 0px), var(--ey, 0px), 0);
+  background: radial-gradient(
+    circle at 35% 30%,
+    #3d4d68 0%,
+    #1a2334 45%,
+    #0b101b 100%
+  );
+  box-shadow: 0 0 0 0.5px rgba(8, 10, 16, 0.55);
+  will-change: transform;
+}

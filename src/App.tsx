@@ -22,6 +22,7 @@ import { AdminPage } from './pages/AdminPage';
 import { CustomPageView } from './pages/CustomPageView';
 import { SEOHead } from './components/SEOHead';
 import { ChatWidget } from './components/ChatWidget';
+import { EyeTrackingAvatar } from './components/EyeTrackingAvatar';
 
 function MainLayout() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -321,6 +322,9 @@ function MainLayout() {
       {/* Admin Floating Toolbar */}
       <AdminFloatingBar />
       <ChatWidget theme={theme} />
+
+      {/* Eye-tracking avatar (decorative, bottom-right) */}
+      {currentPage !== 'admin' && <EyeTrackingAvatar />}
 
       {/* Admin PIN Login Modal */}
       <AdminLoginModal
