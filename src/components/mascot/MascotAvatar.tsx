@@ -1,175 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { mascot, SCENES } from './mascotBus';
-import { soulJourney } from './soul';
+import { mascotController } from './soul';
+import { MascotWorkstation } from './MascotWorkstation';
 import { MascotCue } from './useMascotEvents';
-import sprites from './sprites.json';
 
 /**
- * Mascot figure — the living character.
+ * MascotAvatar — the corner resident.
  *
- * Head tracking: instead of moving pupil overlays (which read as fake), the
- * WHOLE figure turns toward the cursor in fake-3D — perspective rotateY /
- * rotateX around the neck pivot (transform-origin 50% 88%), plus a subtle
- * counter-translate. With no mouse for a few seconds he slowly glances
- * around on his own, like someone thinking.
- *
- * Acting = GIF-style frame loops driven by mascotBus (typing, talk, listen,
- * greet, celebrate, oops…). Used twice: corner widget + chat video bar,
- * always in sync via the bus.
+ * The character lives at his workstation; clicking him opens the chat (he then
+ * "walks into" the panel's video bar, see `body.chat-open`). Speech bubbles are
+ * the only thing this component owns — every body movement goes through
+ * `mascotController.dispatch()`, never through a scene call.
  */
 
-type SpriteMeta = { src: string; w: number; h: number; eyes: Eye[] | null };
-type Eye = { cx: number; cy: number; r: number };
-const META = sprites as unknown as Record<string, SpriteMeta>;
-
-const ALL_FRAMES = Array.from(new Set(Object.values(SCENES).flatMap((s) => s.frames.map((f) => f.f))));
-
-const TURN_Y = 17; // max head-turn, degrees — clearly visible
-const TURN_X = 10; // max head tilt, degrees
-const DRIFT_X = 0.045; // body follow-translate (× width) — sells the 3D turn
-const DRIFT_Y = 0.026;
-const GLANCE_AFTER = 4200; // ms without mouse → he starts glancing around
-const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
-
-export function MascotFigure({ corner = false }: { corner?: boolean }) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-
-  const [scene, setScene] = useState('idle');
-  const [def, setDef] = useState(SCENES.idle);
-  const [frameIdx, setFrameIdx] = useState(0);
-  const frameIdxRef = useRef(0);
-  frameIdxRef.current = frameIdx;
-  const defRef = useRef(def);
-  defRef.current = def;
-
-  // ------------------------------------------------ frame sequencer (GIF loops)
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const playAt = (i: number) => {
-      const d = defRef.current;
-      const step = d.frames[i];
-      if (!step) return;
-      setFrameIdx(i);
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (d.loop) playAt((i + 1) % d.frames.length);
-        else if (i + 1 < d.frames.length) playAt(i + 1);
-      }, Math.max(60, step.ms));
-    };
-    const unsub = mascot.subscribe((name) => {
-      const d = SCENES[name] ?? SCENES.idle;
-      setDef(d);
-      defRef.current = d;
-      setScene(name);
-      playAt(0);
-    });
-    return () => {
-      unsub();
-      if (timer) clearTimeout(timer);
-    };
-  }, []);
-
-  // warm the frame cache so the first loop never stutters
-  useEffect(() => {
-    const run = () => {
-      ALL_FRAMES.forEach((f) => {
-        const im = new Image();
-        im.src = META[f].src;
-        im.decode?.().catch(() => undefined);
-      });
-    };
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
-    if (ric) ric(run);
-    else setTimeout(run, 1500);
-  }, []);
-
-  // ------------------------------------------------ head tracking
-  useEffect(() => {
-    const root = rootRef.current;
-    const body = bodyRef.current;
-    if (!root || !body) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    let raf = 0;
-    const cur = { x: 0, y: 0 };
-    const tgt = { x: 0, y: 0 };
-    let mouse: { x: number; y: number } | null = null;
-    let lastMove = 0;
-
-    const tick = (now: number) => {
-      if (mouse && now - lastMove < GLANCE_AFTER) {
-        // follow the cursor — stronger when he's centered on screen
-        const rect = root.getBoundingClientRect();
-        const fx = rect.left + rect.width / 2;
-        const fy = rect.top + rect.height * 0.35; // ≈ head height
-        const dx = mouse.x - fx;
-        const dy = mouse.y - fy;
-        const dist = Math.hypot(dx, dy) || 1;
-        const norm = Math.min(1, dist / (window.innerWidth * 0.42));
-        tgt.x = clamp((dx / dist) * norm, -1, 1);
-        tgt.y = clamp((dy / dist) * norm, -1, 1);
-      } else {
-        // no cursor around → slow curious glances left/right
-        const t = now / 1000;
-        tgt.x = 0.3 * Math.sin(t * 0.5);
-        tgt.y = 0.12 * Math.sin(t * 0.33 + 1.1);
-      }
-
-      cur.x += (tgt.x - cur.x) * 0.09;
-      cur.y += (tgt.y - cur.y) * 0.09;
-
-      const w = root.getBoundingClientRect().width;
-      body.style.transform =
-        `perspective(520px) rotateY(${(cur.x * TURN_Y).toFixed(2)}deg) rotateX(${(-cur.y * TURN_X).toFixed(2)}deg) ` +
-        `translate3d(${(cur.x * DRIFT_X * w).toFixed(2)}px, ${(cur.y * DRIFT_Y * w).toFixed(2)}px, 0)`;
-
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
-    const onMove = (e: PointerEvent) => {
-      mouse = { x: e.clientX, y: e.clientY };
-      lastMove = performance.now();
-    };
-    const onLeave = () => {
-      mouse = null;
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    document.documentElement.addEventListener('pointerleave', onLeave);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      document.documentElement.removeEventListener('pointerleave', onLeave);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  const activeFrame = def.frames[frameIdx]?.f ?? 'idle';
-  const isMultiFrame = def.frames.length > 1;
-
-  return (
-    <div ref={rootRef} className={`mascot-figure ${corner ? 'mascot-figure--corner' : ''}`} data-scene={scene} data-anim={isMultiFrame ? '1' : '0'}>
-      <div className="mascot-body" ref={bodyRef}>
-        {ALL_FRAMES.map((f) => (
-          <img
-            key={f}
-            src={META[f].src}
-            alt=""
-            width={META[f].w}
-            height={META[f].h}
-            draggable={false}
-            decoding="async"
-            className={`mascot-img ${f === activeFrame ? 'is-active' : ''}`}
-          />
-        ))}
-      </div>
-      {corner && <div className="mascot-shadow" />}
-    </div>
-  );
-}
-
-/** Corner widget: clickable mascot flush with the bottom edge + speech bubbles. */
 export function MascotAvatar() {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const compactTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,22 +23,32 @@ export function MascotAvatar() {
   const typeInt = useRef<ReturnType<typeof setInterval> | null>(null);
   const [nameInput, setNameInput] = useState('');
 
-  const showBubble = useCallback((text: string, ms: number, askName = false) => {
-    bubbleId.current += 1;
-    setBubble({ id: bubbleId.current, text, shown: '', askName });
-    let i = 0;
-    if (typeInt.current) clearInterval(typeInt.current);
-    typeInt.current = setInterval(() => {
-      i += 1;
-      setBubble((b) => (b ? { ...b, shown: text.slice(0, i) } : b));
-      if (i >= text.length && typeInt.current) {
-        clearInterval(typeInt.current);
-        typeInt.current = null;
-      }
-    }, 20);
+  const clearBubbleTimers = useCallback(() => {
     if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
-    bubbleTimer.current = setTimeout(() => setBubble(null), ms);
+    bubbleTimer.current = null;
+    if (typeInt.current) clearInterval(typeInt.current);
+    typeInt.current = null;
   }, []);
+
+  const showBubble = useCallback(
+    (text: string, ms: number, askName = false) => {
+      bubbleId.current += 1;
+      setBubble({ id: bubbleId.current, text, shown: '', askName });
+      let i = 0;
+      if (typeInt.current) clearInterval(typeInt.current);
+      typeInt.current = setInterval(() => {
+        i += 1;
+        setBubble((b) => (b ? { ...b, shown: text.slice(0, i) } : b));
+        if (i >= text.length && typeInt.current) {
+          clearInterval(typeInt.current);
+          typeInt.current = null;
+        }
+      }, 20);
+      if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+      bubbleTimer.current = setTimeout(() => setBubble(null), ms);
+    },
+    []
+  );
 
   useEffect(() => {
     const onCue = (e: Event) => {
@@ -206,12 +59,11 @@ export function MascotAvatar() {
     window.addEventListener('mascot:cues', onCue);
     return () => {
       window.removeEventListener('mascot:cues', onCue);
-      if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
-      if (typeInt.current) clearInterval(typeInt.current);
+      clearBubbleTimers();
     };
-  }, [showBubble]);
+  }, [showBubble, clearBubbleTimers]);
 
-  // while scrolling: compact + dim so sections stay readable
+  // while scrolling: dim so sections stay readable (never covers content)
   useEffect(() => {
     let last = 0;
     const onScroll = () => {
@@ -241,8 +93,8 @@ export function MascotAvatar() {
       /* private mode */
     }
     window.dispatchEvent(new CustomEvent('nd:mascot-name', { detail: n }));
-    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
-    soulJourney({ pose: 'excited', hold: 2.4, then: 'happy' });
+    clearBubbleTimers();
+    mascotController.dispatch({ type: 'FORM_SUCCESS', label: 'name-captured' });
     showBubble(`خوشحالم شناختم، ${n}! هر سوالی بود در خدمتم.`, 4600);
   };
 
@@ -252,12 +104,11 @@ export function MascotAvatar() {
     } catch {
       /* private mode */
     }
-    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+    clearBubbleTimers();
     setBubble(null);
-    soulJourney({ pose: 'wave', hold: 2.6 });
+    mascotController.dispatch({ type: 'USER_RETURNED', label: 'name-skipped' });
   };
 
-  // the input row appears right away so the visitor can start typing
   const askVisible = !!bubble?.askName;
 
   return (
@@ -316,9 +167,7 @@ export function MascotAvatar() {
           }
         }}
       >
-        <div className="mascot-sway">
-          <MascotFigure corner />
-        </div>
+        <MascotWorkstation />
       </div>
     </div>
   );

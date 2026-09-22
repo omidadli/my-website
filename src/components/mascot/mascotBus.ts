@@ -1,128 +1,160 @@
 /**
- * mascotBus — single source of truth for the mascot's acting.
+ * mascotBus — the BODY. It owns the frame clock and nothing else.
  *
- * A SCENE = a frame sequence (sprite glyphs) + timing. Finite scenes
- * auto-return to `idle` when the sequence ends; looping scenes keep cycling
- * until replaced (with a safety ttl), so the AI-chat layer fully controls
- * long-running acts like `typing` and `talk`.
+ * The soul (controller) decides *what* the character does; this module decides
+ * *which frame is on screen right now* and runs the single timer that advances
+ * it. Because the clock lives here, the corner avatar and the chat avatar can
+ * never drift apart, and unmounting every subscriber stops the timer (no
+ * orphaned interval ticking into a dead component).
  *
- *   mascot.scene('greet')            → wave → excited → happy → idle
- *   mascot.scene('typing')           → loops until you play something else
- *   mascot.scene('talk', 6000)       → mouth/hand loop for ~6s → idle
+ *   soul.dispatch() → mascot.scene('typing') → frame clock → <MascotWorkstation/>
  */
 
+import { FRAMES } from './rig';
+
 export type MascotStep = { f: string; ms: number };
+
 export interface MascotSceneDef {
   frames: MascotStep[];
-  /** keep cycling through frames until replaced */
+  /** keep cycling until replaced */
   loop?: boolean;
-  /** safety: a looping scene auto-returns to idle after this long */
+  /**
+   * Safety net only. A looping scene is normally replaced by a real lifecycle
+   * event; the ttl guarantees it can never loop forever if that event is lost.
+   */
   ttl?: number;
 }
 
+/** Every frame referenced here must exist in `rig.FRAMES`. */
 export const SCENES: Record<string, MascotSceneDef> = {
   idle: { frames: [{ f: 'idle', ms: 1000 }], loop: true },
 
-  // finite one-shot scenes (auto → idle)
+  // ---------------------------------------------------------------- finite
   wave: { frames: [{ f: 'wave', ms: 2600 }] },
-  greet: { frames: [{ f: 'wave', ms: 2600 }] },
-  celebrate: {
-    frames: [
-      { f: 'excited', ms: 1600 },
-      { f: 'happy', ms: 1500 },
-    ],
-  },
-  laugh: { frames: [{ f: 'happy', ms: 2600 }] },
-  surprised: {
-    frames: [
-      { f: 'surprised', ms: 2200 },
-      { f: 'idle', ms: 0 },
-    ],
-  },
-  sad: { frames: [{ f: 'sad', ms: 4000 }] },
-  puzzled: { frames: [{ f: 'confused', ms: 2600 }] },
-  flex: { frames: [{ f: 'confident', ms: 3000 }] },
-  sleepy: { frames: [{ f: 'sleepy', ms: 3800 }] },
-  oops: {
-    frames: [
-      { f: 'surprised', ms: 1300 },
-      { f: 'sad', ms: 2600 },
-    ],
-  },
+  greet: { frames: [{ f: 'wave', ms: 2400 }] },
+  celebrate: { frames: [{ f: 'excited', ms: 1500 }, { f: 'happy', ms: 1400 }] },
+  laugh: { frames: [{ f: 'happy', ms: 2400 }] },
+  surprised: { frames: [{ f: 'surprised', ms: 2000 }, { f: 'idle', ms: 600 }] },
+  sad: { frames: [{ f: 'sad', ms: 3200 }] },
+  puzzled: { frames: [{ f: 'confused', ms: 2400 }] },
+  flex: { frames: [{ f: 'confident', ms: 2800 }] },
+  sleepy: { frames: [{ f: 'sleepy', ms: 3400 }] },
+  oops: { frames: [{ f: 'surprised', ms: 1200 }, { f: 'sad', ms: 2200 }] },
 
-  // looping scenes (driven by the chat layer / cues, with safety ttls)
+  // ---------------------------------------------------------------- looping
   think: { frames: [{ f: 'thinking', ms: 900 }], loop: true, ttl: 20000 },
   typing: {
     frames: [
-      { f: 'typing-1', ms: 150 },
-      { f: 'typing-2', ms: 140 },
-      { f: 'typing-3', ms: 150 },
-      { f: 'typing-2', ms: 140 },
+      { f: 'typing-1', ms: 170 },
+      { f: 'typing-2', ms: 150 },
+      { f: 'typing-3', ms: 170 },
+      { f: 'typing-2', ms: 150 },
     ],
     loop: true,
-    ttl: 60000,
+    ttl: 120_000,
   },
   talk: {
-    frames: [
-      { f: 'talking', ms: 150 },
-      { f: 'talking-b', ms: 170 },
-      { f: 'talking-c', ms: 130 },
-      { f: 'talking-b', ms: 170 },
-    ],
+    frames: [{ f: 'talking', ms: 190 }, { f: 'talking-b', ms: 210 }, { f: 'talking-c', ms: 160 }, { f: 'talking-b', ms: 210 }],
     loop: true,
     ttl: 20000,
   },
-  listen: {
-    frames: [
-      { f: 'talking-b', ms: 900 },
-      { f: 'idle', ms: 900 },
-    ],
-    loop: true,
-    ttl: 15000,
-  },
+  listen: { frames: [{ f: 'talking-b', ms: 900 }, { f: 'idle', ms: 900 }], loop: true, ttl: 15000 },
 };
 
-type Listener = (scene: string) => void;
+export const FALLBACK_SCENE = 'idle';
+
+type Listener = (scene: string, frame: string) => void;
 
 class MascotBus {
   private listeners = new Set<Listener>();
-  private timers: ReturnType<typeof setTimeout>[] = [];
-  private current: string = 'idle';
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private ttlTimer: ReturnType<typeof setTimeout> | null = null;
+  private current = FALLBACK_SCENE;
+  private def = SCENES[FALLBACK_SCENE];
+  private index = 0;
 
   get currentScene(): string {
     return this.current;
   }
 
+  get currentFrame(): string {
+    return this.def.frames[this.index]?.f ?? 'idle';
+  }
+
+  /** Register a renderer. Returns its unsubscribe. */
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
-    fn(this.current);
+    fn(this.current, this.currentFrame);
     return () => {
       this.listeners.delete(fn);
+      if (this.listeners.size === 0) this.stopClock();
     };
   }
 
-  /** Play a scene. `ttl` overrides the loop guard OR the finite auto-return. */
-  scene(name: string, ttl?: number) {
-    const def = SCENES[name] ?? SCENES.idle;
-    this.current = name;
-    this.timers.forEach(clearTimeout);
-    this.timers = [];
-    this.listeners.forEach((fn) => fn(name));
+  /** Play a scene. Replays are ignored so an event storm cannot restart a loop. */
+  scene(name: string) {
+    const def = SCENES[name] ?? SCENES[FALLBACK_SCENE];
+    const changed = name !== this.current;
+    this.current = SCENES[name] ? name : FALLBACK_SCENE;
+    if (!changed) return;
+    this.def = def;
+    this.index = 0;
+    this.emit();
+    this.startClock();
+    this.armTtl();
+  }
 
-    const total = def.frames.reduce((a, s) => a + s.ms, 0);
-    if (def.loop) {
-      const guard = ttl ?? def.ttl;
-      if (guard) this.timers.push(setTimeout(() => this.scene('idle'), guard));
-    } else {
-      // finite: hold exactly `ttl` when the director asks for a custom hold,
-      // otherwise auto-return after the natural sequence length
-      const end = ttl && ttl > 0 ? ttl : total;
-      if (end > 0) this.timers.push(setTimeout(() => this.scene('idle'), end));
-    }
+  private emit() {
+    const frame = this.def.frames[this.index]?.f ?? 'idle';
+    this.listeners.forEach((fn) => fn(this.current, frame));
+  }
+
+  private startClock() {
+    this.stopClock();
+    if (this.def.frames.length < 2) return; // a still frame needs no timer
+    const tick = () => {
+      const step = this.def.frames[this.index];
+      this.timer = setTimeout(() => {
+        const next = this.index + 1;
+        if (next < this.def.frames.length) this.index = next;
+        else if (this.def.loop) this.index = 0;
+        else return; // finite scene: hold the last frame
+        this.emit();
+        tick();
+      }, Math.max(60, step?.ms ?? 120));
+    };
+    tick();
+  }
+
+  private stopClock() {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+  }
+
+  private armTtl() {
+    if (this.ttlTimer) clearTimeout(this.ttlTimer);
+    this.ttlTimer = null;
+    const ttl = this.def.ttl;
+    if (!ttl) return;
+    this.ttlTimer = setTimeout(() => this.scene(FALLBACK_SCENE), ttl);
   }
 }
 
 export const mascot = new MascotBus();
+
+/** Warm the browser cache for every frame so the first loop never stutters. */
+export function warmFrames() {
+  const run = () => {
+    Object.values(FRAMES).forEach((f) => {
+      const im = new Image();
+      im.src = f.src;
+      im.decode?.().catch(() => undefined);
+    });
+  };
+  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
+  if (ric) ric(run);
+  else setTimeout(run, 1200);
+}
 
 if (typeof window !== 'undefined') {
   (window as unknown as { __mascot: MascotBus }).__mascot = mascot;

@@ -51,34 +51,33 @@ const expand = (q: Set<string>): Set<string> => {
  * directive protocol, live context (who we talk to / where / when) and the
  * site digest. The AI doesn't just write text — it stages the body.
  */
-const ACT_GUIDE = `واژگان بدن (pose) و کِی انتخابش کنی:
-- wave: سلام، خوش‌آمد، خداحافظی، جواب تشکر. hold: ۲-۳
-- happy: خنده‌ی گرم؛ جواب شوخ کاربر یا تشکر صمیمی. hold: ۲-۳
-- excited: خبر خوب، موفقیت کاربر (ارسال فرم، رزرو)، نتیجه‌ی درخشان. hold: ۳
-- thinking: سوال تحلیلی/محاسباتی؛ مکث کوتاه قبل از جواب قطعی. hold: ۳-۵
-- talking: حالت پیش‌فرضِ توضیح دادن — اکثر جواب‌ها همین. hold: برابرِ طول جواب
-- confused: سوال مبهم؛ همراه با یک سوال شفاف‌سازی در متن جواب. hold: ۲-۳
-- confident: پاسخ مطمئن با استناد به داده و نمونه‌کار. hold: ۳
-- sad: ندانستن، عذرخواهی، محدودیت واقعی، خبر بد. hold: ۳-۴
-- surprised: آمار یا خبر واقعاً غافلگیرکننده. hold: ۲
-- sleepy: فقط اگر خود کاربر از خستگی/انتظار طولانی گفته. hold: ۳
-هرگز از typing یا listen استفاده نکن؛ مخصوصِ سیستم است.
+const ACT_GUIDE = `واژگانِ بدن — فقط همین‌ها مجازند (هر چیزِ دیگر رد می‌شود):
+action:
+- WORKING: درگیرِ پیدا کردنِ جواب است (پیش‌فرضِ لحظه‌ی کار).
+- TYPING: جواب را روی کیبورد می‌نویسد.
+- THINKING: سوال تحلیلی/مبهم؛ مکثِ فکری.
+- READING: دارد جوابِ آماده‌شده را روی صفحه می‌خواند.
+- REACTING: دارد با مخاطب حرف می‌زند / واکنش نشان می‌دهد (پیش‌فرضِ اکثر جواب‌ها).
+- WAITING: منتظرِ ادامه‌ی حرفِ مخاطب است.
+- LOOK_AT_USER / LOOK_AT_LAPTOP: فقط تغییرِ توجه.
+- RETURN_TO_IDLE / IDLE: آرام شدن و برگشتن به زندگیِ عادی.
+gaze: USER | LAPTOP_SCREEN | KEYBOARD | CHAT | ENVIRONMENT
+expression: NEUTRAL | FOCUSED | PLEASED | CONCERNED | CURIOUS | PROUD | TIRED
 
 قوانین بازیگری:
-۱. هر پاسخ دقیقاً یک دستور act دارد و pose باید با «احساس غالبِ» جواب بخواند — نه تصادفی، نه برای تنوع.
-۲. اقتصاد انرژی: excited/surprised/happy طلا هستند؛ زیادشان نکن. اگر شک داری، talking یا idle.
-۳. تکرار ممنوع: اگر در جواب قبلی مثلاً confident دادی، این‌بار متنوع انتخاب کن مگر دلیل واقعی باشد.
-۴. hold را با طول جواب تنظیم کن: جواب یک‌خطی ≈ ۲-۳، معمولی ≈ ۴-۶، توضیحی ≈ ۷-۱۰.
-۵. then فقط برای روایت دوبخشی: مثلاً excited بعد happy (جشن که فروکش کرد لبخند بماند) یا surprised بعد sad (تعجب بعد عذرخواهی). بیشتر مواقع خالی.
+۱. هر پاسخ دقیقاً یک دستور act دارد و action باید با «احساس غالبِ» جواب بخواند — نه تصادفی، نه برای تنوع.
+۲. اقتصاد انرژی: PLEASED / CURIOUS / PROUD طلا هستند؛ زیادشان نکن. اگر شک داری، REACTING با NEUTRAL.
+۳. تکرار ممنوع: اگر در جواب قبلی مثلاً PROUD دادی، این‌بار متنوع انتخاب کن مگر دلیل واقعی باشد.
+۴. action فقط از فهرست بالا باشد؛ اسمِ جدید اختراع نکن (سیستم ردش می‌کند).
+۵. gaze را با کارِ لحظه هماهنگ کن: دارد جواب می‌دهد → LAPTOP_SCREEN یا KEYBOARD؛ دارد با مخاطب حرف می‌زند → USER.
 
 قرارداد اجرا (خیلی مهم):
 - همیشه دقیقاً یک سطر در «انتهای» پاسخ اضافه کن:
-[[act: {"pose":"...","hold":6,"bubble":"...","then":"idle"}]]
-- pose: یکی از واژگان بالا. hold: چند ثانیه بماند (۱.۵ تا ۱۴).
+[[act: {"action":"REACTING","gaze":"USER","expression":"NEUTRAL"}]]
 - bubble: فقط اگر می‌خواهی یک جمله‌ی کوتاهِ احساسی (حداکثر ۱۲۰ کاراکتر، بدون ایموجی، بدون تکرارِ متن جواب) کنار آواتار نمایش داده شود؛ معمولاً خالی بگذار.
-- then: حالت بعدی بعد از hold؛ معمولاً ننویس.
-- اگر این سطر را ننویسی، سیستم خودش talking را با طول جواب تنظیم می‌کند؛ برای حالت‌های خاص حتماً بنویس.
+- اگر این سطر را ننویسی یا نامعتبر باشد، سیستم خودش به‌طور امن به حالتِ عادی برمی‌گردد و پاسخ همچنان نمایش داده می‌شود.
 - JSON باید معتبر باشد؛ داخل bubble از " استفاده نکن.`;
+
 
 
 const buildSoulPrompt = (o: { persona: string; name: string; page: string; daypart: string; bodyState: string; digest: string }) => {
@@ -141,22 +140,22 @@ const localAnswer = (question: string, digest: string, cta: string): string => {
 
   // 1. Common greetings & friendly hellos
   if (/^(سلام|درود|خوبی|چطوری|صبح بخیر|عصر بخیر|سلام علیکم|سلام چطوری|سلام امید)/i.test(norm) || norm === 'سلام' || norm === 'درود') {
-    return `سلام و درود! خوش اومدی رفیق. من مسکات و دستیار هوشمند سایت امید عدلی‌ام. در زمینه‌های تبلیغات دیجیتال (گوگل و متا)، آنالیتیکس GA4، بهینه‌سازی نرخ تبدیل (CRO) و سئو می‌تونم راهنماییت کنم یا مسیر رزرو مشاوره رو بهت نشون بدم. چه کاری از دستم برمی‌آد؟ [[act:{"pose":"wave","hold":3}]]`;
+    return `سلام و درود! خوش اومدی رفیق. من مسکات و دستیار هوشمند سایت امید عدلی‌ام. در زمینه‌های تبلیغات دیجیتال (گوگل و متا)، آنالیتیکس GA4، بهینه‌سازی نرخ تبدیل (CRO) و سئو می‌تونم راهنماییت کنم یا مسیر رزرو مشاوره رو بهت نشون بدم. چه کاری از دستم برمی‌آد؟ [[act:{"action":"REACTING","gaze":"USER","expression":"PLEASED"}]]`;
   }
 
   // 2. Who is Omid / About
   if (/(کیستی|کی هستی|امید عدلی کیه|درباره امید|رزومه|بیوگرافی|سابقه|تو کی هستی)/i.test(norm)) {
-    return `امید عدلی متخصص رشد و تبلیغات دیجیتال با سال‌ها سابقه موفق در اجرای کمپین‌های عملکردی گوگل و متا، راه‌اندازی تحلیلی GA4، سئو و افزایش نرخ تبدیل (CRO) کسب‌وکارها است. من هم مسکات سه‌بعدی و همراه هوشمند او در این سایت هستم! [[act:{"pose":"confident","hold":3}]]`;
+    return `امید عدلی متخصص رشد و تبلیغات دیجیتال با سال‌ها سابقه موفق در اجرای کمپین‌های عملکردی گوگل و متا، راه‌اندازی تحلیلی GA4، سئو و افزایش نرخ تبدیل (CRO) کسب‌وکارها است. من هم مسکات سه‌بعدی و همراه هوشمند او در این سایت هستم! [[act:{"action":"REACTING","gaze":"USER","expression":"PROUD"}]]`;
   }
 
   // 3. E-commerce & Online Shops
   if (/(فروشگاه|آنلاین شاپ|خرید آنلاین|محصولات|سبد خرید)/i.test(norm)) {
-    return `برای فروشگاه‌های اینترنتی، تمرکز اصلی ما روی افزایش نرخ تبدیل سبد خرید، کمپین‌های پربازده گوگل ادز و کاهش هزینه جذب هر خریدار (CAC) است تا فروش خالص شما ماکسیمم شود. برای بررسی تخصصی فروشگاهتان می‌توانید یک جلسه مشاوره رزرو کنید! [[act:{"pose":"talking","hold":4}]]`;
+    return `برای فروشگاه‌های اینترنتی، تمرکز اصلی ما روی افزایش نرخ تبدیل سبد خرید، کمپین‌های پربازده گوگل ادز و کاهش هزینه جذب هر خریدار (CAC) است تا فروش خالص شما ماکسیمم شود. برای بررسی تخصصی فروشگاهتان می‌توانید یک جلسه مشاوره رزرو کنید! [[act:{"action":"REACTING","gaze":"USER","expression":"FOCUSED"}]]`;
   }
 
   // 4. Consultation, contact, booking
   if (/(مشاوره|تماس|همکاری|شماره|ارتباط|رزرو|جلسه|هزینه|قیمت|پروژه)/i.test(norm)) {
-    return `برای شروع همکاری یا دریافت مشاوره مستقیم از امید عدلی، می‌تونی از بخش «رزرو مشاوره» در بالای صفحه استفاده کنی یا از طریق فرم صفحه تماس پیام بفرستی. همچنین راه‌های مستقیم تلگرام و ایمیل هم در سایت فعاله تا خیلی سریع پاسخ بگیری! [[act:{"pose":"confident","hold":3}]]`;
+    return `برای شروع همکاری یا دریافت مشاوره مستقیم از امید عدلی، می‌تونی از بخش «رزرو مشاوره» در بالای صفحه استفاده کنی یا از طریق فرم صفحه تماس پیام بفرستی. همچنین راه‌های مستقیم تلگرام و ایمیل هم در سایت فعاله تا خیلی سریع پاسخ بگیری! [[act:{"action":"REACTING","gaze":"USER","expression":"PROUD"}]]`;
   }
 
   // 3. Keyword matching across site digest
@@ -182,12 +181,12 @@ const localAnswer = (question: string, digest: string, cta: string): string => {
       .slice(0, 3);
 
     if (scored.length > 0) {
-      return scored.map((x) => `• ${x.line.trim()}`).join('\n') + (cta ? `\n\n${cta}` : '') + ' [[act:{"pose":"talking"}]]';
+      return scored.map((x) => `• ${x.line.trim()}`).join('\n') + (cta ? `\n\n${cta}` : '') + ' [[act:{"action":"REACTING","gaze":"USER","expression":"NEUTRAL"}]]';
     }
   }
 
   // 4. Helpful natural fallback
-  return `در سایت امید عدلی، خدمات تخصصی شامل سئو پیشرفته، تبلیغات گوگل و متا، راه‌اندازی و تحلیل GA4 و بهینه‌سازی نرخ تبدیل (CRO) ارائه می‌شه. می‌تونی هر سوالی درباره کسب‌وکارت، نمونه‌کارها یا نحوه همکاری داری بپرسی تا کمکت کنم! [[act:{"pose":"talking"}]]`;
+  return `در سایت امید عدلی، خدمات تخصصی شامل سئو پیشرفته، تبلیغات گوگل و متا، راه‌اندازی و تحلیل GA4 و بهینه‌سازی نرخ تبدیل (CRO) ارائه می‌شه. می‌تونی هر سوالی درباره کسب‌وکارت، نمونه‌کارها یا نحوه همکاری داری بپرسی تا کمکت کنم! [[act:{"action":"REACTING","gaze":"USER","expression":"NEUTRAL"}]]`;
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
@@ -322,22 +321,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
   // The body needs a directive even when the local matcher answered.
   if (!answer.includes('[[act:')) {
-    answer += ' [[act:{"pose":"talking"}]]';
+    answer += ' [[act:{"action":"REACTING","gaze":"USER","expression":"NEUTRAL"}]]';
   }
 
   // Extract the act directive (if any) so the client can show the aside bubble.
-  let act: { pose?: string; hold?: number; bubble?: string; then?: string } | undefined;
+  // Forwarded to the client's strict validator — unknown fields are dropped.
+  let act: { action?: string; gaze?: string; expression?: string; pose?: string; bubble?: string } | undefined;
   try {
     const m = answer.match(/\[\[act:\s*(\{[\s\S]*?\})\s*\]\]/i);
     if (m) {
-      const parsed = JSON.parse(m[1]);
+      const parsed = JSON.parse(m[1]) || {};
       act = {
-        pose: typeof parsed.pose === 'string' ? parsed.pose : undefined,
-        hold: typeof parsed.hold === 'number' ? parsed.hold : undefined,
-        bubble: typeof parsed.bubble === 'string' ? parsed.bubble : undefined,
-        then: typeof parsed.then === 'string' ? parsed.then : undefined,
+        action: typeof parsed.action === 'string' ? parsed.action.slice(0, 32) : undefined,
+        gaze: typeof parsed.gaze === 'string' ? parsed.gaze.slice(0, 24) : undefined,
+        expression: typeof parsed.expression === 'string' ? parsed.expression.slice(0, 24) : undefined,
+        // legacy field, still accepted by the client for one release
+        pose: typeof parsed.pose === 'string' ? parsed.pose.slice(0, 24) : undefined,
+        bubble: typeof parsed.bubble === 'string' ? parsed.bubble.slice(0, 180) : undefined,
       };
-      if (!act.pose && !act.bubble) act = undefined;
+      if (!act.action && !act.pose && !act.bubble) act = undefined;
     }
   } catch {
     act = undefined;

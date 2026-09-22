@@ -790,14 +790,212 @@ html.theme-transitioning *::after {
 }
 
 /* ==========================================================================
-   Mascot v4 — GIF-style frame acting, flush with the bottom edge
-   - corner avatar = chat launcher; hides (body.chat-open) while panel open
-   - looping scenes (typing/talk/listen) cycle frames like a GIF; body bobs
-   - compact+dim while the user scrolls so sections stay readable
+   Mascot workstation — one camera, one character, one machine
+   - the sprite bust is pinned to a shared head anchor (see rig.ts) so the
+     body never teleports or resizes between poses
+   - the laptop deck hides the waist-level crop; the lid hides the wrists
+   - the corner avatar is the chat launcher; it hides (body.chat-open) while
+     the panel is open because the character "walks into" the chat's bar
    ========================================================================== */
 
+.mws {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ambient room light behind the character */
+.mws-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(58% 42% at 50% 30%, color-mix(in srgb, var(--nd-accent) 20%, transparent), transparent 70%),
+    radial-gradient(90% 60% at 50% 104%, rgba(99, 91, 255, 0.16), transparent 62%);
+  opacity: 0.85;
+}
+
+/* desk plane — the surface the machine stands on */
+.mws-desk {
+  position: absolute;
+  left: -6%;
+  right: -6%;
+  bottom: 0;
+  height: 42%;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(12, 13, 20, 0.34) 42%, rgba(9, 10, 16, 0.6) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='light'] .mws-desk {
+  background: linear-gradient(180deg, transparent 0%, rgba(23, 23, 28, 0.06) 42%, rgba(23, 23, 28, 0.12) 100%);
+  border-top-color: rgba(23, 23, 28, 0.08);
+}
+
+/* ---------------------------------------------------- the character layer */
+.mws-figure {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  transform-origin: 50% 88%; /* neck pivot: the whole figure turns from the neck */
+  transform: perspective(640px) rotateY(calc(var(--gaze-x, 0) * 9deg)) rotateX(calc(var(--gaze-y, 0) * 7deg))
+    translate3d(calc(var(--gaze-x, 0) * 1.4%), calc(var(--gaze-y, 0) * 1.1%), 0);
+  will-change: transform;
+}
+
+.mws-body,
+.mws-hands {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0; /* rig transforms are computed from the top-left */
+}
+
+.mws-hands {
+  z-index: 4;
+  pointer-events: none;
+}
+
+.mws-breath {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 92%;
+  animation: mws-breathe 5.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.mws-breath--hands {
+  animation-duration: 5.6s;
+  animation-delay: -0.15s;
+}
+
+@keyframes mws-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  45% {
+    transform: translateY(-0.5%) scaleY(1.008);
+  }
+}
+
+.mws-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: 50% 0;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/*
+ * The sprites are busts cropped at the waist. Everything below the laptop's
+ * hinge is hidden by the machine anyway, so the body is faded out there —
+ * without this the cropped bottom edge of the sprite peeks out beside the
+ * deck. The fade starts *under* the lid, so the visible torso is untouched.
+ */
+.mws-body {
+  -webkit-mask-image: linear-gradient(to bottom, #000 76%, rgba(0, 0, 0, 0) 86%);
+  mask-image: linear-gradient(to bottom, #000 76%, rgba(0, 0, 0, 0) 86%);
+}
+
+.mws-img--hands {
+  /* the clip lives on the img so it travels with the rig transform */
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+}
+
+/* ------------------------------------------------------------ the machine */
+.mws-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mws-lid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 62%;
+  height: 18%;
+  z-index: 5;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+  transform: perspective(520px) rotateX(-3.5deg);
+}
+
+.mws-deck {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 80%;
+  height: 19.5%;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* indeterminate progress — only ever mounted while a request is live */
+.mws-progress {
+  animation: mws-progress 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes mws-progress {
+  0% {
+    transform: translateX(0);
+  }
+  55% {
+    transform: translateX(268px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.mws-caret {
+  animation: mws-caret 1.05s steps(1, end) infinite;
+}
+
+@keyframes mws-caret {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+.mws-led {
+  fill: rgba(255, 255, 255, 0.16);
+}
+.mws-led--processing,
+.mws-led--working {
+  fill: #818cf8;
+  animation: mws-led 1.1s ease-in-out infinite;
+}
+.mws-led--ready {
+  fill: #6ee7b7;
+}
+.mws-led--error {
+  fill: #fbbf24;
+}
+
+@keyframes mws-led {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --------------------------------------------------------- corner launcher */
 .mascot-root {
-  width: clamp(112px, 12vw, 172px);
+  width: clamp(128px, 13vw, 190px);
   pointer-events: none;
   transition: opacity 0.3s var(--nd-ease), transform 0.3s var(--nd-ease);
 }
@@ -807,10 +1005,17 @@ html.theme-transitioning *::after {
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.35s var(--nd-ease);
 }
 
-.mascot-stage:focus-visible .mascot-figure {
-  filter: drop-shadow(0 0 1.5px color-mix(in srgb, var(--nd-accent) 80%, transparent));
+.mascot-stage:hover {
+  transform: translateY(-2px);
+}
+
+.mascot-stage:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--nd-accent) 70%, transparent);
+  outline-offset: 6px;
+  border-radius: 22px;
 }
 
 /* chat panel is open → the mascot "walked into" the chat */
@@ -820,147 +1025,15 @@ body.chat-open .mascot-root {
   pointer-events: none;
 }
 
-/* user is scrolling → step back so content stays readable */
+/* user is scrolling → step back so sections stay readable */
 .mascot-root.mascot-compact {
-  opacity: 0.45;
-}
-.mascot-root.mascot-compact .mascot-figure {
-  transform: scale(0.8);
-  transform-origin: 100% 100%;
-}
-.mascot-figure {
-  transition: transform 0.35s var(--nd-ease);
+  opacity: 0.5;
 }
 
-.mascot-sway {
-  transform-origin: 50% 92%;
-  animation: mascot-sway 7s ease-in-out infinite;
-}
-
-@keyframes mascot-sway {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-2.5px) rotate(-0.7deg);
-  }
-}
-
-.mascot-figure {
-  position: relative;
-}
-
-.mascot-body {
-  position: relative;
-  will-change: transform;
-  transform-origin: 50% 88%; /* neck pivot — the whole figure turns toward the cursor */
-}
-
-/* gentle hover affordance only — no random scenes on hover */
-.mascot-stage {
-  transition: transform 0.3s var(--nd-ease);
-}
-
-.mascot-stage:hover .mascot-figure {
-  transform: scale(1.045);
-}
-
-/* frame stack — first frame lays out, the rest overlay; active shows */
-.mascot-img {
-  display: block;
-  width: 100%;
-  height: auto;
-  position: relative;
-  opacity: 0;
-  transition: opacity 0.16s ease;
-  user-select: none;
-  -webkit-user-drag: none;
-  -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
-}
-
-.mascot-img + .mascot-img {
-  position: absolute;
-  inset: 0;
-  height: 100%;
-  object-fit: contain;
-}
-
-.mascot-img.is-active {
-  opacity: 1;
-  z-index: 2;
-}
-
-/* GIF runs: near-instant swaps (no ghost trails) */
-.mascot-figure[data-anim='1'] .mascot-img {
-  transition: opacity 0.05s linear;
-}
-
-.mascot-shadow {
-  height: 9px;
-  width: 70%;
-  margin: -3px auto 0;
-  border-radius: 999px;
-  background: radial-gradient(closest-side, rgba(23, 23, 28, 0.24), transparent);
-}
-
-[data-theme='dark'] .mascot-shadow {
-  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
-}
-
-/* ---------- acting: body language while a loop scene plays ---------- */
-.mascot-figure[data-scene='typing'] .mascot-body {
-  animation: mascot-typebob 0.58s ease-in-out infinite;
-}
-
-@keyframes mascot-typebob {
-  0%,
-  100% {
-    margin-top: 0;
-  }
-  50% {
-    margin-top: -1.5px;
-  }
-}
-
-.mascot-figure[data-scene='talk'] .mascot-body {
-  animation: mascot-talklean 1.15s ease-in-out infinite;
-}
-
-@keyframes mascot-talklean {
-  0%,
-  100% {
-    margin-left: 0;
-    rotate: 0deg;
-  }
-  50% {
-    margin-left: -1px;
-    rotate: 0.8deg;
-  }
-}
-
-.mascot-figure[data-scene='listen'] .mascot-body {
-  animation: mascot-nod 1.8s ease-in-out infinite;
-}
-
-@keyframes mascot-nod {
-  0%,
-  100% {
-    margin-top: 0;
-  }
-  35% {
-    margin-top: 1.2px;
-  }
-  70% {
-    margin-top: 0.4px;
-  }
-}
-
-/* ---------- speech bubble ---------- */
+/* ---------------------------------------------------------------- bubble */
 .mascot-bubble {
   position: absolute;
-  bottom: calc(100% - 12px);
+  bottom: calc(100% - 10px);
   right: 6px;
   max-width: min(250px, 62vw);
   padding: 0.55rem 0.8rem;
@@ -991,49 +1064,52 @@ body.chat-open .mascot-root {
 }
 
 /* ==========================================================================
-   Assistant chat panel — flush with the bottom edge, video bar on top
+   Assistant chat panel
    ========================================================================== */
 
 .mascot-chat {
   width: min(94vw, 390px);
-  height: min(72vh, 600px);
+  height: min(74dvh, 620px);
+  max-height: calc(100dvh - 5.5rem);
   backdrop-filter: blur(18px);
 }
 
 .mascot-chat-stage {
+  position: relative;
+  height: clamp(146px, 33vw, 188px);
+  flex-shrink: 0;
+  overflow: hidden;
   background:
-    radial-gradient(120% 90% at 78% 110%, color-mix(in srgb, var(--nd-accent) 22%, transparent), transparent 60%),
+    radial-gradient(120% 90% at 78% 108%, color-mix(in srgb, var(--nd-accent) 22%, transparent), transparent 60%),
     radial-gradient(120% 120% at 15% -20%, rgba(99, 91, 255, 0.14), transparent 55%),
     linear-gradient(170deg, #171728 0%, #0d0d17 100%);
 }
 
-.mascot-chat-glow {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(46% 70% at 50% 78%, color-mix(in srgb, var(--nd-accent) 30%, transparent), transparent 70%);
-  filter: blur(10px);
-  pointer-events: none;
-}
-
+/* the character sits on the desk plane at the bottom of the bar */
 .mascot-chat-avatar {
   position: absolute;
-  bottom: -5%;
+  bottom: -2%;
   left: 50%;
   transform: translateX(-50%);
-  width: 138px;
-  animation: mascot-sway 7s ease-in-out infinite;
+  height: 100%;
+  aspect-ratio: 640 / 698;
+  z-index: 1;
 }
 
 .mascot-chat-status {
-  z-index: 2;
+  z-index: 6;
 }
 
-/* the AI's short spoken aside, floating beside the video-bar avatar */
+.mascot-chat-close {
+  z-index: 6;
+}
+
+/* the AI's short spoken aside, floating beside the avatar */
 .mascot-chat-said {
   position: absolute;
-  top: 14px;
-  left: 14px;
-  max-width: 58%;
+  top: 12px;
+  left: 12px;
+  max-width: 56%;
   padding: 0.45rem 0.75rem;
   border-radius: 12px 12px 12px 4px;
   background: rgba(255, 255, 255, 0.92);
@@ -1042,15 +1118,23 @@ body.chat-open .mascot-root {
   font-weight: 800;
   line-height: 1.6;
   box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
-  z-index: 3;
+  z-index: 6;
   pointer-events: none;
 }
 
 .mascot-chat-scroll {
   scrollbar-width: thin;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* ---------- name-ask bubble ---------- */
+/* long words / code / URLs must never blow the bubble open */
+.mascot-chat-msg {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* --------------------------------------------------------- name-ask bubble */
 .mascot-ask-row {
   display: flex;
   align-items: center;
@@ -1104,16 +1188,36 @@ body.chat-open .mascot-root {
   filter: brightness(1.1);
 }
 
-/* ---------- reduced motion ---------- */
+/* ------------------------------------------------------------ mobile dock */
+@media (max-width: 640px) {
+  .mascot-root {
+    width: clamp(112px, 30vw, 150px);
+  }
+  .mascot-chat {
+    right: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+    height: min(78dvh, 620px);
+    max-height: calc(100dvh - 4.5rem);
+  }
+}
+
+/* --------------------------------------------------------- reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .mascot-sway,
-  .mascot-chat-avatar,
-  .mascot-figure[data-scene] .mascot-body {
+  .mws-breath,
+  .mws-progress,
+  .mws-caret,
+  .mws-led {
     animation: none !important;
   }
-  .mascot-img,
-  .mascot-root,
-  .mascot-figure {
+  .mws-figure {
+    transition: none;
+  }
+  .mws-lid {
+    transform: none;
+  }
+  .mascot-stage,
+  .mascot-root {
     transition: none !important;
   }
 }

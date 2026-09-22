@@ -201,20 +201,41 @@ export const api = {
     }
   },
 
-  /** AI consultant conversation. */
+  /**
+   * AI consultant conversation.
+   *
+   * The endpoint answers with a single JSON document today, but the client is
+   * stream-ready: if the server replies `text/event-stream` (SSE) or
+   * newline-delimited JSON, the partial text is handed to `onDelta` as it
+   * arrives while keeping the exact same resolve contract. The mascot
+   * controller consumes those deltas *throttled*, so a token storm can never
+   * thrash the animation.
+   */
   async sendChat(
     messages: { role: 'user' | 'model'; content: string }[],
-    mascotContext?: { name?: string; page?: string; daypart?: string; bodyState?: string }
+    mascotContext?: { name?: string; page?: string; daypart?: string; bodyState?: string },
+    opts?: { signal?: AbortSignal; onDelta?: (partialText: string) => void }
   ): Promise<{ ok: boolean; answer?: string; act?: { pose?: string; hold?: number; bubble?: string; then?: string }; mode?: 'ai' | 'local'; error?: string }> {
     try {
       const r = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
         body: JSON.stringify({ messages, mascot: mascotContext }),
+        signal: opts?.signal,
       });
+
+      const ctype = r.headers.get('Content-Type') || '';
+      if (r.ok && r.body && (ctype.includes('text/event-stream') || ctype.includes('application/x-ndjson'))) {
+        return await readStreamedAnswer(r, opts?.onDelta);
+      }
+
       const j = await r.json().catch(() => ({}));
-      return r.ok && j?.ok ? { ok: true, answer: j.answer, act: j.act, mode: j.mode } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
-    } catch {
+      if (!r.ok || !j?.ok) return { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+      const answer = String(j.answer || '');
+      opts?.onDelta?.(answer);
+      return { ok: true, answer, act: j.act, mode: j.mode };
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return { ok: false, error: 'درخواست لغو شد.' };
       return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
     }
   },
@@ -246,3 +267,73 @@ export const api = {
     }
   },
 };
+
+/**
+ * Consume an SSE / NDJSON AI answer.
+ *
+ * Accepted chunk shapes: `data: {"delta":"…"}`, `data: {"text":"…"}`,
+ * `data: {"answer":"…"}` and a bare `data: …` string. A final
+ * `data: {"done":true, "answer": "…"}` (or `[DONE]`) closes the stream.
+ * Anything unparseable is ignored rather than thrown — a malformed chunk must
+ * never take the chat down.
+ */
+async function readStreamedAnswer(
+  r: Response,
+  onDelta?: (partialText: string) => void
+): Promise<{ ok: boolean; answer?: string; act?: Record<string, unknown>; mode?: 'ai' | 'local'; error?: string }> {
+  const reader = r.body?.getReader();
+  if (!reader) return { ok: false, error: 'پاسخ جریانی قابل خواندن نبود.' };
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let text = '';
+  let act: Record<string, unknown> | undefined;
+  let mode: 'ai' | 'local' | undefined;
+  let done = false;
+
+  const handle = (payload: string) => {
+    const payloadTrimmed = payload.trim();
+    if (!payloadTrimmed || payloadTrimmed === '[DONE]') {
+      if (payloadTrimmed === '[DONE]') done = true;
+      return;
+    }
+    try {
+      const j = JSON.parse(payloadTrimmed) as Record<string, unknown>;
+      const chunk = typeof j.delta === 'string' ? j.delta : typeof j.text === 'string' ? j.text : typeof j.answer === 'string' ? j.answer : '';
+      if (chunk) {
+        text += chunk;
+        onDelta?.(text);
+      }
+      if (j.act && typeof j.act === 'object') act = j.act as Record<string, unknown>;
+      if (j.mode === 'ai' || j.mode === 'local') mode = j.mode;
+      if (j.done === true) done = true;
+      if (j.error) throw new Error(String(j.error));
+    } catch (err) {
+      if ((err as Error)?.message && !(err instanceof SyntaxError)) throw err;
+      /* not JSON → treat as a raw text chunk */
+      text += payloadTrimmed;
+      onDelta?.(text);
+    }
+  };
+
+  try {
+    while (!done) {
+      const { value, done: streamDone } = await reader.read();
+      if (streamDone) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl = buffer.indexOf('\n');
+      while (nl !== -1) {
+        const line = buffer.slice(0, nl);
+        buffer = buffer.slice(nl + 1);
+        handle(line.startsWith('data:') ? line.slice(5) : line);
+        nl = buffer.indexOf('\n');
+      }
+    }
+    if (buffer.trim()) handle(buffer.trim());
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError') return { ok: false, error: 'درخواست لغو شد.' };
+    return { ok: false, error: (e as Error)?.message || 'خواندن پاسخ ناموفق بود.' };
+  }
+
+  if (!text) return { ok: false, error: 'پاسخی دریافت نشد؛ دوباره تلاش کنید.' };
+  return { ok: true, answer: text, act, mode };
+}

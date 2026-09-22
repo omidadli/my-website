@@ -1,32 +1,27 @@
 import { useEffect, useRef } from 'react';
-import { mascot } from './mascotBus';
-import { soulJourney, soulSystem, soulSetVisitor } from './soul';
+import { mascotController, type MascotEventType } from './soul';
 import { Page } from '../../types';
 
 /**
- * useMascotEvents — the mascot's social brain. EVERY act has a reason.
+ * useMascotEvents — the character's social life. EVERY act has a reason.
  *
- * entry
- *   first v6 visit      → ONE wave + asks the visitor's name (input bubble)
- *   named visitor       → «سلام {name}، {وقت بخیر}! حالت چطوره؟ امروز چه
- *                          کمکی از دستم برمیاد؟»
- *   anonymous return    → warm one-act welcome
- *   returning, no name  → soft name-ask (once per session)
- * journey
- *   first land on page  → one contextual tip for THAT page
- *   copies text         → celebrate (helped you)
- *   contact form ok     → celebrate
- *   booking ok          → celebrate
- *   genuinely leaving   → sad goodbye (dwell ≥30s, cursor really exits the
- *                         top of the window, once per session)
- * ambient (purposeful, ≤4/session)
- *   every 45s, ONLY if the tab is visible, chat closed, he's idle, nothing
- *   is on screen and the user isn't scrolling — and the line is tied to the
- *   page the visitor is actually on.
+ * This module produces *events*, never animations. Each social reflex is
+ * dispatched to the single controller with the priority it deserves, so an
+ * ambient remark can never interrupt an AI interaction:
+ *
+ *   entry greeting  → USER_RETURNED   (NORMAL)
+ *   page tip        → PAGE_CHANGED    (NORMAL)
+ *   copies text     → COPY            (NORMAL)  — you helped them
+ *   contact form ok → FORM_SUCCESS    (NORMAL)
+ *   booking ok      → BOOKING_SUCCESS (NORMAL)
+ *   genuinely leaving → EXIT_INTENT   (NORMAL)
+ *   ambient remark  → USER_RETURNED   (NORMAL, ≤4/session)
+ *
+ * The corner speech bubble is rendered by <MascotAvatar/>; this file only
+ * decides *whether* a line is worth saying.
  */
 
 export interface MascotCue {
-  scene: string;
   text: string;
   ms?: number;
   askName?: boolean;
@@ -35,42 +30,30 @@ export interface MascotCue {
 const SILENCE_KEY = 'nd-mascot-muted';
 const NAME_KEY = 'nd-mascot-name';
 const SKIP_KEY = 'nd-mascot-skip';
-// fresh scheme key → everyone (incl. previous visitors) gets asked once
-const SCHEME_KEY = 'nd-mascot-v6';
-const SESSION_ASKED = 'nd-mascot-v6-asked';
-const SESSION_EXIT = 'nd-mascot-v6-exit';
+const SCHEME_KEY = 'nd-mascot-v7';
+const SESSION_ASKED = 'nd-mascot-v7-asked';
+const SESSION_EXIT = 'nd-mascot-v7-exit';
 
 const rate = { lastText: null as string | null, lastAt: 0 };
 
-export function mascotCue(pose: string, text: string, ms = 4200, force = false, askName = false) {
+/**
+ * Say a line (corner bubble) and let the body react through the controller.
+ * `event` is the reason the line exists; `ms` only sizes the bubble.
+ */
+export function mascotCue(text: string, ms = 4200, askName = false, event: MascotEventType = 'USER_RETURNED', force = false) {
+  if (typeof document !== 'undefined' && document.body.classList.contains('chat-open')) return; // chat owns him
   try {
     if (localStorage.getItem(SILENCE_KEY) === '1') return;
   } catch {
     /* private mode */
   }
-  if (document.body.classList.contains('chat-open')) return; // chat owns him
   const now = Date.now();
   if (!force && now - rate.lastAt < 18000) return;
   if (text === rate.lastText) return;
   rate.lastText = text;
   rate.lastAt = now;
-  window.dispatchEvent(new CustomEvent<MascotCue>('mascot:cues', { detail: { scene: pose, text, ms, askName } }));
-  // «celebrate» is a choreography, not a pose: fist-pump → warm laugh
-  const spec =
-    pose === 'celebrate'
-      ? { pose: 'excited' as const, hold: ms / 1000, then: 'happy' as const, bubble: text }
-      : { pose: pose as 'idle' | 'wave' | 'sad', hold: ms / 1000, bubble: text };
-  soulJourney(spec);
-}
-
-/** Producer-side act (chat wiring) — routed through the soul. */
-export function mascotAct(pose: 'typing' | 'listen' | 'talking' | 'surprised' | 'sad' | 'wave' | 'oops', ms?: number) {
-  if (pose === 'oops') {
-    // startled → apologetic (mini choreography)
-    soulSystem({ pose: 'surprised', hold: 1.4, then: 'sad' });
-    return;
-  }
-  soulSystem({ pose, hold: ms ? ms / 1000 : undefined });
+  window.dispatchEvent(new CustomEvent<MascotCue>('mascot:cues', { detail: { text, ms, askName } }));
+  mascotController.dispatch({ type: event, label: 'mascot-cue' });
 }
 
 function getName(): string {
@@ -99,8 +82,7 @@ const PAGE_CUES: Partial<Record<Page, string>> = {
   products: 'محصولات آماده‌ان؛ سریع‌تر از پروژه‌ی اختصاصی راه می‌افتن.',
 };
 
-// ambient lines keyed by context (page-aware, purposeful)
-function ambientLine(page: Page, name: string): { scene: string; text: string } | null {
+function ambientLine(page: Page, name: string): string {
   const n = name ? `${name}، ` : '';
   const onPage: Partial<Record<Page, string>> = {
     home: 'اگه دنبال رشد فروشی، بخش خدمات رو یه ببین؛ از اون‌جا همه‌چیز شروع می‌شه.',
@@ -109,20 +91,25 @@ function ambientLine(page: Page, name: string): { scene: string; text: string } 
     blog: 'مقاله‌ی خاصی مدنظرته؟ بگو موضوعش رو پیدا کنم.',
     contact: 'نیم‌ساعت مشاوره‌ی اول رایگانه؛ تقویم همین پایینه.',
   };
-  if (onPage[page]) return { scene: 'idle', text: n + onPage[page]! };
-  return { scene: 'idle', text: `${n}هر جا گم شدی، من همین‌جام؛ بپرس تا راهنماییت کنم.` };
+  return n + (onPage[page] || 'هر جا گم شدی، من همین‌جام؛ بپرس تا راهنماییت کنم.');
 }
 
 export function useMascotEvents(currentPage: Page) {
   const nameRef = useRef(getName());
   const pageRef = useRef(currentPage);
   pageRef.current = currentPage;
-  soulSetVisitor({ name: nameRef.current, page: currentPage });
+
   useEffect(() => {
-    soulSetVisitor({ page: currentPage });
+    mascotController.setVisitor({ name: nameRef.current, page: currentPage });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    mascotController.setVisitor({ page: currentPage });
   }, [currentPage]);
+
   useEffect(() => {
-    const onName = () => soulSetVisitor({ name: getName() });
+    const onName = () => mascotController.setVisitor({ name: getName() });
     window.addEventListener('nd:mascot-name', onName);
     return () => window.removeEventListener('nd:mascot-name', onName);
   }, []);
@@ -157,22 +144,15 @@ export function useMascotEvents(currentPage: Page) {
     // ---------- entry: exactly ONE purposeful act ----------
     let openT: ReturnType<typeof setTimeout>;
     if (!schemeSeen && !skipped) {
-      // first meeting: greet once, then ask the name
       openT = setTimeout(() => {
-        mascotCue('wave', 'سلام، خیلی خوش اومدی! اسمت چیه؟ دوست دارم درست صدامت کنم.', 24000, true, true);
+        mascotCue('سلام، خیلی خوش اومدی! اسمت چیه؟ دوست دارم درست صدامت کنم.', 24000, true, 'USER_RETURNED', true);
       }, 2400);
     } else {
       const n = nameRef.current;
-      openT = setTimeout(
-        () => {
-          if (n) {
-            mascotCue('wave', `سلام ${n}، ${timeGreet()}! حالت چطوره؟ امروز چه کمکی از دستم برمیاد؟`, 6400, true);
-          } else {
-            mascotCue('wave', 'سلام! خوش برگشتی. چه کاری برات انجام بدم؟', 5200, true);
-          }
-        },
-        1600
-      );
+      openT = setTimeout(() => {
+        if (n) mascotCue(`سلام ${n}، ${timeGreet()}! حالت چطوره؟ امروز چه کمکی از دستم برمیاد؟`, 6400, false, 'USER_RETURNED', true);
+        else mascotCue('سلام! خوش برگشتی. چه کاری برات انجام بدم؟', 5200, false, 'USER_RETURNED', true);
+      }, 1600);
     }
 
     // ---------- ambient: purposeful, page-aware, capped ----------
@@ -190,17 +170,14 @@ export function useMascotEvents(currentPage: Page) {
         const conditions =
           document.visibilityState === 'visible' &&
           !document.body.classList.contains('chat-open') &&
-          mascot.currentScene === 'idle' &&
           Date.now() - rate.lastAt > 40000 && // nothing on screen lately
           Date.now() - lastScroll > 8000 && // not mid-reading/scrolling
           ambCount < 4;
         if (conditions) {
-          // soft name-ask has priority exactly once per session
           if (!nameRef.current && !skipped && !sessionAsked) {
-            mascotCue('wave', 'راستی، اسمت چیه؟ دوست دارم درست صدامت کنم.', 20000, true, true);
+            mascotCue('راستی، اسمت چیه؟ دوست دارم درست صدامت کنم.', 20000, true, 'USER_RETURNED', true);
           } else {
-            const line = ambientLine(pageRef.current, nameRef.current);
-            if (line) mascotCue(line.scene, line.text, 5200);
+            mascotCue(ambientLine(pageRef.current, nameRef.current), 5200);
           }
           ambCount += 1;
         }
@@ -210,17 +187,17 @@ export function useMascotEvents(currentPage: Page) {
     armAmbient();
 
     // ---------- journey reactions ----------
-    const onCopy = () => mascotCue('celebrate', 'کپی شد؛ بردار!', 2400);
+    const onCopy = () => mascotCue('کپی شد؛ بردار!', 2400, false, 'COPY', true);
     document.addEventListener('copy', onCopy);
 
-    const onFormOk = () => mascotCue('celebrate', 'پیامت رسید! خیلی زود جواب می‌دم.', 5000, true);
+    const onFormOk = () => mascotCue('پیامت رسید! خیلی زود جواب می‌دم.', 5000, false, 'FORM_SUCCESS', true);
     window.addEventListener('nd:form-success', onFormOk);
 
-    const onBooked = () => mascotCue('celebrate', 'جلسه‌ت رزرو شد! می‌بینمت.', 5000, true);
+    const onBooked = () => mascotCue('جلسه‌ت رزرو شد! می‌بینمت.', 5000, false, 'BOOKING_SUCCESS', true);
     window.addEventListener('nd:booking-success', onBooked);
 
-    // exit intent — ONLY a real exit: cursor leaves through the top after a
-    // real visit (≥30s dwell), once per session
+    // exit intent — ONLY a real exit: the cursor leaves through the top after a
+    // real visit (≥30 s dwell), once per session
     let exitUsed = (() => {
       try {
         return sessionStorage.getItem(SESSION_EXIT) === '1';
@@ -239,12 +216,7 @@ export function useMascotEvents(currentPage: Page) {
         /* private mode */
       }
       const n = nameRef.current;
-      mascotCue(
-        'sad',
-        n ? `${n}، قبل از رفتن یه سوال داشتی، همون رو ازم بپرس.` : 'قبل از رفتن، اگه سوالی بود من همین‌جام.',
-        4600,
-        true
-      );
+      mascotCue(n ? `${n}، قبل از رفتن یه سوال داشتی، همون رو ازم بپرس.` : 'قبل از رفتن، اگه سوالی بود من همین‌جام.', 4600, false, 'EXIT_INTENT', true);
     };
     document.documentElement.addEventListener('mouseleave', onDocLeave);
 
@@ -260,9 +232,15 @@ export function useMascotEvents(currentPage: Page) {
     };
   }, []);
 
-  // ---------- first landing on a page: one contextual tip ----------
+  // ---------- navigation: he notices where you went ----------
   useEffect(() => {
     if (currentPage === 'admin') return;
+    mascotController.dispatch({ type: 'PAGE_CHANGED', label: currentPage });
+  }, [currentPage]);
+
+  // ---------- first landing on a page: one contextual tip ----------
+  useEffect(() => {
+    if (currentPage === 'admin') return undefined;
     const key = `nd-mascot-pg-${currentPage}`;
     let first = false;
     try {
@@ -271,10 +249,10 @@ export function useMascotEvents(currentPage: Page) {
     } catch {
       first = true;
     }
-    if (!first) return;
+    if (!first) return undefined;
     const line = PAGE_CUES[currentPage];
-    if (!line) return;
-    const t = setTimeout(() => mascotCue('idle', line, 5000), 2800);
+    if (!line) return undefined;
+    const t = setTimeout(() => mascotCue(line, 5000, false, 'PAGE_CHANGED'), 2800);
     return () => clearTimeout(t);
   }, [currentPage]);
 }
