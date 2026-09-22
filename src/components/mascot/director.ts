@@ -137,16 +137,17 @@ export function guessHold(text: string): number {
  * strip it from the display text, and perform the requested acting.
  * Returns the clean human-readable answer.
  */
-export function applyAIRawAnswer(raw: string): { text: string; applied: boolean } {
+export function applyAIRawAnswer(raw: string): { text: string; applied: boolean; spec: ActSpec | null } {
   const rawText = String(raw || '');
   const m = rawText.match(/\[\[act:\s*(\{[\s\S]*?\})\s*\]\]/i);
   let text = rawText;
   let applied = false;
+  let spec: ActSpec | null = null;
 
   if (m) {
     text = (rawText.slice(0, m.index) + ' ' + rawText.slice(m.index + m[0].length)).replace(/\s{2,}/g, ' ').trim();
     try {
-      const spec = JSON.parse(m[1]) as ActSpec;
+      spec = JSON.parse(m[1]) as ActSpec;
       applied = performAct({ pose: spec.pose, hold: spec.hold, bubble: spec.bubble, then: spec.then }, 'ai');
     } catch {
       applied = false; // malformed JSON → ignore, body stays calm
@@ -157,7 +158,7 @@ export function applyAIRawAnswer(raw: string): { text: string; applied: boolean 
   if (!applied) {
     performAct({ pose: 'talking', hold: guessHold(text) }, 'ai');
   }
-  return { text, applied };
+  return { text, applied, spec };
 }
 
 /** Journey reflexes (copy, form success, …) — never interrupt the AI. */

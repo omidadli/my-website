@@ -5,7 +5,7 @@ import { Theme } from '../../types';
 import { useContent } from '../../context/ContentContext';
 import { api } from '../../services/api';
 import { mascotAct } from './useMascotEvents';
-import { applyAIRawAnswer, directorGetContext } from './director';
+import { ActSpec, applyAIRawAnswer, directorGetContext } from './director';
 import { MascotFigure } from './MascotAvatar';
 
 interface AssistantPanelProps {
@@ -42,6 +42,8 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [said, setSaid] = useState<string | null>(null);
+  const saidTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,6 +70,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
   useEffect(() => {
     return () => {
       if (listenTimer.current) clearTimeout(listenTimer.current);
+      if (saidTimer.current) clearTimeout(saidTimer.current);
     };
   }, []);
 
@@ -96,8 +99,14 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
     if (res.ok && res.answer) {
       // the AI's act directive drives the body (pose/hold/bubble);
       // fallback: talking loop sized to the answer
-      const { text } = applyAIRawAnswer(res.answer);
+      const { text, spec } = applyAIRawAnswer(res.answer);
       setMessages((prev) => [...prev, { role: 'model', content: text }]);
+      // the AI's short spoken aside floats beside the avatar in the video bar
+      if (spec?.bubble) {
+        setSaid(String(spec.bubble).slice(0, 90));
+        if (saidTimer.current) clearTimeout(saidTimer.current);
+        saidTimer.current = setTimeout(() => setSaid(null), 3600);
+      }
     } else {
       setError(res.error || 'پاسخ دریافت نشد؛ دوباره تلاش کنید.');
       mascotAct('oops'); // surprised → apologetic → idle
@@ -123,6 +132,20 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
           {/* ---- avatar video bar ---- */}
           <div className="mascot-chat-stage relative h-36 shrink-0 overflow-hidden sm:h-44">
             <div className="mascot-chat-glow" />
+            <AnimatePresence>
+              {said && (
+                <motion.div
+                  key={said}
+                  initial={{ opacity: 0, y: 6, scale: 0.94 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ type: 'spring', stiffness: 340, damping: 24 }}
+                  className="mascot-chat-said"
+                >
+                  {said}
+                </motion.div>
+              )}
+            </AnimatePresence>
             {/* live avatar — mirrors the corner mascot's current scene */}
             <div className="mascot-chat-avatar">
               <MascotFigure />
