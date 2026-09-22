@@ -111,7 +111,10 @@ export const MediaField: React.FC<MediaFieldProps> = ({ value, onChange, label =
                       title="حذف"
                       onClick={async () => {
                         if (!confirm('این فایل از کتابخانه حذف شود؟')) return;
-                        if (m.cloud) await api.deleteMedia(decodeURIComponent(m.url.replace('/api/media/file/', '')));
+                        if (m.cloud) {
+                          const key = (m as any).key || (m.url.includes('key=') ? new URL(m.url, window.location.origin).searchParams.get('key') : decodeURIComponent(m.url.replace('/api/media/file/', '')));
+                          if (key) await api.deleteMedia(key);
+                        }
                         removeMediaItem(m.id);
                         setCloudItems((prev) => prev.filter((c) => c.url !== m.url));
                         logActivity('حذف رسانه', `فایل ${m.title} از کتابخانه رسانه حذف شد.`);

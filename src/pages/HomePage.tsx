@@ -5,7 +5,6 @@ import { EditableText } from '../components/cms/EditableText';
 import { RepeaterControls } from '../components/cms/RepeaterControls';
 import { SectionEditHeader } from '../components/cms/SectionEditHeader';
 import { SectionWrapper } from '../components/cms/SectionWrapper';
-import { IsometricDashboard } from '../components/3D/IsometricDashboard';
 import { IconBadge3D } from '../components/3D/3DIconBadge';
 import { TiltCard } from '../components/3D/TiltCard';
 import {
@@ -125,8 +124,6 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
   const orbX = useTransform(sx, (v) => v * 18);
   const orbY = useTransform(sy, (v) => v * 14);
   const orb2X = useTransform(sx, (v) => v * -12);
-  const dashX = useTransform(sx, (v) => v * -9);
-  const dashY = useTransform(sy, (v) => v * -7);
   const spotX = useTransform(sx, (v) => `${50 + v * 38}%`);
   const spotY = useTransform(sy, (v) => `${42 + v * 34}%`);
 
@@ -237,14 +234,14 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       /* ============ 1. HERO ============ */
       case 'HERO':
         return (
-          <section id="hero-section" className="relative">
-            {/* ---------- Cinematic dark stage (full-bleed) ---------- */}
+          <section id="hero-section" className="relative w-full">
+            {/* ---------- Cinematic dark stage (full-bleed 100% screen width) ---------- */}
             <div
               onMouseMove={isDark ? handleStageMove : undefined}
               className={
                 isDark
-                  ? 'nd-stage nd-hairline-top relative left-1/2 -translate-x-1/2 w-screen rounded-b-[44px] -mt-28 sm:-mt-32'
-                  : 'relative'
+                  ? 'nd-stage nd-hairline-top relative w-full rounded-b-[44px] sm:rounded-b-[56px] pt-28 sm:pt-32 pb-16 sm:pb-20 overflow-hidden'
+                  : 'relative w-full pt-28 sm:pt-32 pb-10'
               }
             >
               {/* dark-theme cinematic decorations */}
@@ -277,7 +274,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                 </>
               )}
 
-              <div className={`relative max-w-5xl mx-auto px-4 sm:px-8 text-center space-y-8 ${isDark ? 'pt-36 sm:pt-40 pb-16 sm:pb-20' : 'pt-8 sm:pt-14 pb-10'}`}>
+              <div className="relative max-w-5xl mx-auto px-4 sm:px-8 text-center space-y-8 pt-4 sm:pt-6">
                 {/* Trust pill */}
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
@@ -397,47 +394,8 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   <span>تحلیل و بهینه‌سازی فروش</span>
                 </motion.div>
 
-                {/* Dashboard showcase — dark glass frame */}
-                <motion.div
-                  initial={{ opacity: 0, y: 44, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 1, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                  className="relative max-w-4xl mx-auto"
-                  style={{ x: dashX, y: dashY }}
-                >
-                  {isDark && <div className="nd-conic-ring" aria-hidden />}
-                  <div className={`relative rounded-[28px] sm:rounded-[32px] p-3 sm:p-4 ${isDark ? 'nd-glass-dark' : 'nd-card'}`}>
-                    <div className="flex items-center gap-2 px-2 pb-3">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/80" />
-                      <span className={`ms-3 flex-1 h-7 rounded-full grid place-items-center text-[10px] font-bold dir-ltr ${isDark ? 'bg-white/5 border border-white/10 text-slate-500' : 'bg-[color:var(--nd-bg)] border border-[color:var(--nd-line)] text-[color:var(--nd-faint)]'}`}>
-                        {personal.website}
-                      </span>
-                    </div>
-                    <div className={`rounded-[18px] sm:rounded-[22px] overflow-hidden border ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`} style={{ background: isDark ? 'linear-gradient(180deg,#141428,#0d0d1a)' : 'linear-gradient(180deg,#f7f6ff,#eef4ff)' }}>
-                      <IsometricDashboard theme={isDark ? 'dark' : 'light'} />
-                    </div>
-                  </div>
-
-                  {stats.slice(0, 2).map((s, i) => (
-                    <div
-                      key={i}
-                      className={`${isDark ? 'nd-glass-dark' : 'nd-card'} absolute hidden lg:flex items-center gap-2.5 rounded-2xl px-4 py-3 ${i === 0 ? '-right-10 top-8 nd-float' : '-left-12 bottom-10 nd-float-slow'}`}
-                    >
-                      <span className="w-9 h-9 rounded-xl grid place-items-center" style={isDark ? { background: 'rgba(255,255,255,0.08)', color: '#a5b4fc' } : { background: 'var(--nd-accent-soft)', color: '#4f46e5' }}>
-                        {React.createElement(iconFor(s.icon), { className: 'w-4 h-4' })}
-                      </span>
-                      <span>
-                        <span className={`block text-sm font-black dir-ltr text-right ${isDark ? 'text-white' : 'text-[color:var(--nd-ink)]'}`}>{s.value}</span>
-                        <span className={`block text-[10px] font-bold ${isDark ? 'text-slate-400' : 'text-[color:var(--nd-muted)]'}`}>{s.label}</span>
-                      </span>
-                    </div>
-                  ))}
-                </motion.div>
-
                 {/* Scroll cue */}
-                <div className="flex justify-center pt-2">
+                <div className="flex justify-center pt-4">
                   <ChevronLeft className={`w-5 h-5 nd-scroll-cue rotate-[-90deg] ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`} />
                 </div>
               </div>
@@ -1173,10 +1131,16 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
   };
 
   return (
-    <div className="space-y-6 md:space-y-10 py-4">
+    <div className="w-full space-y-6 md:space-y-10">
       {homeSections.map((sec) => (
         <SectionWrapper key={sec.id} pageKey="home" sectionName={sec.name}>
-          {renderSectionByName(sec.name)}
+          {sec.name === 'HERO' ? (
+            renderSectionByName(sec.name)
+          ) : (
+            <div className="max-w-6xl mx-auto px-4 sm:px-8">
+              {renderSectionByName(sec.name)}
+            </div>
+          )}
         </SectionWrapper>
       ))}
     </div>

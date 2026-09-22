@@ -10,3 +10,4 @@ coverage/
 # Cloudflare
 .wrangler/
 .dev.vars
+.dev-*.json

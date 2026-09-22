@@ -708,3 +708,84 @@ h1, h2, h3, h4, h5, h6 {
     animation: none !important;
   }
 }
+
+@keyframes dockOrbPop {
+  0% {
+    transform: scale(0.4) translateY(6px);
+    opacity: 0.2;
+  }
+  65% {
+    transform: scale(1.14) translateY(-2px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes iconRiseUp {
+  0% {
+    transform: translateY(26px) scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-3px) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* ==========================================================================
+   Smooth Theme Switch Transitions (View Transitions API & CSS Transition Fallback)
+   ========================================================================== */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.45s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-old(root) {
+  animation: 0.45s cubic-bezier(0.22, 1, 0.36, 1) both nd-theme-scale-out;
+}
+
+::view-transition-new(root) {
+  animation: 0.45s cubic-bezier(0.22, 1, 0.36, 1) both nd-theme-scale-in;
+}
+
+@keyframes nd-theme-scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.992);
+  }
+}
+
+@keyframes nd-theme-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(1.008);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* When theme is toggling, smoothly animate backgrounds, borders, and colors */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              color 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+

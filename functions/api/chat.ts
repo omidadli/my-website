@@ -165,14 +165,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         parts: [{ text: String(m.content || '').slice(0, 1200) }],
       }));
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: `${cfg.persona}\n\nاطلاعات سایت (تنها منبع حقیقت تو):\n${digest}` }] },
             contents: [...history, { role: 'user', parts: [{ text: question }] }],
-            generationConfig: { temperature: 0.6, maxOutputTokens: 700 },
+            generationConfig: {
+              temperature: 0.6,
+              maxOutputTokens: 700,
+            },
             safetySettings: [
               { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
               { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
@@ -184,7 +187,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
       if (res.ok) {
         const j: any = await res.json();
-        const text = String(j?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+        const parts = j?.candidates?.[0]?.content?.parts || [];
+        const text = String(parts[0]?.text || '').trim();
         if (text) {
           answer = text;
           mode = 'ai';

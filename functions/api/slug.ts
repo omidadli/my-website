@@ -47,7 +47,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (env.GEMINI_API_KEY) {
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -65,13 +65,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
                 ],
               },
             ],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 40 },
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 60,
+            },
           }),
         }
       );
       if (res.ok) {
         const data: any = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const textPart = parts.find((p: any) => p.text && !p.thought) || parts[0];
+        const text = textPart?.text || '';
         const slug = cleanSlug(text);
         if (slug) return json({ ok: true, slug, source: 'gemini' });
       }

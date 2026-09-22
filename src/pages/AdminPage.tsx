@@ -1001,7 +1001,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                         <button
                           onClick={async () => {
                             if (!confirm('این فایل حذف شود؟')) return;
-                            if (m.url.startsWith('/api/media/file/')) await api.deleteMedia(decodeURIComponent(m.url.replace('/api/media/file/', '')));
+                            const key = (m as any).key || (m.url.includes('key=') ? new URL(m.url, window.location.origin).searchParams.get('key') : decodeURIComponent(m.url.replace('/api/media/file/', '')));
+                            if (key) await api.deleteMedia(key);
                             removeMediaItem(m.id);
                             showToast('فایل حذف شد.');
                           }}

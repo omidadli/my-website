@@ -75,7 +75,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       httpMetadata: { contentType: file.type },
       customMetadata: { title, alt },
     });
-    const url = `/api/media/file/${key}`;
+    const url = `/api/media/file?key=${encodeURIComponent(key)}`;
     await env.DB.prepare(
       `INSERT INTO media (key, url, title, alt, size_kb, content_type, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
     ).bind(key, url, title, alt, sizeKb, file.type, now).run();
@@ -95,7 +95,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
   const b64 = btoa(bin);
   const key = `d1-${Date.now()}-${rand}`;
-  const url = `/api/media/file/${key}`;
+  const url = `/api/media/file?key=${encodeURIComponent(key)}`;
   await env.DB.prepare(
     `INSERT INTO media_files (id, name, content_type, size_kb, data_b64, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
   ).bind(key, title, file.type, sizeKb, b64, now).run();

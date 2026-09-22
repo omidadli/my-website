@@ -1,16 +1,27 @@
-import { Env, json } from '../../_shared';
+import { Env, json } from './_shared';
 
-/** GET /api/media/file/<key…> — streams a file from R2 (public read, write stays admin-only). */
-export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
-  const parts = Array.isArray(params.key) ? params.key : [params.key];
-  const key = parts.map(decodeURIComponent).join('/');
+/**
+ * GET /api/media/file?key=… (یا /api/media/file/…)
+ * فایل‌ها را از Cloudflare R2 یا پایگاه‌داده D1 استریم می‌کند.
+ * نام فایل بدون براکت [] طراحی شده تا با تمام APIهای Git و سیستم‌های ابری سازگار باشد.
+ */
+export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+  const url = new URL(request.url);
+  let key = url.searchParams.get('key');
+  if (!key) {
+    const match = url.pathname.match(/\/api\/media\/file\/(.+)/);
+    if (match) key = decodeURIComponent(match[1]);
+  }
+
   if (!key || key.includes('..') || !(key.startsWith('uploads/') || key.startsWith('d1-'))) {
     return json({ ok: false, error: 'کلید نامعتبر است.' }, { status: 400 });
   }
 
   // D1-stored file (free fallback when R2 is not activated)
   if (key.startsWith('d1-')) {
-    const row = await env.DB.prepare(`SELECT name, content_type, data_b64 FROM media_files WHERE id = ?1`).bind(key).first<{ name: string; content_type: string; data_b64: string }>();
+    const row = await env.DB.prepare(`SELECT name, content_type, data_b64 FROM media_files WHERE id = ?1`)
+      .bind(key)
+      .first<{ name: string; content_type: string; data_b64: string }>();
     if (!row) return json({ ok: false, error: 'فایل یافت نشد.' }, { status: 404 });
     const binStr = atob(row.data_b64);
     const bytes = new Uint8Array(binStr.length);

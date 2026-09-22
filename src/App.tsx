@@ -5,7 +5,6 @@ import { ContentProvider, useContent } from './context/ContentContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { BackgroundBlobs } from './components/BackgroundBlobs';
-import { QuickActionDock } from './components/QuickActionDock';
 import { CustomCursor } from './components/CustomCursor';
 import { AdminFloatingBar } from './components/cms/AdminFloatingBar';
 import { AdminLoginModal } from './components/cms/AdminLoginModal';
@@ -36,19 +35,43 @@ function MainLayout() {
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<CaseStudy | null>(null);
   const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
+  const [isThemeTransitioning, setIsThemeTransitioning] = useState<boolean>(false);
 
   const { isAdmin, setIsAdmin, data } = useContent();
 
   const handleToggleTheme = useCallback(() => {
-    setTheme((t) => {
-      const next: Theme = t === 'light' ? 'dark' : 'light';
-      try {
-        localStorage.setItem('nd-theme', next);
-      } catch {
-        /* private mode */
+    // Add temporary transitioning class for smooth CSS token interpolation
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.add('theme-transitioning');
+    }
+    setIsThemeTransitioning(true);
+
+    const applyNext = () => {
+      setTheme((t) => {
+        const next: Theme = t === 'light' ? 'dark' : 'light';
+        try {
+          localStorage.setItem('nd-theme', next);
+        } catch {
+          /* private mode */
+        }
+        return next;
+      });
+    };
+
+    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
+      (document as any).startViewTransition(() => {
+        applyNext();
+      });
+    } else {
+      applyNext();
+    }
+
+    setTimeout(() => {
+      setIsThemeTransitioning(false);
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('theme-transitioning');
       }
-      return next;
-    });
+    }, 480);
   }, []);
 
   // Read initial page & admin trigger from URL hash or pathname on load
@@ -132,7 +155,45 @@ function MainLayout() {
   };
 
   return (
-    <div className="min-h-screen relative flex flex-col transition-colors duration-500 font-['Vazirmatn',sans-serif] nd-bg overflow-x-hidden">
+    <motion.div
+      animate={
+        isThemeTransitioning
+          ? {
+              scale: [0.993, 1],
+              opacity: [0.86, 1],
+            }
+          : {
+              scale: 1,
+              opacity: 1,
+            }
+      }
+      transition={{
+        duration: 0.46,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      className="min-h-screen relative flex flex-col transition-colors duration-500 font-['Vazirmatn',sans-serif] nd-bg overflow-x-hidden origin-center"
+    >
+      {/* Subtle Premium Ambient Theme Wash Overlay */}
+      <AnimatePresence>
+        {isThemeTransitioning && (
+          <motion.div
+            initial={{ opacity: 0.45 }}
+            animate={{ opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.48, ease: 'easeOut' }}
+            className="pointer-events-none fixed inset-0 z-[9998]"
+            style={{
+              background:
+                theme === 'dark'
+                  ? 'radial-gradient(circle at 50% 12%, rgba(129, 140, 248, 0.16), transparent 75%)'
+                  : 'radial-gradient(circle at 50% 12%, rgba(255, 255, 255, 0.45), transparent 75%)',
+              backdropFilter: 'blur(2px)',
+              WebkitBackdropFilter: 'blur(2px)',
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* SEO meta tags — driven by the CMS (global, per-page and per-post) */}
       <SEOHead currentPage={currentPage} blogPostId={selectedBlogPostId} />
 
@@ -156,7 +217,11 @@ function MainLayout() {
       />
 
       {/* Main Content Area with Cinematic Motion Page Transitions */}
-      <main className="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-8 relative z-10 pb-10 pt-28 sm:pt-32">
+      <main
+        className={`flex-grow w-full relative z-10 pb-10 ${
+          currentPage === 'home' ? '' : 'max-w-6xl mx-auto px-4 sm:px-8 pt-28 sm:pt-32'
+        }`}
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={currentPage}
@@ -263,16 +328,13 @@ function MainLayout() {
         onClose={() => setIsAdminModalOpen(false)}
       />
 
-      {/* Bottom Floating Quick Action Dock */}
-      <QuickActionDock theme={theme} currentPage={currentPage} onNavigate={handleNavigate} />
-
       {/* Footer */}
       <Footer
         theme={theme}
         onNavigate={handleNavigate}
         onOpenAdminModal={() => setIsAdminModalOpen(true)}
       />
-    </div>
+    </motion.div>
   );
 }
 
