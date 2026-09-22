@@ -25,13 +25,7 @@ export const SCENES: Record<string, MascotSceneDef> = {
 
   // finite one-shot scenes (auto → idle)
   wave: { frames: [{ f: 'wave', ms: 2600 }] },
-  greet: {
-    frames: [
-      { f: 'wave', ms: 1500 },
-      { f: 'excited', ms: 1600 },
-      { f: 'happy', ms: 1800 },
-    ],
-  },
+  greet: { frames: [{ f: 'wave', ms: 2600 }] },
   celebrate: {
     frames: [
       { f: 'excited', ms: 1600 },

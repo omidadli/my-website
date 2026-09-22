@@ -3,20 +3,25 @@ import { mascot } from './mascotBus';
 import { Page } from '../../types';
 
 /**
- * useMascotEvents — the mascot's "small talk" brain.
+ * useMascotEvents — the mascot's social brain. EVERY act has a reason.
  *
- * Opening line:
- *   first visit  → greets and ASKS THE VISITOR'S NAME (bubble with input)
- *   named visitor→ «سلام سارا، ظهرت بخیر! حالت چطوره؟ امروز چه کمکی از
- *                   دستم برمیاد؟»  (time-of-day aware)
- *   anonymous    → warm generic welcome-back
- *
- * Ambient chatter: every ~30s (while the tab is visible, no chat open, and
- * he's idle) he drops one natural line — tips, guidance, a nudge toward the
- * chat — so visitors learn he SPEAKS and assists. Capped per session.
- *
- * Journey reactions: page landings, copy, contact-form success, booking
- * success, exit intent — each with the most natural scene.
+ * entry
+ *   first v6 visit      → ONE wave + asks the visitor's name (input bubble)
+ *   named visitor       → «سلام {name}، {وقت بخیر}! حالت چطوره؟ امروز چه
+ *                          کمکی از دستم برمیاد؟»
+ *   anonymous return    → warm one-act welcome
+ *   returning, no name  → soft name-ask (once per session)
+ * journey
+ *   first land on page  → one contextual tip for THAT page
+ *   copies text         → celebrate (helped you)
+ *   contact form ok     → celebrate
+ *   booking ok          → celebrate
+ *   genuinely leaving   → sad goodbye (dwell ≥30s, cursor really exits the
+ *                         top of the window, once per session)
+ * ambient (purposeful, ≤4/session)
+ *   every 45s, ONLY if the tab is visible, chat closed, he's idle, nothing
+ *   is on screen and the user isn't scrolling — and the line is tied to the
+ *   page the visitor is actually on.
  */
 
 export interface MascotCue {
@@ -28,8 +33,11 @@ export interface MascotCue {
 
 const SILENCE_KEY = 'nd-mascot-muted';
 const NAME_KEY = 'nd-mascot-name';
-const SEEN_KEY = 'nd-mascot-seen';
 const SKIP_KEY = 'nd-mascot-skip';
+// fresh scheme key → everyone (incl. previous visitors) gets asked once
+const SCHEME_KEY = 'nd-mascot-v6';
+const SESSION_ASKED = 'nd-mascot-v6-asked';
+const SESSION_EXIT = 'nd-mascot-v6-exit';
 
 const rate = { lastText: null as string | null, lastAt: 0 };
 
@@ -39,7 +47,7 @@ export function mascotCue(scene: string, text: string, ms = 4200, force = false,
   } catch {
     /* private mode */
   }
-  if (document.body.classList.contains('chat-open')) return; // chat owns him then
+  if (document.body.classList.contains('chat-open')) return; // chat owns him
   const now = Date.now();
   if (!force && now - rate.lastAt < 18000) return;
   if (text === rate.lastText) return;
@@ -49,7 +57,7 @@ export function mascotCue(scene: string, text: string, ms = 4200, force = false,
   mascot.scene(scene, ms);
 }
 
-/** Force a scene with no bubble (chat wiring etc.). */
+/** Force a scene, no bubble (chat wiring). */
 export function mascotAct(sc: string, ms?: number) {
   mascot.scene(sc, ms);
 }
@@ -64,34 +72,40 @@ function getName(): string {
 
 function timeGreet(): string {
   const h = new Date().getHours();
-  if (h >= 5 && h < 11) return 'صبحت بخیر';
-  if (h >= 11 && h < 15) return 'ظهرت بخیر';
+  if (h >= 5 && h < 12) return 'صبحت بخیر';
+  if (h >= 12 && h < 15) return 'ظهرت بخیر';
   if (h >= 15 && h < 19) return 'عصرت بخیر';
   return 'شبت بخیر';
 }
 
-const PAGE_CUES: Partial<Record<Page, { scene: string; text: string }>> = {
-  services: { scene: 'talk', text: 'اینجا خدمات رو کامل توضیح دادیم؛ سوالی بود بپرس.' },
-  portfolio: { scene: 'flex', text: 'نتیجه‌ها خودشون حرف می‌زنن؛ یک نگاه بنداز.' },
-  about: { scene: 'laugh', text: 'این منم! یه سر به مسیر و تخصص‌هام بزن.' },
-  blog: { scene: 'think', text: 'مقاله‌های تازه درباره رشد و دیتا منتشر شده.' },
-  contact: { scene: 'wave', text: 'برای شروع همکاری، همین‌جا پیام بذار.' },
-  projects: { scene: 'talk', text: 'پروژه‌های جاری رو ببین؛ شاید جذاب بود.' },
-  products: { scene: 'celebrate', text: 'محصولات آماده؛ سریع‌تر از پروژه اختصاصی!' },
+const PAGE_CUES: Partial<Record<Page, string>> = {
+  services: 'هر خدمتی که اینجا می‌بینی، با یه جلسه‌ی رایگان شروع می‌شه؛ سوالی بود بپرس.',
+  portfolio: 'این‌جا نتیجه‌های واقعی پروژه‌هاست؛ عدد‌ها خودشون حرف می‌زنن.',
+  about: 'این منم! مسیر و تخصص‌هام رو این‌جا نوشتم.',
+  blog: 'مقاله‌های تازه درباره رشد و دیتا این‌جاست؛ هر کدوم خواستی بگو خلاصه‌ش بگم.',
+  contact: 'فرم همین صفحه رو پر کن؛ خیلی زود جواب می‌گیری.',
+  projects: 'پروژه‌های در جریان رو این‌جا می‌بینی؛ شاید یکی‌ش به کارت اومد.',
+  products: 'محصولات آماده‌ان؛ سریع‌تر از پروژه‌ی اختصاصی راه می‌افتن.',
 };
 
-type Ambient = (name: string) => { scene: string; text: string };
-const AMBIENT: Ambient[] = [
-  () => ({ scene: 'idle', text: 'هر سوالی از خدمات یا قیمت‌ها داری، همین‌جا ازم بپرس.' }),
-  () => ({ scene: 'wave', text: 'برای گفتگوی مستقیم، روی خودم کلیک کن؛ در خدمتم.' }),
-  () => ({ scene: 'idle', text: 'صفحه‌ی نمونه‌کارها پر از نتیجه‌های واقعیه؛ یه سر بزن.' }),
-  (n) => ({ scene: 'idle', text: n ? `${n}، اگه راهنمایی خواستی، من همین دوره‌تم.` : 'اگه گم شدی، منوی بالا راهنماییت می‌کنه.' }),
-  () => ({ scene: 'think', text: 'راستی، بخش وبلاگ مقاله‌های کاربردی درباره رشد داره.' }),
-  (n) => ({ scene: 'flex', text: `${n ? n + '، ' : ''}پیشنهاد ویژه‌ی من: صفحه‌ی نمونه‌کارها رو از دست نده.` }),
-];
+// ambient lines keyed by context (page-aware, purposeful)
+function ambientLine(page: Page, name: string): { scene: string; text: string } | null {
+  const n = name ? `${name}، ` : '';
+  const onPage: Partial<Record<Page, string>> = {
+    home: 'اگه دنبال رشد فروشی، بخش خدمات رو یه ببین؛ از اون‌جا همه‌چیز شروع می‌شه.',
+    services: 'سوالی درباره‌ی هر کدوم از خدمات داری، همون‌جا ازم بپرس.',
+    portfolio: 'دوست داری یه نمونه‌کار مشابه کسب‌وکار خودت رو بهت معرفی کنم؟ از چت بپرس.',
+    blog: 'مقاله‌ی خاصی مدنظرته؟ بگو موضوعش رو پیدا کنم.',
+    contact: 'نیم‌ساعت مشاوره‌ی اول رایگانه؛ تقویم همین پایینه.',
+  };
+  if (onPage[page]) return { scene: 'idle', text: n + onPage[page]! };
+  return { scene: 'idle', text: `${n}هر جا گم شدی، من همین‌جام؛ بپرس تا راهنماییت کنم.` };
+}
 
 export function useMascotEvents(currentPage: Page) {
   const nameRef = useRef(getName());
+  const pageRef = useRef(currentPage);
+  pageRef.current = currentPage;
 
   useEffect(() => {
     const onName = (e: Event) => {
@@ -99,59 +113,83 @@ export function useMascotEvents(currentPage: Page) {
     };
     window.addEventListener('nd:mascot-name', onName);
 
-    // ---- opening line ----------------------------------------------------
-    let returning = false;
-    let alreadyAsked = false;
+    // ---------- storage state ----------
+    let schemeSeen = false;
+    let skipped = false;
     try {
-      returning = localStorage.getItem(SEEN_KEY) === '1';
-      alreadyAsked = localStorage.getItem(SKIP_KEY) === '1' || !!getName();
-      localStorage.setItem(SEEN_KEY, '1');
+      schemeSeen = localStorage.getItem(SCHEME_KEY) === '1';
+      skipped = localStorage.getItem(SKIP_KEY) === '1';
+      localStorage.setItem(SCHEME_KEY, '1');
     } catch {
       /* private mode */
     }
 
+    const sessionAsked = (() => {
+      try {
+        if (sessionStorage.getItem(SESSION_ASKED) === '1') return true;
+        sessionStorage.setItem(SESSION_ASKED, '1');
+      } catch {
+        /* private mode */
+      }
+      return false;
+    })();
+
+    // ---------- entry: exactly ONE purposeful act ----------
     let openT: ReturnType<typeof setTimeout>;
-    if (!returning && !alreadyAsked) {
-      // first meeting: greet + ask the visitor's name
+    if (!schemeSeen && !skipped) {
+      // first meeting: greet once, then ask the name
       openT = setTimeout(() => {
-        mascotCue('greet', 'سلام، خیلی خوش اومدی! اسمت چیه؟', 14000, true, true);
-      }, 2200);
+        mascotCue('wave', 'سلام، خیلی خوش اومدی! اسمت چیه؟ دوست دارم درست صدامت کنم.', 24000, true, true);
+      }, 2400);
     } else {
       const n = nameRef.current;
       openT = setTimeout(
         () => {
           if (n) {
-            mascotCue('wave', `سلام ${n}، ${timeGreet()}! حالت چطوره؟ امروز چه کمکی از دستم برمیاد؟`, 6200, true);
+            mascotCue('wave', `سلام ${n}، ${timeGreet()}! حالت چطوره؟ امروز چه کمکی از دستم برمیاد؟`, 6400, true);
           } else {
-            mascotCue('greet', 'سلام! دوباره خوش اومدی. چه کاری برات انجام بدم؟', 5200, true);
+            mascotCue('wave', 'سلام! خوش برگشتی. چه کاری برات انجام بدم؟', 5200, true);
           }
         },
-        returning ? 1600 : 1400
+        1600
       );
     }
 
-    // ---- ambient chatter (proves he talks) --------------------------------
+    // ---------- ambient: purposeful, page-aware, capped ----------
     let ambT: ReturnType<typeof setTimeout> | null = null;
-    let ambStep = 0;
-    let ambientCount = 0;
+    let ambCount = 0;
+    let lastScroll = 0;
+    const onScrollMark = () => {
+      lastScroll = Date.now();
+    };
+    window.addEventListener('scroll', onScrollMark, { passive: true });
+
     const armAmbient = () => {
       if (ambT) clearTimeout(ambT);
       ambT = setTimeout(() => {
-        const visible = document.visibilityState === 'visible';
-        const chatOpen = document.body.classList.contains('chat-open');
-        const idleish = mascot.currentScene === 'idle';
-        if (visible && !chatOpen && idleish && ambientCount < 6) {
-          const line = AMBIENT[ambStep % AMBIENT.length](nameRef.current);
-          ambStep += 1;
-          ambientCount += 1;
-          mascotCue(line.scene, line.text, 4800);
+        const conditions =
+          document.visibilityState === 'visible' &&
+          !document.body.classList.contains('chat-open') &&
+          mascot.currentScene === 'idle' &&
+          Date.now() - rate.lastAt > 40000 && // nothing on screen lately
+          Date.now() - lastScroll > 8000 && // not mid-reading/scrolling
+          ambCount < 4;
+        if (conditions) {
+          // soft name-ask has priority exactly once per session
+          if (!nameRef.current && !skipped && !sessionAsked) {
+            mascotCue('wave', 'راستی، اسمت چیه؟ دوست دارم درست صدامت کنم.', 20000, true, true);
+          } else {
+            const line = ambientLine(pageRef.current, nameRef.current);
+            if (line) mascotCue(line.scene, line.text, 5200);
+          }
+          ambCount += 1;
         }
         armAmbient();
-      }, 30000);
+      }, 45000);
     };
     armAmbient();
 
-    // ---- journey reactions -------------------------------------------------
+    // ---------- journey reactions ----------
     const onCopy = () => mascotCue('celebrate', 'کپی شد؛ بردار!', 2400);
     document.addEventListener('copy', onCopy);
 
@@ -161,28 +199,48 @@ export function useMascotEvents(currentPage: Page) {
     const onBooked = () => mascotCue('celebrate', 'جلسه‌ت رزرو شد! می‌بینمت.', 5000, true);
     window.addEventListener('nd:booking-success', onBooked);
 
-    let exitUsed = false;
-    const onOut = (e: MouseEvent) => {
-      if (e.relatedTarget || e.clientY > 12) return;
-      if (exitUsed) return;
+    // exit intent — ONLY a real exit: cursor leaves through the top after a
+    // real visit (≥30s dwell), once per session
+    let exitUsed = (() => {
+      try {
+        return sessionStorage.getItem(SESSION_EXIT) === '1';
+      } catch {
+        return false;
+      }
+    })();
+    const bornAt = Date.now();
+    const onDocLeave = (e: MouseEvent) => {
+      if (e.clientY > 0 || e.relatedTarget) return; // not leaving upward
+      if (exitUsed || Date.now() - bornAt < 30000) return;
       exitUsed = true;
+      try {
+        sessionStorage.setItem(SESSION_EXIT, '1');
+      } catch {
+        /* private mode */
+      }
       const n = nameRef.current;
-      mascotCue('sad', n ? `${n}، قبل از رفتن یه لحظه... سوالی داشتی در خدمتم.` : 'قبل از رفتن یه لحظه... سوالی داشتی در خدمتم.', 4600, true);
+      mascotCue(
+        'sad',
+        n ? `${n}، قبل از رفتن یه سوال داشتی، همون رو ازم بپرس.` : 'قبل از رفتن، اگه سوالی بود من همین‌جام.',
+        4600,
+        true
+      );
     };
-    document.addEventListener('mouseout', onOut);
+    document.documentElement.addEventListener('mouseleave', onDocLeave);
 
     return () => {
       clearTimeout(openT);
       if (ambT) clearTimeout(ambT);
       window.removeEventListener('nd:mascot-name', onName);
+      window.removeEventListener('scroll', onScrollMark);
       document.removeEventListener('copy', onCopy);
-      document.removeEventListener('mouseout', onOut);
+      document.documentElement.removeEventListener('mouseleave', onDocLeave);
       window.removeEventListener('nd:form-success', onFormOk);
       window.removeEventListener('nd:booking-success', onBooked);
     };
   }, []);
 
-  // ---- page-change cue -----------------------------------------------------
+  // ---------- first landing on a page: one contextual tip ----------
   useEffect(() => {
     if (currentPage === 'admin') return;
     const key = `nd-mascot-pg-${currentPage}`;
@@ -194,9 +252,9 @@ export function useMascotEvents(currentPage: Page) {
       first = true;
     }
     if (!first) return;
-    const cue = PAGE_CUES[currentPage];
-    if (!cue) return;
-    const t = setTimeout(() => mascotCue(cue.scene, cue.text, 4200), 2600);
+    const line = PAGE_CUES[currentPage];
+    if (!line) return;
+    const t = setTimeout(() => mascotCue('idle', line, 5000), 2800);
     return () => clearTimeout(t);
   }, [currentPage]);
 }

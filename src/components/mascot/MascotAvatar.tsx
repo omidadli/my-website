@@ -24,10 +24,10 @@ const META = sprites as unknown as Record<string, SpriteMeta>;
 
 const ALL_FRAMES = Array.from(new Set(Object.values(SCENES).flatMap((s) => s.frames.map((f) => f.f))));
 
-const TURN_Y = 9; // max head-turn, degrees
-const TURN_X = 5.5; // max head tilt, degrees
-const DRIFT_X = 0.012; // body counter-translate (× width)
-const DRIFT_Y = 0.008;
+const TURN_Y = 17; // max head-turn, degrees — clearly visible
+const TURN_X = 10; // max head tilt, degrees
+const DRIFT_X = 0.045; // body follow-translate (× width) — sells the 3D turn
+const DRIFT_Y = 0.026;
 const GLANCE_AFTER = 4200; // ms without mouse → he starts glancing around
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -116,12 +116,12 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
         tgt.y = 0.12 * Math.sin(t * 0.33 + 1.1);
       }
 
-      cur.x += (tgt.x - cur.x) * 0.07;
-      cur.y += (tgt.y - cur.y) * 0.07;
+      cur.x += (tgt.x - cur.x) * 0.09;
+      cur.y += (tgt.y - cur.y) * 0.09;
 
       const w = root.getBoundingClientRect().width;
       body.style.transform =
-        `perspective(720px) rotateY(${(cur.x * TURN_Y).toFixed(2)}deg) rotateX(${(-cur.y * TURN_X).toFixed(2)}deg) ` +
+        `perspective(520px) rotateY(${(cur.x * TURN_Y).toFixed(2)}deg) rotateX(${(-cur.y * TURN_X).toFixed(2)}deg) ` +
         `translate3d(${(cur.x * DRIFT_X * w).toFixed(2)}px, ${(cur.y * DRIFT_Y * w).toFixed(2)}px, 0)`;
 
       raf = requestAnimationFrame(tick);
@@ -256,7 +256,8 @@ export function MascotAvatar() {
     mascot.scene('wave');
   };
 
-  const askVisible = !!bubble?.askName && bubble.shown === bubble.text;
+  // the input row appears right away so the visitor can start typing
+  const askVisible = !!bubble?.askName;
 
   return (
     <div ref={rootRef} className="mascot-root fixed bottom-0 right-2 z-[50] sm:right-5">
@@ -281,6 +282,10 @@ export function MascotAvatar() {
                   maxLength={24}
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
+                  onFocus={() => {
+                    // user is answering — stop the bubble from dismissing
+                    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+                  }}
                   placeholder="اسمت چیه؟"
                   className="mascot-ask-input"
                   aria-label="اسم شما"
