@@ -2,39 +2,48 @@
  * mascotBus — a tiny global event bus that lets any part of the app drive
  * the avatar's behavior (the "Mascot State Machine" pattern):
  *
- *   User Action → Product State → mascot.set(mood) → Mascot Reaction
+ *   User Action → Product State → mascot.set(pose) → Mascot Reaction
  *
- * Moods: idle | happy | excited | thinking | talking | sad | surprised
- * `set(mood, ttl)` holds a mood for `ttl` ms, then falls back to idle.
+ * Each "pose" maps 1:1 to a sprite (a full-body render of the character with
+ * its own facial expression AND body language — see public/mascot/*.webp).
+ * `set(pose)` holds the pose for a few seconds, then falls back to idle.
  */
 
-export type MascotMood =
-  | 'idle'
-  | 'happy'
-  | 'excited'
-  | 'thinking'
-  | 'talking'
-  | 'sad'
-  | 'surprised';
+export type MascotPose =
+  | 'idle' // arms crossed, warm smile
+  | 'wave' // waving hello
+  | 'happy' // laughing, eyes squinted
+  | 'excited' // fist pump
+  | 'thinking' // hand on chin, looking up
+  | 'talking' // explaining gesture
+  | 'sad' // apologetic, shoulders down
+  | 'surprised' // gasp, hands up
+  | 'confused' // scratching head
+  | 'confident' // sunglasses, arms crossed
+  | 'sleepy'; // yawning
 
-export type MascotListener = (mood: MascotMood) => void;
+export type MascotListener = (pose: MascotPose) => void;
 
-const HOLD_MS: Record<MascotMood, number> = {
+const HOLD_MS: Record<MascotPose, number> = {
   idle: 0,
-  happy: 2600,
-  excited: 3200,
+  wave: 3200,
+  happy: 2800,
+  excited: 3000,
   thinking: 12000,
   talking: 4200,
-  sad: 3800,
+  sad: 3600,
   surprised: 2200,
+  confused: 3000,
+  confident: 3400,
+  sleepy: 3600,
 };
 
 class MascotBus {
   private listeners = new Set<MascotListener>();
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private current: MascotMood = 'idle';
+  private current: MascotPose = 'idle';
 
-  get mood(): MascotMood {
+  get pose(): MascotPose {
     return this.current;
   }
 
@@ -46,15 +55,15 @@ class MascotBus {
     };
   }
 
-  /** Set a mood; auto-reverts to idle after its hold time. */
-  set(mood: MascotMood, ttl?: number) {
+  /** Set a pose; auto-reverts to idle after its hold time. */
+  set(pose: MascotPose, ttl?: number) {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    this.current = mood;
-    this.listeners.forEach((fn) => fn(mood));
-    const hold = ttl ?? HOLD_MS[mood];
+    this.current = pose;
+    this.listeners.forEach((fn) => fn(pose));
+    const hold = ttl ?? HOLD_MS[pose];
     if (hold > 0) {
       this.timer = setTimeout(() => {
         this.current = 'idle';

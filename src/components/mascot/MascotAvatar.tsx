@@ -1,82 +1,74 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { mascot, MascotMood } from './mascotBus';
-import { MascotCue } from './useMascotEvents';
+import { mascot, MascotPose } from './mascotBus';
+import { MascotCue, mascotSay, CLICK_LINES, HOVER_LINES, pick } from './useMascotEvents';
+import sprites from './sprites.json';
 
 /**
- * MascotAvatar — the site owner's cutout portrait living in the bottom-right
- * corner as the site's intelligent assistant.
+ * MascotAvatar — a full-body 3D character (Pixar-style render of the site
+ * owner) living in the bottom-right corner as the site's intelligent
+ * assistant.
  *
- * Eyes: pupil positions were measured from the photo with MediaPipe FaceMesh
- * (refined iris landmarks). Pupils track the cursor with relative-vector
- * math, a dead-zone and two-speed easing (fast catch-up → slow settle), plus
- * random micro-saccades so the gaze feels organic.
- *
- * Eyelids: skin-colored overlays sampled from the photo blink on a natural
- * schedule (2–6s, occasional double-blinks) and react to mood.
- *
- * Moods (driven by mascotBus from real site events — see useMascotEvents):
- * idle · happy · excited · thinking · talking · sad · surprised
+ * Every mood is a real sprite with its own facial expression AND body
+ * language (wave, fist-pump, hand-on-chin, sunglasses power pose, yawning…).
+ * Sprites crossfade on pose change; pupils track the cursor using per-sprite
+ * iris coordinates measured with MediaPipe FaceMesh; the whole character gets
+ * a subtle parallax + per-pose body animation. Clicking it opens the chat.
  */
 
-const IMG_W = 520;
-const IMG_H = 415;
-
-// viewer-left eye, viewer-right eye (normalized to the image)
-const EYES = [
-  { cx: 0.409918134029095, cy: 0.4768268792026014, r: 0.01545999264269716 },
-  { cx: 0.5915931554941031, cy: 0.4707462747412992, r: 0.015935624480404465 },
+const POSES: MascotPose[] = [
+  'idle', 'wave', 'happy', 'excited', 'thinking', 'talking',
+  'sad', 'surprised', 'confused', 'confident', 'sleepy',
 ];
 
-// pupil travel as a fraction of eye radius
-const GAZE = 2.1;
-// head parallax (fraction of widget width) & tilt (deg)
-const HEAD_X = 0.016;
-const HEAD_Y = 0.01;
-const HEAD_R = 2.2;
+type Eye = { cx: number; cy: number; r: number };
+type SpriteMeta = { src: string; w: number; h: number; eyes: Eye[] | null };
+const META = sprites as unknown as Record<string, SpriteMeta>;
 
-const CLICK_LINES: Array<[MascotMood, string]> = [
-  ['happy', 'بله؟ 🙌'],
-  ['excited', 'سرباز! 🫡'],
-  ['surprised', 'وای، غافلگیرم کردی!'],
-];
-const HOVER_LINES = ['آفرین که این‌جایی 😊', 'یه چیز بگم؟ 💬', 'سلام رفیق!'];
+// poses whose artwork already closes/hides the eyes → don't draw pupils there
+const NO_PUPILS: Set<MascotPose> = new Set(['confident', 'happy']);
+
+// pupil travel relative to the sprite's own iris radius
+const GAZE = 1.3;
+// body parallax (fraction of widget width) & tilt
+const BODY_X = 0.014;
+const BODY_Y = 0.008;
+const BODY_R = 1.6;
+const DEAD_ZONE = 22; // px — pupils rest when the cursor is basically on the face
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
 export function MascotAvatar() {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const headRef = useRef<HTMLDivElement | null>(null);
-  const glowRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const pupilRefs = useRef<(HTMLSpanElement | null)[]>([]);
-  const lidRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
-  const [mood, setMood] = useState<MascotMood>('idle');
-  const moodRef = useRef<MascotMood>('idle');
-  moodRef.current = mood;
-  const bubbleId = useRef(0);
+  const [pose, setPose] = useState<MascotPose>('idle');
+  const poseRef = useRef<MascotPose>('idle');
+  poseRef.current = pose;
+
   const [bubble, setBubble] = useState<{ id: number; text: string; shown: string } | null>(null);
+  const bubbleId = useRef(0);
   const bubbleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const typeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typeInt = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ---------------------------------------------------------------- moods
-  useEffect(() => mascot.subscribe(setMood), []);
+  // ---------------------------------------------------------------- poses
+  useEffect(() => mascot.subscribe(setPose), []);
 
   // ------------------------------------------------------------- bubbles
   const showBubble = useCallback((text: string, ms: number) => {
     bubbleId.current += 1;
-    const id = bubbleId.current;
-    setBubble({ id, text, shown: '' });
+    setBubble({ id: bubbleId.current, text, shown: '' });
     let i = 0;
-    if (typeTimer.current) clearInterval(typeTimer.current);
-    typeTimer.current = setInterval(() => {
+    if (typeInt.current) clearInterval(typeInt.current);
+    typeInt.current = setInterval(() => {
       i += 1;
       setBubble((b) => (b ? { ...b, shown: text.slice(0, i) } : b));
-      if (i >= text.length && typeTimer.current) {
-        clearInterval(typeTimer.current);
-        typeTimer.current = null;
+      if (i >= text.length && typeInt.current) {
+        clearInterval(typeInt.current);
+        typeInt.current = null;
       }
-    }, 22);
+    }, 20);
     if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
     bubbleTimer.current = setTimeout(() => setBubble(null), ms);
   }, []);
@@ -91,63 +83,52 @@ export function MascotAvatar() {
     return () => {
       window.removeEventListener('mascot:cues', onCue);
       if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
-      if (typeTimer.current) clearInterval(typeTimer.current);
+      if (typeInt.current) clearInterval(typeInt.current);
     };
   }, [showBubble]);
 
-  // ------------------------------------------------ animation brain
+  // -------------------------------------------------- eye/body animation
   useEffect(() => {
     const root = rootRef.current;
-    const head = headRef.current;
-    const glow = glowRef.current;
-    const pupils = pupilRefs.current.filter(Boolean) as HTMLSpanElement[];
-    const lids = lidRefs.current.filter(Boolean) as HTMLSpanElement[];
-    if (!root || !head || !glow || pupils.length !== 2 || lids.length !== 2) return;
-
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) return; // fully static; bubbles still work
+    const body = bodyRef.current;
+    if (!root || !body) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     let raf = 0;
-    let running = false;
-    // gaze: -1..1 eased target
     const cur = { x: 0, y: 0 };
     const tgt = { x: 0, y: 0 };
-    const fast = { x: 0, y: 0 }; // quick component
-    let saccade = { x: 0, y: 0, until: 0, next: performance.now() + 2600 };
-    // blink
-    let blink = 0; // 0 open .. 1 closed
-    let blinkPhase: 'none' | 'closing' | 'opening' = 'none';
-    let nextBlink = performance.now() + 1800 + Math.random() * 2600;
+    const fast = { x: 0, y: 0 };
     let mouse: { x: number; y: number } | null = null;
-    const bornAt = performance.now();
-
-    const eyePx = () => {
-      const w = root.getBoundingClientRect().width;
-      return EYES.map((e) => ({ ...e, px: e.cx * w, py: e.cy * (w * (IMG_H / IMG_W)), r: e.r * w }));
-    };
+    let saccade = { x: 0, y: 0, until: 0, next: 2400 };
 
     const tick = (now: number) => {
-      const m = moodRef.current;
+      const p = poseRef.current;
+      const meta = META[p];
 
-      // ---- gaze target per mood ----
-      if (m === 'thinking') {
-        const t = (now - bornAt) / 1000;
-        tgt.x = -0.5 + 0.22 * Math.sin(t * 0.9);
-        tgt.y = -0.72 + 0.1 * Math.sin(t * 1.6 + 1);
-      } else if (m === 'sad') {
+      // ---- gaze target ----
+      if (p === 'thinking' || p === 'confused') {
+        // artwork already looks away; add a soft roaming drift
+        const t = now / 1000;
+        tgt.x = 0.12 * Math.sin(t * 0.8);
+        tgt.y = -0.08;
+      } else if (p === 'sleepy' || p === 'sad' || NO_PUPILS.has(p) || !meta?.eyes) {
         tgt.x = 0;
-        tgt.y = 0.78;
+        tgt.y = 0;
       } else if (mouse) {
-        const eyes = eyePx();
-        const cx = (eyes[0].px + eyes[1].px) / 2;
-        const cy = (eyes[0].py + eyes[1].py) / 2;
-        const dx = mouse.x - cx;
-        const dy = mouse.y - cy;
+        const rect = root.getBoundingClientRect();
+        const fx = rect.left + rect.width / 2;
+        const fy = rect.top + rect.height * (meta.eyes[0]?.cy ?? 0.35);
+        const dx = mouse.x - fx;
+        const dy = mouse.y - fy;
         const dist = Math.hypot(dx, dy) || 1;
-        const norm = Math.min(1, Math.max(dist, 60) / (window.innerWidth * 0.42));
-        const dead = dist < 26 ? 0 : (dist - 26) / dist;
-        tgt.x = clamp((dx / dist) * norm * dead, -1, 1);
-        tgt.y = clamp((dy / dist) * norm * dead, -1, 1);
+        if (dist < DEAD_ZONE) {
+          tgt.x = 0;
+          tgt.y = 0;
+        } else {
+          const norm = Math.min(1, dist / (window.innerWidth * 0.4));
+          tgt.x = clamp((dx / dist) * norm, -1, 1);
+          tgt.y = clamp((dy / dist) * norm, -1, 1);
+        }
       } else {
         tgt.x = 0;
         tgt.y = 0;
@@ -156,13 +137,13 @@ export function MascotAvatar() {
       // ---- micro-saccades ----
       let sx = 0;
       let sy = 0;
-      if (m !== 'thinking' && m !== 'sad') {
+      if (!NO_PUPILS.has(p) && p !== 'sleepy' && p !== 'sad') {
         if (now > saccade.next && now > saccade.until) {
           saccade = {
-            x: (Math.random() - 0.5) * 0.24,
-            y: (Math.random() - 0.5) * 0.16,
-            until: now + 90 + Math.random() * 90,
-            next: now + 2200 + Math.random() * 3400,
+            x: (Math.random() - 0.5) * 0.22,
+            y: (Math.random() - 0.5) * 0.14,
+            until: now + 90 + Math.random() * 80,
+            next: now + 2300 + Math.random() * 3200,
           };
         }
         if (now < saccade.until) {
@@ -174,75 +155,41 @@ export function MascotAvatar() {
       // ---- two-speed easing ----
       fast.x += (tgt.x - fast.x) * 0.2;
       fast.y += (tgt.y - fast.y) * 0.2;
-      cur.x += (tgt.x - cur.x) * 0.045;
-      cur.y += (tgt.y - cur.y) * 0.045;
+      cur.x += (tgt.x - cur.x) * 0.05;
+      cur.y += (tgt.y - cur.y) * 0.05;
       const gx = cur.x * 0.72 + fast.x * 0.28 + sx;
       const gy = cur.y * 0.72 + fast.y * 0.28 + sy;
 
       const w = root.getBoundingClientRect().width;
-      const ex = gx * GAZE * EYES[0].r * w;
-      const ey = gy * GAZE * EYES[0].r * w;
-      pupils.forEach((p) =>
-        p.style.setProperty(
-          'transform',
-          `translate(-50%, -50%) translate3d(${ex.toFixed(2)}px, ${(ey * 0.82).toFixed(2)}px, 0)`
-        )
-      );
 
-      // ---- head follows gaze (not cursor) ----
-      const hx = gx * HEAD_X * w;
-      const hy = gy * HEAD_Y * w;
-      const hr = gx * HEAD_R;
-      head.style.transform = `translate3d(${hx.toFixed(2)}px, ${hy.toFixed(2)}px, 0) rotate(${hr.toFixed(2)}deg)`;
-      glow.style.transform = `translate(-50%, -50%) translate3d(${(gx * 0.03 * w).toFixed(2)}px, ${(gy * 0.02 * w).toFixed(2)}px, 0)`;
-
-      // ---- eyelids: mood base + blink ----
-      const base =
-        m === 'sad' ? 0.5 : m === 'thinking' ? 0.34 : m === 'surprised' ? 0 : 0.06;
-      if (blinkPhase === 'none' && now > nextBlink) blinkPhase = 'closing';
-      if (blinkPhase === 'closing') {
-        blink = Math.min(1, blink + 0.22);
-        if (blink >= 1) {
-          blinkPhase = 'opening';
-          // 18% chance of a quick double-blink
-          nextBlink =
-            Math.random() < 0.18
-              ? now + 130
-              : now + 2100 + Math.random() * 3900;
+      // pupils — per-sprite iris geometry, all pupil nodes move together
+      if (meta?.eyes && !NO_PUPILS.has(p)) {
+        const rr = (meta.eyes[0]?.r ?? 0.016) * w;
+        const ex = gx * GAZE * rr;
+        const ey = gy * GAZE * rr * 0.85;
+        for (const el of pupilRefs.current) {
+          if (el) el.style.transform = `translate(-50%, -50%) translate3d(${ex.toFixed(2)}px, ${ey.toFixed(2)}px, 0)`;
         }
-      } else if (blinkPhase === 'opening') {
-        blink = Math.max(0, blink - 0.16);
-        if (blink <= 0) blinkPhase = 'none';
       }
-      const amount = Math.min(1, base + blink);
-      lids.forEach((l) => {
-        l.style.opacity = amount > 0.03 ? '1' : '0';
-        l.style.transform = `translate(-50%, ${(-118 + amount * 106).toFixed(1)}%)`;
-      });
+
+      // body parallax follows gaze
+      const hx = gx * BODY_X * w;
+      const hy = gy * BODY_Y * w;
+      const hr = gx * BODY_R;
+      body.style.transform = `translate3d(${hx.toFixed(2)}px, ${hy.toFixed(2)}px, 0) rotate(${hr.toFixed(2)}deg)`;
 
       raf = requestAnimationFrame(tick);
     };
 
-    const kick = () => {
-      if (!running) {
-        running = true;
-        raf = requestAnimationFrame(tick);
-      }
-    };
-
     const onMove = (e: PointerEvent) => {
-      const rect = root.getBoundingClientRect();
-      mouse = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      kick();
+      mouse = { x: e.clientX, y: e.clientY };
     };
     const onLeave = () => {
       mouse = null;
     };
-
     window.addEventListener('pointermove', onMove, { passive: true });
     document.documentElement.addEventListener('pointerleave', onLeave);
     raf = requestAnimationFrame(tick);
-
     return () => {
       window.removeEventListener('pointermove', onMove);
       document.documentElement.removeEventListener('pointerleave', onLeave);
@@ -251,14 +198,14 @@ export function MascotAvatar() {
   }, []);
 
   // ------------------------------------------------ interactions
-  const clickCount = useRef(0);
+  const clickStep = useRef(0);
   const lastHover = useRef(0);
 
   const onClick = () => {
-    const [m, line] = CLICK_LINES[clickCount.current % CLICK_LINES.length];
-    clickCount.current += 1;
-    mascot.set(m);
-    showBubble(line, 2600);
+    const line = CLICK_LINES[clickStep.current % CLICK_LINES.length];
+    clickStep.current += 1;
+    mascot.set(line.pose);
+    showBubble(line.text, 2400);
     window.dispatchEvent(new CustomEvent('nd:open-chat'));
   };
 
@@ -266,18 +213,12 @@ export function MascotAvatar() {
     const now = Date.now();
     if (now - lastHover.current < 30000) return;
     lastHover.current = now;
-    if (Math.random() < 0.5) {
-      const line = HOVER_LINES[Math.floor(Math.random() * HOVER_LINES.length)];
-      showBubble(line, 2400);
-    }
+    if (Math.random() < 0.5) showBubble(pick(HOVER_LINES, null), 2400);
     mascot.set('happy');
   };
 
   return (
-    <div
-      ref={rootRef}
-      className="mascot-root fixed bottom-4 right-4 z-[50] sm:bottom-7 sm:right-7"
-    >
+    <div ref={rootRef} className="mascot-root fixed bottom-4 right-4 z-[50] sm:bottom-7 sm:right-7">
       <AnimatePresence>
         {bubble && (
           <motion.div
@@ -294,7 +235,7 @@ export function MascotAvatar() {
       </AnimatePresence>
 
       <div
-        className={`mascot-stage mascot--${mood}`}
+        className={`mascot-stage mascot--${pose}`}
         onClick={onClick}
         onMouseEnter={onHover}
         role="button"
@@ -308,46 +249,39 @@ export function MascotAvatar() {
         }}
       >
         <div className="mascot-sway">
-          <div ref={glowRef} className="mascot-glow" />
-          <div ref={headRef} className="mascot-head">
-            <img
-              src="/avatar-assistant.png"
-              alt="امید عدلی — دستیار هوشمند"
-              width={IMG_W}
-              height={IMG_H}
-              draggable={false}
-              decoding="async"
-              className="mascot-img"
-            />
-            {EYES.map((eye, i) => (
-              <React.Fragment key={i}>
-                <span
-                  ref={(el) => {
-                    pupilRefs.current[i] = el;
-                  }}
-                  className="mascot-pupil"
-                  style={{
-                    left: `${(eye.cx * 100).toFixed(3)}%`,
-                    top: `${(eye.cy * 100).toFixed(3)}%`,
-                    width: `${(eye.r * 2.9 * 100).toFixed(3)}%`,
-                  }}
-                />
-                <span
-                  ref={(el) => {
-                    lidRefs.current[i] = el;
-                  }}
-                  className="mascot-lid"
-                  data-eye={i}
-                  style={{
-                    left: `${(eye.cx * 100).toFixed(3)}%`,
-                    top: `${(eye.cy * 100).toFixed(3)}%`,
-                    width: `${(eye.r * 3.4 * 100).toFixed(3)}%`,
-                    height: `${(eye.r * 3.4 * (IMG_W / IMG_H) * 100).toFixed(3)}%`,
-                  }}
-                />
-              </React.Fragment>
+          <div ref={bodyRef} className="mascot-body">
+            {/* all sprites mounted, crossfaded via .is-active */}
+            {POSES.map((p) => (
+              <img
+                key={p}
+                src={META[p].src}
+                alt=""
+                width={META[p].w}
+                height={META[p].h}
+                draggable={false}
+                decoding="async"
+                className={`mascot-img ${p === pose ? 'is-active' : ''}`}
+              />
             ))}
+            {/* one pupil pair per sprite pose (per-sprite iris geometry) */}
+            {POSES.map((p) =>
+              (META[p].eyes ?? []).map((eye, i) => (
+                <span
+                  key={`${p}-${i}`}
+                  ref={(el) => {
+                    pupilRefs.current[POSES.indexOf(p) * 2 + i] = el;
+                  }}
+                  className={`mascot-pupil ${p === pose ? 'is-active' : ''}`}
+                  style={{
+                    left: `${(eye.cx * 100).toFixed(3)}%`,
+                    top: `${(eye.cy * 100).toFixed(3)}%`,
+                    width: `${(eye.r * 1.65 * 100).toFixed(3)}%`,
+                  }}
+                />
+              ))
+            )}
           </div>
+          <div className="mascot-shadow" />
         </div>
       </div>
     </div>
