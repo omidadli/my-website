@@ -44,44 +44,59 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
   if (!title) return json({ ok: false, error: 'عنوان خالی است.' }, { status: 400 });
 
-  if (env.GEMINI_API_KEY) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    text:
-                      `Convert this Persian page/post title into a short, SEO-friendly English URL slug.\n` +
-                      `Rules: lowercase English words only, joined by single dashes, max 6 words, no dates, no stop words at the start, translate the meaning (do not transliterate).\n` +
-                      `Respond with ONLY the slug, nothing else.\n\nTitle: ${title}`,
-                  },
-                ],
+  const geminiKey = (env.GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : '') || '').trim();
+  if (geminiKey) {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': geminiKey,
+    };
+
+    const candidateModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+
+    for (const model of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        const res = await fetch(
+          url,
+          {
+            method: 'POST',
+            headers,
+            signal: AbortSignal.timeout(8000),
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    {
+                      text:
+                        `Convert this Persian page/post title into a short, SEO-friendly English URL slug.\n` +
+                        `Rules: lowercase English words only, joined by single dashes, max 6 words, no dates, no stop words at the start, translate the meaning (do not transliterate).\n` +
+                        `Respond with ONLY the slug, nothing else.\n\nTitle: ${title}`,
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 150,
+                thinkingConfig: {
+                  thinkingBudget: 0,
+                },
               },
-            ],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 60,
-            },
-          }),
+            }),
+          }
+        );
+        if (res.ok) {
+          const data: any = await res.json();
+          const parts = data?.candidates?.[0]?.content?.parts || [];
+          const textPart = parts.find((p: any) => p.text && !p.thought) || parts[0];
+          const text = textPart?.text || '';
+          const slug = cleanSlug(text);
+          if (slug) return json({ ok: true, slug, source: 'gemini' });
         }
-      );
-      if (res.ok) {
-        const data: any = await res.json();
-        const parts = data?.candidates?.[0]?.content?.parts || [];
-        const textPart = parts.find((p: any) => p.text && !p.thought) || parts[0];
-        const text = textPart?.text || '';
-        const slug = cleanSlug(text);
-        if (slug) return json({ ok: true, slug, source: 'gemini' });
+      } catch {
+        /* try next model */
       }
-    } catch {
-      /* fall through to transliteration */
     }
   }
 

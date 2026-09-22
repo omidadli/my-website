@@ -112,36 +112,113 @@ const buildDigest = (data: any): string => {
     if (pr.status === 'draft') continue;
     L.push(`محصول/ابزار «${pr.title}»: ${pr.description || ''} قیمت: ${pr.price || '-'}، مخاطب: ${pr.targetAudience || '-'}.`);
   }
-  for (const b of (data.BLOG_POSTS || []).slice(0, 12)) {
+  for (const b of (data.BLOG_POSTS || []).slice(0, 8)) {
     if (b.status === 'draft') continue;
     L.push(`مقاله «${b.title}» (${b.categoryFa || ''}): ${b.excerpt || ''}`);
   }
-  return L.join('\n').slice(0, 9000);
+  return L.join('\n').slice(0, 4000);
 };
 
 const localAnswer = (question: string, digest: string, cta: string): string => {
+  const norm = question.trim().toLowerCase();
+
+  // 1. Common greetings & friendly hellos
+  if (/^(سلام|درود|خوبی|چطوری|صبح بخیر|عصر بخیر|سلام علیکم|سلام چطوری|سلام امید)/i.test(norm) || norm === 'سلام' || norm === 'درود') {
+    return `سلام و درود! خوش اومدی رفیق. من مسکات و دستیار هوشمند سایت امید عدلی‌ام. در زمینه‌های تبلیغات دیجیتال (گوگل و متا)، آنالیتیکس GA4، بهینه‌سازی نرخ تبدیل (CRO) و سئو می‌تونم راهنماییت کنم یا مسیر رزرو مشاوره رو بهت نشون بدم. چه کاری از دستم برمی‌آد؟ [[act:{"pose":"wave","hold":3}]]`;
+  }
+
+  // 2. Who is Omid / About
+  if (/(کیستی|کی هستی|امید عدلی کیه|درباره امید|رزومه|بیوگرافی|سابقه|تو کی هستی)/i.test(norm)) {
+    return `امید عدلی متخصص رشد و تبلیغات دیجیتال با سال‌ها سابقه موفق در اجرای کمپین‌های عملکردی گوگل و متا، راه‌اندازی تحلیلی GA4، سئو و افزایش نرخ تبدیل (CRO) کسب‌وکارها است. من هم مسکات سه‌بعدی و همراه هوشمند او در این سایت هستم! [[act:{"pose":"confident","hold":3}]]`;
+  }
+
+  // 3. E-commerce & Online Shops
+  if (/(فروشگاه|آنلاین شاپ|خرید آنلاین|محصولات|سبد خرید)/i.test(norm)) {
+    return `برای فروشگاه‌های اینترنتی، تمرکز اصلی ما روی افزایش نرخ تبدیل سبد خرید، کمپین‌های پربازده گوگل ادز و کاهش هزینه جذب هر خریدار (CAC) است تا فروش خالص شما ماکسیمم شود. برای بررسی تخصصی فروشگاهتان می‌توانید یک جلسه مشاوره رزرو کنید! [[act:{"pose":"talking","hold":4}]]`;
+  }
+
+  // 4. Consultation, contact, booking
+  if (/(مشاوره|تماس|همکاری|شماره|ارتباط|رزرو|جلسه|هزینه|قیمت|پروژه)/i.test(norm)) {
+    return `برای شروع همکاری یا دریافت مشاوره مستقیم از امید عدلی، می‌تونی از بخش «رزرو مشاوره» در بالای صفحه استفاده کنی یا از طریق فرم صفحه تماس پیام بفرستی. همچنین راه‌های مستقیم تلگرام و ایمیل هم در سایت فعاله تا خیلی سریع پاسخ بگیری! [[act:{"pose":"confident","hold":3}]]`;
+  }
+
+  // 5. Keyword matching across site digest
   const q = tokens(question);
-  if (!q.length || !digest) return '';
-  const qSet = expand(new Set(q));
-  const scored = digest
-    .split('\n')
-    .map((line) => {
-      const lt = tokens(line);
-      let score = 0;
-      const seen = new Set<string>();
-      for (const t of lt) {
-        if (qSet.has(t) && !seen.has(t)) {
-          score += 1;
-          seen.add(t);
+  if (q.length && digest) {
+    const qSet = expand(new Set(q));
+    const scored = digest
+      .split('\n')
+      .map((line) => {
+        const lt = tokens(line);
+        let score = 0;
+        const seen = new Set<string>();
+        for (const t of lt) {
+          if (qSet.has(t) && !seen.has(t)) {
+            score += 1;
+            seen.add(t);
+          }
         }
-      }
-      return { line, score: score / Math.max(1, Math.min(q.length, 6)) };
-    })
-    .filter((x) => x.score >= 0.3)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-  if (!scored.length) return '';
-  return scored.map((x) => `• ${x.line.trim()}`).join('\n') + (cta ? `\n\n${cta}` : '');
+        return { line, score: score / Math.max(1, Math.min(q.length, 5)) };
+      })
+      .filter((x) => x.score >= 0.2)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+
+    if (scored.length > 0) {
+      return scored.map((x) => `• ${x.line.trim()}`).join('\n') + (cta ? `\n\n${cta}` : '') + ' [[act:{"pose":"talking"}]]';
+    }
+  }
+
+  // 6. Helpful natural fallback
+  return `در سایت امید عدلی، خدمات تخصصی شامل سئو پیشرفته، تبلیغات گوگل و متا، راه‌اندازی و تحلیل GA4 و بهینه‌سازی نرخ تبدیل (CRO) ارائه می‌شه. می‌تونی هر سوالی درباره کسب‌وکارت، نمونه‌کارها یا نحوه همکاری داری بپرسی تا کمکت کنم! [[act:{"pose":"talking"}]]`;
+};
+
+const ACT_GUIDE = `واژگان بدن (pose) و کِی انتخابش کنی:
+- wave: سلام، خوش‌آمد، خداحافظی، جواب تشکر. hold: ۲-۳
+- happy: خنده‌ی گرم؛ جواب شوخ کاربر یا تشکر صمیمی. hold: ۲-۳
+- excited: خبر خوب، موفقیت کاربر (ارسال فرم، رزرو)، نتیجه‌ی درخشان. hold: ۳
+- thinking: سوال تحلیلی/محاسباتی؛ مکث کوتاه قبل از جواب قطعی. hold: ۳-۵
+- talking: حالت پیش‌فرضِ توضیح دادن — اکثر جواب‌ها همین. hold: برابرِ طول جواب
+- confused: سوال مبهم؛ همراه با یک سوال شفاف‌سازی در متن جواب. hold: ۲-۳
+- confident: پاسخ مطمئن با استناد به داده و نمونه‌کار. hold: ۳
+- sad: ندانستن، عذرخواهی، محدودیت واقعی، خبر بد. hold: ۳-۴
+- surprised: آمار یا خبر واقعاً غافلگیرکننده. hold: ۲
+- sleepy: فقط اگر خود کاربر از خستگی/انتظار طولانی گفته. hold: ۳
+هرگز از typing یا listen استفاده نکن؛ مخصوصِ سیستم است.
+
+قوانین بازیگری:
+۱. هر پاسخ دقیقاً یک دستور act دارد و pose باید با «احساس غالبِ» جواب بخواند — نه تصادفی، نه برای تنوع.
+۲. اقتصاد انرژی: excited/surprised/happy طلا هستند؛ زیادشان نکن. اگر شک داری، talking یا idle.
+۳. تکرار ممنوع: اگر در جواب قبلی مثلاً confident دادی، این‌بار متنوع انتخاب کن مگر دلیل واقعی باشد.
+۴. hold را با طول جواب تنظیم کن: جواب یک‌خطی ≈ ۲-۳، معمولی ≈ ۴-۶، توضیحی ≈ ۷-۱۰.
+۵. then فقط برای روایت دوبخشی: مثلاً excited بعد happy یا surprised بعد sad. بیشتر مواقع خالی.
+
+قرارداد اجرا (خیلی مهم):
+- همیشه دقیقاً یک سطر در «انتهای» پاسخ اضافه کن:
+[[act: {"pose":"...","hold":6,"bubble":"...","then":"idle"}]]
+- pose: یکی از واژگان بالا. hold: چند ثانیه بماند (۱.۵ تا ۱۴).
+- bubble: حداکثر ۱۲۰ کاراکتر، بدون ایموجی؛ معمولاً خالی بگذار.
+- JSON باید معتبر باشد؛ داخل bubble از " استفاده نکن.`;
+
+const buildSoulPrompt = (o: { persona: string; name: string; page: string; daypart: string; bodyState: string; digest: string }) => {
+  const who = o.name
+    ? `مخاطب فعلی تو «${o.name}» است — او را با اسم صدا کن.`
+    : 'اسم مخاطب را نمی‌دانی؛ اگر لازم بود محترمانه بپرس.';
+  const where = `کاربر الان در صفحه‌ی «${o.page}» سایت است.`;
+  const when = `زمان فعلی: ${o.daypart || 'روز'} است.`;
+  const bodyNow = o.bodyState ? `وضعیت بدن در همین لحظه: ${o.bodyState}` : '';
+  return `تو «دستیار هوشمند» سایتی هستی که امید عدلی — متخصص رشد و تبلیغات دیجیتال — ساخته است. تو روحِ یک کاراکتر سه‌بعدی به نام مَسکات هستی.
+شخصیت تو: صمیمی، خودی و محترم. پاسخ‌هایت کوتاه، شفاف و گفتاری باشند (۱ تا ۴ جمله‌ی کوتاه). از ایموجی استفاده نکن.
+
+${who} ${where} ${when}
+${bodyNow}
+
+${ACT_GUIDE}
+
+اطلاعات سایت:
+${o.digest}
+
+${o.persona ? `نکات مدیریت:\n${o.persona}` : ''}`;
 };
 
 export function cmsDevApiPlugin(): Plugin {
@@ -243,6 +320,12 @@ export function cmsDevApiPlugin(): Plugin {
                 return sendJson({ ok: false, error: 'سوال خالی است.' }, 400);
               }
 
+              const mc = body?.mascot || {};
+              const mcName = String(mc.name || '').trim().slice(0, 40);
+              const mcPage = String(mc.page || 'home').slice(0, 30);
+              const mcDaypart = String(mc.daypart || '').slice(0, 12);
+              const mcBody = String(mc.bodyState || '').slice(0, 300);
+
               const saved = safeReadJson<{ data: any } | null>(CONTENT_FILE, null);
               const data = saved?.data || {};
               const cfg = {
@@ -251,38 +334,65 @@ export function cmsDevApiPlugin(): Plugin {
                 fallbackMessage: data?.CHAT_CONFIG?.fallbackMessage || 'پاسخ دقیقی در محتوای سایت برای این مورد نیافتم؛ لطفاً مستقیماً از بخش تماس پیام دهید.',
               };
               const digest = buildDigest(data);
+              const soulPrompt = buildSoulPrompt({
+                persona: cfg.persona,
+                name: mcName,
+                page: mcPage,
+                daypart: mcDaypart,
+                bodyState: mcBody,
+                digest,
+              });
 
               let answer = '';
               let mode: 'ai' | 'local' = 'local';
 
-              const geminiKey = process.env.GEMINI_API_KEY || '';
+              const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
               if (geminiKey) {
-                try {
-                  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`;
-                  const gRes = await fetch(geminiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: AbortSignal.timeout(15000),
-                    body: JSON.stringify({
-                      systemInstruction: { parts: [{ text: `${cfg.persona}\n\nاطلاعات سایت:\n${digest}` }] },
-                      contents: [{ role: 'user', parts: [{ text: question }] }],
-                      generationConfig: {
-                        temperature: 0.5,
-                        maxOutputTokens: 800,
-                      },
-                    }),
-                  });
-                  if (gRes.ok) {
-                    const gj: any = await gRes.json();
-                    const parts = gj?.candidates?.[0]?.content?.parts || [];
-                    const text = parts[0]?.text;
-                    if (text) {
-                      answer = text.trim();
-                      mode = 'ai';
+                const history = messages.slice(0, -1).filter((m) => m.role === 'user' || m.role === 'model').map((m) => ({
+                  role: m.role === 'user' ? 'user' : 'model',
+                  parts: [{ text: String(m.content || '').slice(0, 800) }],
+                }));
+
+                const headers: Record<string, string> = {
+                  'Content-Type': 'application/json',
+                  'x-goog-api-key': geminiKey,
+                };
+
+                const candidateModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+
+                for (const model of candidateModels) {
+                  try {
+                    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+                    const gRes = await fetch(geminiUrl, {
+                      method: 'POST',
+                      headers,
+                      signal: AbortSignal.timeout(9000),
+                      body: JSON.stringify({
+                        systemInstruction: { parts: [{ text: soulPrompt }] },
+                        contents: [...history, { role: 'user', parts: [{ text: question }] }],
+                        generationConfig: {
+                          temperature: 0.6,
+                          maxOutputTokens: 250,
+                          thinkingConfig: {
+                            thinkingBudget: 0,
+                          },
+                        },
+                      }),
+                    });
+
+                    if (gRes.ok) {
+                      const gj: any = await gRes.json();
+                      const parts = gj?.candidates?.[0]?.content?.parts || [];
+                      const text = parts.find((p: any) => p?.text && !p?.thought)?.text || parts.find((p: any) => p?.text)?.text || parts[0]?.text;
+                      if (text) {
+                        answer = text.trim();
+                        mode = 'ai';
+                        break;
+                      }
                     }
+                  } catch {
+                    // Gracefully continue to fallback model or local engine without raising warnings
                   }
-                } catch {
-                  /* fallback to local matcher */
                 }
               }
 
@@ -292,8 +402,29 @@ export function cmsDevApiPlugin(): Plugin {
               if (!answer) {
                 answer = `${cfg.fallbackMessage}\n\n${cfg.ctaText}`;
               }
+              if (!answer.includes('[[act:')) {
+                answer += ' [[act:{"pose":"talking"}]]';
+              }
 
-              return sendJson({ ok: true, answer, mode });
+              // Extract the act directive (if any)
+              let act: { pose?: string; hold?: number; bubble?: string; then?: string } | undefined;
+              try {
+                const m = answer.match(/\[\[act:\s*(\{[\s\S]*?\})\s*\]\]/i);
+                if (m) {
+                  const parsed = JSON.parse(m[1]);
+                  act = {
+                    pose: typeof parsed.pose === 'string' ? parsed.pose : undefined,
+                    hold: typeof parsed.hold === 'number' ? parsed.hold : undefined,
+                    bubble: typeof parsed.bubble === 'string' ? parsed.bubble : undefined,
+                    then: typeof parsed.then === 'string' ? parsed.then : undefined,
+                  };
+                  if (!act.pose && !act.bubble) act = undefined;
+                }
+              } catch {
+                act = undefined;
+              }
+
+              return sendJson({ ok: true, answer, act, mode });
             }
           }
 
@@ -303,15 +434,22 @@ export function cmsDevApiPlugin(): Plugin {
             const title = String(body.title || '').trim();
             if (!title) return sendJson({ ok: false, error: 'عنوان خالی است.' }, 400);
 
-            const geminiKey = process.env.GEMINI_API_KEY || '';
+            const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
             if (geminiKey) {
-              try {
-                const gRes = await fetch(
-                  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
-                  {
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': geminiKey,
+              };
+
+              const candidateModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+
+              for (const model of candidateModels) {
+                try {
+                  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+                  const gRes = await fetch(geminiUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: AbortSignal.timeout(15000),
+                    headers,
+                    signal: AbortSignal.timeout(8000),
                     body: JSON.stringify({
                       contents: [
                         {
@@ -325,22 +463,25 @@ export function cmsDevApiPlugin(): Plugin {
                       ],
                       generationConfig: {
                         temperature: 0.1,
-                        maxOutputTokens: 60,
+                        maxOutputTokens: 150,
+                        thinkingConfig: {
+                          thinkingBudget: 0,
+                        },
                       },
                     }),
+                  });
+                  if (gRes.ok) {
+                    const gj: any = await gRes.json();
+                    const parts = gj?.candidates?.[0]?.content?.parts || [];
+                    const slugCandidate = parts.find((p: any) => p?.text)?.text?.trim();
+                    const cleaned = cleanSlug(slugCandidate || '');
+                    if (cleaned) {
+                      return sendJson({ ok: true, slug: cleaned, source: 'gemini' });
+                    }
                   }
-                );
-                if (gRes.ok) {
-                  const gj: any = await gRes.json();
-                  const parts = gj?.candidates?.[0]?.content?.parts || [];
-                  const slugCandidate = parts[0]?.text?.trim();
-                  const cleaned = cleanSlug(slugCandidate || '');
-                  if (cleaned) {
-                    return sendJson({ ok: true, slug: cleaned, source: 'gemini' });
-                  }
+                } catch {
+                  // Fall back smoothly to next model or transliteration without console noise
                 }
-              } catch {
-                /* fallback to transliteration */
               }
             }
 

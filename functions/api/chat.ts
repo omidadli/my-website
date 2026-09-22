@@ -137,28 +137,57 @@ const buildDigest = (data: any): string => {
 
 /** Zero-cost fallback: score digest lines by token overlap with the question. */
 const localAnswer = (question: string, digest: string, cta: string): string => {
+  const norm = question.trim().toLowerCase();
+
+  // 1. Common greetings & friendly hellos
+  if (/^(سلام|درود|خوبی|چطوری|صبح بخیر|عصر بخیر|سلام علیکم|سلام چطوری|سلام امید)/i.test(norm) || norm === 'سلام' || norm === 'درود') {
+    return `سلام و درود! خوش اومدی رفیق. من مسکات و دستیار هوشمند سایت امید عدلی‌ام. در زمینه‌های تبلیغات دیجیتال (گوگل و متا)، آنالیتیکس GA4، بهینه‌سازی نرخ تبدیل (CRO) و سئو می‌تونم راهنماییت کنم یا مسیر رزرو مشاوره رو بهت نشون بدم. چه کاری از دستم برمی‌آد؟ [[act:{"pose":"wave","hold":3}]]`;
+  }
+
+  // 2. Who is Omid / About
+  if (/(کیستی|کی هستی|امید عدلی کیه|درباره امید|رزومه|بیوگرافی|سابقه|تو کی هستی)/i.test(norm)) {
+    return `امید عدلی متخصص رشد و تبلیغات دیجیتال با سال‌ها سابقه موفق در اجرای کمپین‌های عملکردی گوگل و متا، راه‌اندازی تحلیلی GA4، سئو و افزایش نرخ تبدیل (CRO) کسب‌وکارها است. من هم مسکات سه‌بعدی و همراه هوشمند او در این سایت هستم! [[act:{"pose":"confident","hold":3}]]`;
+  }
+
+  // 3. E-commerce & Online Shops
+  if (/(فروشگاه|آنلاین شاپ|خرید آنلاین|محصولات|سبد خرید)/i.test(norm)) {
+    return `برای فروشگاه‌های اینترنتی، تمرکز اصلی ما روی افزایش نرخ تبدیل سبد خرید، کمپین‌های پربازده گوگل ادز و کاهش هزینه جذب هر خریدار (CAC) است تا فروش خالص شما ماکسیمم شود. برای بررسی تخصصی فروشگاهتان می‌توانید یک جلسه مشاوره رزرو کنید! [[act:{"pose":"talking","hold":4}]]`;
+  }
+
+  // 4. Consultation, contact, booking
+  if (/(مشاوره|تماس|همکاری|شماره|ارتباط|رزرو|جلسه|هزینه|قیمت|پروژه)/i.test(norm)) {
+    return `برای شروع همکاری یا دریافت مشاوره مستقیم از امید عدلی، می‌تونی از بخش «رزرو مشاوره» در بالای صفحه استفاده کنی یا از طریق فرم صفحه تماس پیام بفرستی. همچنین راه‌های مستقیم تلگرام و ایمیل هم در سایت فعاله تا خیلی سریع پاسخ بگیری! [[act:{"pose":"confident","hold":3}]]`;
+  }
+
+  // 3. Keyword matching across site digest
   const q = tokens(question);
-  if (!q.length || !digest) return '';
-  const qSet = expand(new Set(q));
-  const scored = digest
-    .split('\n')
-    .map((line) => {
-      const lt = tokens(line);
-      let score = 0;
-      const seen = new Set<string>();
-      for (const t of lt) {
-        if (qSet.has(t) && !seen.has(t)) {
-          score += 1;
-          seen.add(t);
+  if (q.length && digest) {
+    const qSet = expand(new Set(q));
+    const scored = digest
+      .split('\n')
+      .map((line) => {
+        const lt = tokens(line);
+        let score = 0;
+        const seen = new Set<string>();
+        for (const t of lt) {
+          if (qSet.has(t) && !seen.has(t)) {
+            score += 1;
+            seen.add(t);
+          }
         }
-      }
-      return { line, score: score / Math.max(1, Math.min(q.length, 6)) };
-    })
-    .filter((x) => x.score >= 0.3)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-  if (!scored.length) return '';
-  return scored.map((x) => `• ${x.line.trim()}`).join('\n') + (cta ? `\n\n${cta}` : '');
+        return { line, score: score / Math.max(1, Math.min(q.length, 5)) };
+      })
+      .filter((x) => x.score >= 0.2)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+
+    if (scored.length > 0) {
+      return scored.map((x) => `• ${x.line.trim()}`).join('\n') + (cta ? `\n\n${cta}` : '') + ' [[act:{"pose":"talking"}]]';
+    }
+  }
+
+  // 4. Helpful natural fallback
+  return `در سایت امید عدلی، خدمات تخصصی شامل سئو پیشرفته، تبلیغات گوگل و متا، راه‌اندازی و تحلیل GA4 و بهینه‌سازی نرخ تبدیل (CRO) ارائه می‌شه. می‌تونی هر سوالی درباره کسب‌وکارت، نمونه‌کارها یا نحوه همکاری داری بپرسی تا کمکت کنم! [[act:{"pose":"talking"}]]`;
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
@@ -226,44 +255,61 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   let mode: 'ai' | 'local' = 'local';
 
   // 1) Preferred path: Gemini grounded on the site digest.
-  if (env.GEMINI_API_KEY) {
-    try {
-      const history = messages.slice(0, -1).filter((m) => m.role === 'user' || m.role === 'model').map((m) => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: String(m.content || '').slice(0, 1200) }],
-      }));
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: soulPrompt }]},
-            contents: [...history, { role: 'user', parts: [{ text: question }] }],
-            generationConfig: {
-              temperature: 0.6,
-              maxOutputTokens: 700,
-            },
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-            ],
-          }),
+  const geminiKey = (env.GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : '') || '').trim();
+  if (geminiKey) {
+    const history = messages.slice(0, -1).filter((m) => m.role === 'user' || m.role === 'model').map((m) => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: String(m.content || '').slice(0, 1200) }],
+    }));
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': geminiKey,
+    };
+
+    const candidateModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+
+    for (const model of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        const res = await fetch(
+          url,
+          {
+            method: 'POST',
+            headers,
+            signal: AbortSignal.timeout(9000),
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: soulPrompt }]},
+              contents: [...history, { role: 'user', parts: [{ text: question }] }],
+              generationConfig: {
+                temperature: 0.6,
+                maxOutputTokens: 250,
+                thinkingConfig: {
+                  thinkingBudget: 0,
+                },
+              },
+              safetySettings: [
+                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+              ],
+            }),
+          }
+        );
+        if (res.ok) {
+          const j: any = await res.json();
+          const parts = j?.candidates?.[0]?.content?.parts || [];
+          const text = String(parts.find((p: any) => p?.text && !p?.thought)?.text || parts.find((p: any) => p?.text)?.text || parts[0]?.text || '').trim();
+          if (text) {
+            answer = text;
+            mode = 'ai';
+            break;
+          }
         }
-      );
-      if (res.ok) {
-        const j: any = await res.json();
-        const parts = j?.candidates?.[0]?.content?.parts || [];
-        const text = String(parts[0]?.text || '').trim();
-        if (text) {
-          answer = text;
-          mode = 'ai';
-        }
+      } catch {
+        /* try next model or fallback */
       }
-    } catch {
-      /* fall through to local matcher */
     }
   }
 
