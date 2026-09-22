@@ -412,22 +412,24 @@ export function cmsDevApiPlugin(): Plugin {
                 answer = `${cfg.fallbackMessage}\n\n${cfg.ctaText}`;
               }
               if (!answer.includes('[[act:')) {
-                answer += ' [[act:{"pose":"talking"}]]';
+                answer += ' [[act:{"action":"REACTING","gaze":"USER","expression":"NEUTRAL"}]]';
               }
 
-              // Extract the act directive (if any)
-              let act: { pose?: string; hold?: number; bubble?: string; then?: string } | undefined;
+              // Extract the act directive (if any). The client re-validates it
+              // against the closed vocabulary, so forwarding it verbatim is safe.
+              let act: { action?: string; gaze?: string; expression?: string; pose?: string; bubble?: string } | undefined;
               try {
                 const m = answer.match(/\[\[act:\s*(\{[\s\S]*?\})\s*\]\]/i);
                 if (m) {
-                  const parsed = JSON.parse(m[1]);
+                  const parsed = JSON.parse(m[1]) || {};
                   act = {
-                    pose: typeof parsed.pose === 'string' ? parsed.pose : undefined,
-                    hold: typeof parsed.hold === 'number' ? parsed.hold : undefined,
-                    bubble: typeof parsed.bubble === 'string' ? parsed.bubble : undefined,
-                    then: typeof parsed.then === 'string' ? parsed.then : undefined,
+                    action: typeof parsed.action === 'string' ? parsed.action.slice(0, 32) : undefined,
+                    gaze: typeof parsed.gaze === 'string' ? parsed.gaze.slice(0, 24) : undefined,
+                    expression: typeof parsed.expression === 'string' ? parsed.expression.slice(0, 24) : undefined,
+                    pose: typeof parsed.pose === 'string' ? parsed.pose.slice(0, 24) : undefined,
+                    bubble: typeof parsed.bubble === 'string' ? parsed.bubble.slice(0, 180) : undefined,
                   };
-                  if (!act.pose && !act.bubble) act = undefined;
+                  if (!act.action && !act.pose && !act.bubble) act = undefined;
                 }
               } catch {
                 act = undefined;

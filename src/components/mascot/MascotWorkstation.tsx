@@ -55,10 +55,11 @@ function bindPointer() {
   document.documentElement.addEventListener('pointerleave', onLeave);
 }
 
-const TURN_Y = 9; // max head turn (deg)
-const TURN_X = 7; // max head tilt (deg)
-const LEAN_X = 1.4; // % of stage width
-const LEAN_Y = 1.1; // % of stage height
+/**
+ * The driver only produces a unit vector (-1.5 … 1.5). How far that actually
+ * turns the head lives in CSS (.mws-figure), so the amplitude can be tuned
+ * per breakpoint without touching this loop.
+ */
 const GLANCE_AFTER = 4500;
 
 function gazeVector(target: MascotGaze, now: number): { x: number; y: number } {
@@ -117,6 +118,16 @@ function attachGaze(el: HTMLElement, target: MascotGaze): () => void {
   };
 }
 
+/**
+ * Re-aim an already-attached element. The eased `cur` value is deliberately
+ * kept — re-attaching would reset it to zero and make the head snap back to
+ * centre before every single glance.
+ */
+function retargetGaze(el: HTMLElement | null, target: MascotGaze) {
+  const entry = el && gazeEntries.get(el);
+  if (entry) entry.target = target;
+}
+
 // ---------------------------------------------------------------------------
 // Scene
 // ---------------------------------------------------------------------------
@@ -138,11 +149,17 @@ export const MascotWorkstation: React.FC<MascotWorkstationProps> = ({ className 
   // one subscription: the body clock drives the frame, nothing else does
   useEffect(() => mascot.subscribe((_scene, f) => setFrame(f)), []);
 
-  // gaze follows the controller's attention target, smoothly
+  // gaze: registered once, then re-aimed. Re-registering on every change
+  // would reset the easing and make the head jump.
   useEffect(() => {
     const el = figureRef.current;
     if (!el) return undefined;
     return attachGaze(el, snapshot.gaze);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    retargetGaze(figureRef.current, snapshot.gaze);
   }, [snapshot.gaze]);
 
   const activeFrame = broken[frame] || !FRAMES[frame] ? FALLBACK_FRAME : frame;
@@ -193,26 +210,25 @@ export const MascotWorkstation: React.FC<MascotWorkstationProps> = ({ className 
       {/* the machine — deck first so it covers the cropped torso… */}
       <LaptopDeck state={snapshot.laptop} />
 
-      {/* …then the hands, resting on the keys… */}
-      {handsVisible && (
-        <div className="mws-hands" style={{ transform: rigCss(handRig.rig) }}>
-          <div className="mws-breath mws-breath--hands">
-            <img
-              src={handRig.src}
-              alt=""
-              width={640}
-              height={698}
-              draggable={false}
-              decoding="async"
-              className="mws-img mws-img--hands"
-              style={{ clipPath: HANDS_CLIP_CSS }}
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          </div>
+      {/* …then the hands, resting on the keys. Kept mounted so lifting them
+          to talk is a fade, not a pop. */}
+      <div className={`mws-hands${handsVisible ? '' : ' mws-hands--lifted'}`} style={{ transform: rigCss(handRig.rig) }}>
+        <div className="mws-breath mws-breath--hands">
+          <img
+            src={handRig.src}
+            alt=""
+            width={640}
+            height={698}
+            draggable={false}
+            decoding="async"
+            className="mws-img mws-img--hands"
+            style={{ clipPath: HANDS_CLIP_CSS }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+            }}
+          />
         </div>
-      )}
+      </div>
 
       {/* …and the lid last, so the wrists vanish behind the screen. */}
       <LaptopLid state={snapshot.laptop} screenText={snapshot.screenText} />

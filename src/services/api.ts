@@ -277,7 +277,7 @@ export const api = {
  * Anything unparseable is ignored rather than thrown — a malformed chunk must
  * never take the chat down.
  */
-async function readStreamedAnswer(
+export async function readStreamedAnswer(
   r: Response,
   onDelta?: (partialText: string) => void
 ): Promise<{ ok: boolean; answer?: string; act?: Record<string, unknown>; mode?: 'ai' | 'local'; error?: string }> {

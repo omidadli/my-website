@@ -143,7 +143,10 @@ class MascotBus {
 export const mascot = new MascotBus();
 
 /** Warm the browser cache for every frame so the first loop never stutters. */
+let warmed = false;
 export function warmFrames() {
+  if (warmed) return;
+  warmed = true;
   const run = () => {
     Object.values(FRAMES).forEach((f) => {
       const im = new Image();

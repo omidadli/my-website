@@ -857,6 +857,13 @@ html.theme-transitioning *::after {
 .mws-hands {
   z-index: 4;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 320ms var(--nd-ease);
+}
+
+/* a pose that lifts a hand (talking, thinking, waving…) puts the hands away */
+.mws-hands--lifted {
+  opacity: 0;
 }
 
 .mws-breath {
@@ -1211,6 +1218,9 @@ body.chat-open .mascot-root {
     animation: none !important;
   }
   .mws-figure {
+    transition: none;
+  }
+  .mws-hands {
     transition: none;
   }
   .mws-lid {

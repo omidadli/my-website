@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { mascotController, parseMascotIntent, type MascotSnapshot } from '../src/components/mascot/soul';
 import { mascot } from '../src/components/mascot/mascotBus';
 import { FRAMES, rigOf, handsRig } from '../src/components/mascot/rig';
+import { readStreamedAnswer } from '../src/services/api';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const snap = (): MascotSnapshot => mascotController.getSnapshot();
@@ -247,6 +248,63 @@ async function main() {
   });
 
   // ------------------------------------------------------------------- rig
+  // ------------------------------------------------------------ streaming
+  const sseResponse = (chunks: string[], ctype = 'text/event-stream'): Response => {
+    const enc = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        for (const ch of chunks) c.enqueue(enc.encode(ch));
+        c.close();
+      },
+    });
+    return new Response(stream, { status: 200, headers: { 'Content-Type': ctype } });
+  };
+
+  await check('SSE stream: deltas accumulate, one final answer', async () => {
+    const seen: string[] = [];
+    const res = await readStreamedAnswer(
+      sseResponse([
+        'data: {"delta":"سلام "}\n\n',
+        'data: {"delta":"رفیق"}\n\n',
+        'data: {"text":" چطوری"}\n\n',
+        'data: {"done":true,"mode":"ai"}\n\n',
+      ]),
+      (t) => seen.push(t)
+    );
+    assert.equal(res.ok, true);
+    assert.equal(res.answer, 'سلام رفیق چطوری');
+    assert.equal(res.mode, 'ai');
+    assert.equal(seen.length, 3, 'onDelta fires per chunk, not per token-batch');
+    assert.equal(seen[seen.length - 1], 'سلام رفیق چطوری');
+  });
+
+  await check('SSE stream: malformed chunks are ignored, not thrown', async () => {
+    const res = await readStreamedAnswer(
+      sseResponse(['not json at all\n\n', 'data: {broken\n\n', 'data: {"delta":"ok"}\n\n', 'data: [DONE]\n\n'])
+    );
+    assert.equal(res.ok, true);
+    assert.ok(res.answer?.includes('ok'), `got ${res.answer}`);
+  });
+
+  await check('SSE stream: error payload fails the request', async () => {
+    const res = await readStreamedAnswer(sseResponse(['data: {"error":"rate limited"}\n\n']));
+    assert.equal(res.ok, false);
+    assert.match(res.error ?? '', /rate limited/);
+  });
+
+  await check('SSE stream: an empty stream is an error, not an empty answer', async () => {
+    const res = await readStreamedAnswer(sseResponse([]));
+    assert.equal(res.ok, false);
+  });
+
+  await check('NDJSON stream is accepted too', async () => {
+    const res = await readStreamedAnswer(
+      sseResponse(['{"delta":"a"}\n', '{"delta":"b"}\n', '{"answer":"ab"}\n'], 'application/x-ndjson')
+    );
+    assert.equal(res.ok, true);
+    assert.ok(res.answer?.startsWith('ab'));
+  });
+
   await check('rig: every scene frame exists and is anchored', () => {
     const names = Object.keys(FRAMES);
     assert.ok(names.length > 10);
