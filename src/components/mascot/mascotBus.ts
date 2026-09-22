@@ -1,53 +1,109 @@
 /**
- * mascotBus — a tiny global event bus that lets any part of the app drive
- * the avatar's behavior (the "Mascot State Machine" pattern):
+ * mascotBus — the mascot's "brain": a global scene director that any part of
+ * the app can drive.
  *
- *   User Action → Product State → mascot.set(pose) → Mascot Reaction
+ * A SCENE = a short choreography (sprite/glyph frames + optional speech line
+ * + duration). Scenes can be simple (a single pose) or sequenced ("wave" for
+ * 2.6s, then back to idle). Any component can request one:
  *
- * Each "pose" maps 1:1 to a sprite (a full-body render of the character with
- * its own facial expression AND body language — see public/mascot/*.webp).
- * `set(pose)` holds the pose for a few seconds, then falls back to idle.
+ *   mascot.scene('greet')
+ *   mascot.speak('excited', 'خیالت راحت!', 3200)
+ *
+ * The avatar component subscribes and renders whatever scene is active.
  */
 
 export type MascotPose =
-  | 'idle' // arms crossed, warm smile
-  | 'wave' // waving hello
-  | 'happy' // laughing, eyes squinted
-  | 'excited' // fist pump
-  | 'thinking' // hand on chin, looking up
-  | 'talking' // explaining gesture
-  | 'sad' // apologetic, shoulders down
-  | 'surprised' // gasp, hands up
-  | 'confused' // scratching head
-  | 'confident' // sunglasses, arms crossed
-  | 'sleepy'; // yawning
+  | 'idle'
+  | 'wave'
+  | 'happy'
+  | 'excited'
+  | 'thinking'
+  | 'talking'
+  | 'sad'
+  | 'surprised'
+  | 'confused'
+  | 'confident'
+  | 'sleepy'
+  | 'typing';
 
-export type MascotListener = (pose: MascotPose) => void;
+export interface MascotScene {
+  /** steps: each step holds a pose for `ms` milliseconds */
+  steps: Array<{ pose: MascotPose; ms: number }>;
+  /** loop the last step until the scene is replaced (used for typing/talking) */
+  loopLast?: boolean;
+}
 
-const HOLD_MS: Record<MascotPose, number> = {
-  idle: 0,
-  wave: 3200,
-  happy: 2800,
-  excited: 3000,
-  thinking: 12000,
-  talking: 4200,
-  sad: 3600,
-  surprised: 2200,
-  confused: 3000,
-  confident: 3400,
-  sleepy: 3600,
+const SCENES: Record<string, MascotScene> = {
+  idle: { steps: [{ pose: 'idle', ms: 60000 }] },
+  greet: {
+    steps: [
+      { pose: 'wave', ms: 1500 },
+      { pose: 'excited', ms: 1400 },
+      { pose: 'idle', ms: Infinity },
+    ],
+  },
+  celebrate: {
+    steps: [
+      { pose: 'excited', ms: 1600 },
+      { pose: 'happy', ms: 1400 },
+      { pose: 'idle', ms: Infinity },
+    ],
+  },
+  laugh: {
+    steps: [
+      { pose: 'happy', ms: 2400 },
+      { pose: 'idle', ms: Infinity },
+    ],
+  },
+  think: { steps: [{ pose: 'thinking', ms: 14000 }], loopLast: true },
+  typing: { steps: [{ pose: 'typing', ms: 14000 }], loopLast: true },
+  talk: { steps: [{ pose: 'talking', ms: 14000 }], loopLast: true },
+  oops: {
+    steps: [
+      { pose: 'surprised', ms: 1400 },
+      { pose: 'sad', ms: 2600 },
+      { pose: 'idle', ms: Infinity },
+    ],
+  },
+  sad: { steps: [{ pose: 'sad', ms: 4200 }] },
+  puzzled: {
+    steps: [
+      { pose: 'confused', ms: 2800 },
+      { pose: 'idle', ms: Infinity },
+    ],
+  },
+  flex: {
+    steps: [
+      { pose: 'confident', ms: 3000 },
+      { pose: 'idle', ms: Infinity },
+    ],
+  },
+  sleepy: {
+    steps: [
+      { pose: 'sleepy', ms: 4200 },
+      { pose: 'idle', ms: Infinity },
+    ],
+  },
+  surprised: {
+    steps: [
+      { pose: 'surprised', ms: 2200 },
+      { pose: 'idle', ms: Infinity },
+    ],
+  },
 };
 
-class MascotBus {
-  private listeners = new Set<MascotListener>();
-  private timer: ReturnType<typeof setTimeout> | null = null;
-  private current: MascotPose = 'idle';
+type Listener = (scene: string) => void;
 
-  get pose(): MascotPose {
+class MascotBus {
+  private listeners = new Set<Listener>();
+  private timers: ReturnType<typeof setTimeout>[] = [];
+  private current = 'idle';
+
+  get currentScene(): string {
     return this.current;
   }
 
-  subscribe(fn: MascotListener): () => void {
+  subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
     fn(this.current);
     return () => {
@@ -55,27 +111,38 @@ class MascotBus {
     };
   }
 
-  /** Set a pose; auto-reverts to idle after its hold time. */
-  set(pose: MascotPose, ttl?: number) {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
+  /** Play a named scene. If `minMs` is given, keep it at least that long. */
+  scene(name: string, minMs?: number) {
+    const sc = SCENES[name] ?? SCENES.idle;
+    this.current = name;
+    this.timers.forEach(clearTimeout);
+    this.timers = [];
+    this.listeners.forEach((fn) => fn(name));
+
+    let t = 0;
+    sc.steps.forEach((step) => {
+      if (step.ms !== Infinity) {
+        this.timers.push(setTimeout(() => undefined, 0));
+        t += step.ms;
+      }
+    });
+
+    // schedule end-of-scene → idle (unless the last step is a hold/loop)
+    const lastHold = sc.steps[sc.steps.length - 1].ms === Infinity;
+    const total = lastHold ? (minMs ?? 0) : Math.max(t, minMs ?? 0);
+    if (total > 0 && total < 60000) {
+      this.timers.push(setTimeout(() => this.scene('idle'), total));
     }
-    this.current = pose;
-    this.listeners.forEach((fn) => fn(pose));
-    const hold = ttl ?? HOLD_MS[pose];
-    if (hold > 0) {
-      this.timer = setTimeout(() => {
-        this.current = 'idle';
-        this.listeners.forEach((fn) => fn('idle'));
-      }, hold);
-    }
+  }
+
+  /** Convenience: hold a single pose glyph for a given duration. */
+  pose(p: MascotPose, ms: number) {
+    this.scene(`pose:${p}`, ms);
   }
 }
 
 export const mascot = new MascotBus();
 
-/** Convenience for non-React code (CMS editors, handlers, etc.). */
 if (typeof window !== 'undefined') {
   (window as unknown as { __mascot: MascotBus }).__mascot = mascot;
 }

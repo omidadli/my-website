@@ -31,6 +31,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ theme, onNavigate }) =
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
+    window.dispatchEvent(new CustomEvent('nd:form-success'));
   };
 
   const channels = [

@@ -32,6 +32,7 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
   const handleConfirmBooking = (e: React.FormEvent) => {
     e.preventDefault();
     setStep(3);
+    window.dispatchEvent(new CustomEvent('nd:booking-success'));
   };
 
   return (
