@@ -22,6 +22,8 @@ import { AdminPage } from './pages/AdminPage';
 import { CustomPageView } from './pages/CustomPageView';
 import { SEOHead } from './components/SEOHead';
 import { ChatWidget } from './components/ChatWidget';
+import { MascotAvatar } from './components/mascot/MascotAvatar';
+import { useMascotEvents } from './components/mascot/useMascotEvents';
 
 function MainLayout() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -38,6 +40,9 @@ function MainLayout() {
   const [isThemeTransitioning, setIsThemeTransitioning] = useState<boolean>(false);
 
   const { isAdmin, setIsAdmin, data } = useContent();
+
+  // Wire the avatar assistant to real site events (greetings, idle nudges, …)
+  useMascotEvents(currentPage);
 
   const handleToggleTheme = useCallback(() => {
     // Add temporary transitioning class for smooth CSS token interpolation
@@ -218,7 +223,7 @@ function MainLayout() {
 
       {/* Main Content Area with Cinematic Motion Page Transitions */}
       <main
-        className={`flex-grow w-full relative z-10 pb-10 ${
+        className={`flex-grow w-full relative z-10 pb-28 sm:pb-24 ${
           currentPage === 'home' ? '' : 'max-w-6xl mx-auto px-4 sm:px-8 pt-28 sm:pt-32'
         }`}
       >
@@ -320,7 +325,10 @@ function MainLayout() {
 
       {/* Admin Floating Toolbar */}
       <AdminFloatingBar />
-      <ChatWidget theme={theme} />
+      {currentPage !== 'admin' && <ChatWidget theme={theme} />}
+
+      {/* Mascot assistant — avatar reacts to site events, clicks open the chat */}
+      {currentPage !== 'admin' && <MascotAvatar />}
 
       {/* Admin PIN Login Modal */}
       <AdminLoginModal

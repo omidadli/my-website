@@ -789,3 +789,331 @@ html.theme-transitioning *::after {
               box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
+/* ==========================================================================
+   Mascot v4 — GIF-style frame acting, flush with the bottom edge
+   - corner avatar = chat launcher; hides (body.chat-open) while panel open
+   - looping scenes (typing/talk/listen) cycle frames like a GIF; body bobs
+   - compact+dim while the user scrolls so sections stay readable
+   ========================================================================== */
+
+.mascot-root {
+  width: clamp(112px, 12vw, 172px);
+  pointer-events: none;
+  transition: opacity 0.3s var(--nd-ease), transform 0.3s var(--nd-ease);
+}
+
+.mascot-stage {
+  pointer-events: auto;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mascot-stage:focus-visible .mascot-figure {
+  filter: drop-shadow(0 0 1.5px color-mix(in srgb, var(--nd-accent) 80%, transparent));
+}
+
+/* chat panel is open → the mascot "walked into" the chat */
+body.chat-open .mascot-root {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+
+/* user is scrolling → step back so content stays readable */
+.mascot-root.mascot-compact {
+  opacity: 0.45;
+}
+.mascot-root.mascot-compact .mascot-figure {
+  transform: scale(0.8);
+  transform-origin: 100% 100%;
+}
+.mascot-figure {
+  transition: transform 0.35s var(--nd-ease);
+}
+
+.mascot-sway {
+  transform-origin: 50% 92%;
+  animation: mascot-sway 7s ease-in-out infinite;
+}
+
+@keyframes mascot-sway {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-2.5px) rotate(-0.7deg);
+  }
+}
+
+.mascot-figure {
+  position: relative;
+}
+
+.mascot-body {
+  position: relative;
+  will-change: transform;
+  transform-origin: 50% 88%; /* neck pivot — the whole figure turns toward the cursor */
+}
+
+/* gentle hover affordance only — no random scenes on hover */
+.mascot-stage {
+  transition: transform 0.3s var(--nd-ease);
+}
+
+.mascot-stage:hover .mascot-figure {
+  transform: scale(1.045);
+}
+
+/* frame stack — first frame lays out, the rest overlay; active shows */
+.mascot-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  position: relative;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
+}
+
+.mascot-img + .mascot-img {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  object-fit: contain;
+}
+
+.mascot-img.is-active {
+  opacity: 1;
+  z-index: 2;
+}
+
+/* GIF runs: near-instant swaps (no ghost trails) */
+.mascot-figure[data-anim='1'] .mascot-img {
+  transition: opacity 0.05s linear;
+}
+
+.mascot-shadow {
+  height: 9px;
+  width: 70%;
+  margin: -3px auto 0;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, rgba(23, 23, 28, 0.24), transparent);
+}
+
+[data-theme='dark'] .mascot-shadow {
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+}
+
+/* ---------- acting: body language while a loop scene plays ---------- */
+.mascot-figure[data-scene='typing'] .mascot-body {
+  animation: mascot-typebob 0.58s ease-in-out infinite;
+}
+
+@keyframes mascot-typebob {
+  0%,
+  100% {
+    margin-top: 0;
+  }
+  50% {
+    margin-top: -1.5px;
+  }
+}
+
+.mascot-figure[data-scene='talk'] .mascot-body {
+  animation: mascot-talklean 1.15s ease-in-out infinite;
+}
+
+@keyframes mascot-talklean {
+  0%,
+  100% {
+    margin-left: 0;
+    rotate: 0deg;
+  }
+  50% {
+    margin-left: -1px;
+    rotate: 0.8deg;
+  }
+}
+
+.mascot-figure[data-scene='listen'] .mascot-body {
+  animation: mascot-nod 1.8s ease-in-out infinite;
+}
+
+@keyframes mascot-nod {
+  0%,
+  100% {
+    margin-top: 0;
+  }
+  35% {
+    margin-top: 1.2px;
+  }
+  70% {
+    margin-top: 0.4px;
+  }
+}
+
+/* ---------- speech bubble ---------- */
+.mascot-bubble {
+  position: absolute;
+  bottom: calc(100% - 12px);
+  right: 6px;
+  max-width: min(250px, 62vw);
+  padding: 0.55rem 0.8rem;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--nd-surface);
+  border: 1px solid var(--nd-line-strong);
+  box-shadow: var(--nd-shadow-md);
+  color: var(--nd-ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.65;
+  white-space: normal;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.mascot-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  right: 14px;
+  width: 9px;
+  height: 9px;
+  background: var(--nd-surface);
+  border-right: 1px solid var(--nd-line-strong);
+  border-bottom: 1px solid var(--nd-line-strong);
+  transform: rotate(45deg);
+}
+
+/* ==========================================================================
+   Assistant chat panel — flush with the bottom edge, video bar on top
+   ========================================================================== */
+
+.mascot-chat {
+  width: min(94vw, 390px);
+  height: min(72vh, 600px);
+  backdrop-filter: blur(18px);
+}
+
+.mascot-chat-stage {
+  background:
+    radial-gradient(120% 90% at 78% 110%, color-mix(in srgb, var(--nd-accent) 22%, transparent), transparent 60%),
+    radial-gradient(120% 120% at 15% -20%, rgba(99, 91, 255, 0.14), transparent 55%),
+    linear-gradient(170deg, #171728 0%, #0d0d17 100%);
+}
+
+.mascot-chat-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(46% 70% at 50% 78%, color-mix(in srgb, var(--nd-accent) 30%, transparent), transparent 70%);
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.mascot-chat-avatar {
+  position: absolute;
+  bottom: -5%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 138px;
+  animation: mascot-sway 7s ease-in-out infinite;
+}
+
+.mascot-chat-status {
+  z-index: 2;
+}
+
+/* the AI's short spoken aside, floating beside the video-bar avatar */
+.mascot-chat-said {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  max-width: 58%;
+  padding: 0.45rem 0.75rem;
+  border-radius: 12px 12px 12px 4px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #17171c;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.6;
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.mascot-chat-scroll {
+  scrollbar-width: thin;
+}
+
+/* ---------- name-ask bubble ---------- */
+.mascot-ask-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.mascot-ask-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--nd-line-strong);
+  background: var(--nd-bg);
+  color: var(--nd-ink);
+  font-size: 11px;
+  font-weight: 700;
+  outline: none;
+}
+
+.mascot-ask-input:focus {
+  border-color: color-mix(in srgb, var(--nd-accent) 55%, transparent);
+}
+
+.mascot-ask-btn {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--nd-line-strong);
+  background: transparent;
+  color: var(--nd-muted);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s var(--nd-ease);
+}
+
+.mascot-ask-btn:hover {
+  border-color: var(--nd-line-strong);
+  color: var(--nd-ink);
+}
+
+.mascot-ask-btn--ok {
+  border: none;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+}
+
+.mascot-ask-btn--ok:hover {
+  filter: brightness(1.1);
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .mascot-sway,
+  .mascot-chat-avatar,
+  .mascot-figure[data-scene] .mascot-body {
+    animation: none !important;
+  }
+  .mascot-img,
+  .mascot-root,
+  .mascot-figure {
+    transition: none !important;
+  }
+}
