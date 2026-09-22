@@ -5,7 +5,7 @@ import { Theme } from '../../types';
 import { useContent } from '../../context/ContentContext';
 import { api } from '../../services/api';
 import { mascotAct } from './useMascotEvents';
-import { ActSpec, applyAIRawAnswer, directorGetContext } from './director';
+import { SoulActSpec, applyAIRawAnswer, soulGetContext, soulSnapshotLine } from './soul';
 import { MascotFigure } from './MascotAvatar';
 
 interface AssistantPanelProps {
@@ -90,10 +90,15 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
     setInput('');
     setBusy(true);
     mascotAct('typing'); // he is "writing" the answer on his laptop
-    const ctx = directorGetContext();
+    const ctx = soulGetContext();
     const res = await api.sendChat(
       next.map((m) => ({ role: m.role, content: m.content })),
-      { name: ctx.name, page: ctx.page, daypart: ctx.daypart }
+      {
+        name: ctx.name,
+        page: ctx.page,
+        daypart: ctx.daypart,
+        bodyState: soulSnapshotLine(), // behavioral continuity for the soul
+      }
     );
     setBusy(false);
     if (res.ok && res.answer) {

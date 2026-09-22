@@ -101,7 +101,7 @@ class MascotBus {
     };
   }
 
-  /** Play a scene. `ttl` overrides a looping scene's safety timer. */
+  /** Play a scene. `ttl` overrides the loop guard OR the finite auto-return. */
   scene(name: string, ttl?: number) {
     const def = SCENES[name] ?? SCENES.idle;
     this.current = name;
@@ -110,11 +110,14 @@ class MascotBus {
     this.listeners.forEach((fn) => fn(name));
 
     const total = def.frames.reduce((a, s) => a + s.ms, 0);
-    if (!def.loop && total > 0) {
-      this.timers.push(setTimeout(() => this.scene('idle'), total));
-    } else if (def.loop) {
+    if (def.loop) {
       const guard = ttl ?? def.ttl;
       if (guard) this.timers.push(setTimeout(() => this.scene('idle'), guard));
+    } else {
+      // finite: hold exactly `ttl` when the director asks for a custom hold,
+      // otherwise auto-return after the natural sequence length
+      const end = ttl && ttl > 0 ? ttl : total;
+      if (end > 0) this.timers.push(setTimeout(() => this.scene('idle'), end));
     }
   }
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Theme } from '../types';
 import { AssistantPanel } from './mascot/AssistantPanel';
-import { mascot } from './mascot/mascotBus';
+import { soulSystem, soulJourney, soulSetChatOpen } from './mascot/soul';
 
 /**
  * AssistantChat — mounts the mascot's chat panel. The old standalone chat
@@ -15,7 +15,7 @@ export const ChatWidget: React.FC<{ theme: Theme; isHidden?: boolean }> = ({ the
   useEffect(() => {
     const openChat = () => {
       setOpen(true);
-      mascot.scene('wave', 2200);
+      soulSystem({ pose: 'wave', hold: 2.2 }); // he greets you at the door
     };
     window.addEventListener('nd:open-chat', openChat);
     return () => window.removeEventListener('nd:open-chat', openChat);
@@ -23,7 +23,8 @@ export const ChatWidget: React.FC<{ theme: Theme; isHidden?: boolean }> = ({ the
 
   useEffect(() => {
     document.body.classList.toggle('chat-open', open);
-    if (!open) mascot.scene('greet');
+    soulSetChatOpen(open);
+    if (!open) soulJourney({ pose: 'wave', hold: 2.6 }); // waves goodbye
     return () => document.body.classList.remove('chat-open');
   }, [open]);
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { mascot } from './mascotBus';
-import { journeyAct, directorSetContext, directorGetContext } from './director';
+import { soulJourney, soulSystem, soulSetVisitor } from './soul';
 import { Page } from '../../types';
 
 /**
@@ -42,7 +42,7 @@ const SESSION_EXIT = 'nd-mascot-v6-exit';
 
 const rate = { lastText: null as string | null, lastAt: 0 };
 
-export function mascotCue(scene: string, text: string, ms = 4200, force = false, askName = false) {
+export function mascotCue(pose: string, text: string, ms = 4200, force = false, askName = false) {
   try {
     if (localStorage.getItem(SILENCE_KEY) === '1') return;
   } catch {
@@ -54,13 +54,23 @@ export function mascotCue(scene: string, text: string, ms = 4200, force = false,
   if (text === rate.lastText) return;
   rate.lastText = text;
   rate.lastAt = now;
-  window.dispatchEvent(new CustomEvent<MascotCue>('mascot:cues', { detail: { scene, text, ms, askName } }));
-  journeyAct({ pose: scene as never, hold: ms / 1000 });
+  window.dispatchEvent(new CustomEvent<MascotCue>('mascot:cues', { detail: { scene: pose, text, ms, askName } }));
+  // «celebrate» is a choreography, not a pose: fist-pump → warm laugh
+  const spec =
+    pose === 'celebrate'
+      ? { pose: 'excited' as const, hold: ms / 1000, then: 'happy' as const, bubble: text }
+      : { pose: pose as 'idle' | 'wave' | 'sad', hold: ms / 1000, bubble: text };
+  soulJourney(spec);
 }
 
-/** Force a scene, no bubble (chat wiring). */
-export function mascotAct(sc: string, ms?: number) {
-  mascot.scene(sc, ms);
+/** Producer-side act (chat wiring) — routed through the soul. */
+export function mascotAct(pose: 'typing' | 'listen' | 'talking' | 'surprised' | 'sad' | 'wave' | 'oops', ms?: number) {
+  if (pose === 'oops') {
+    // startled → apologetic (mini choreography)
+    soulSystem({ pose: 'surprised', hold: 1.4, then: 'sad' });
+    return;
+  }
+  soulSystem({ pose, hold: ms ? ms / 1000 : undefined });
 }
 
 function getName(): string {
@@ -107,12 +117,12 @@ export function useMascotEvents(currentPage: Page) {
   const nameRef = useRef(getName());
   const pageRef = useRef(currentPage);
   pageRef.current = currentPage;
-  directorSetContext({ name: nameRef.current, page: currentPage });
+  soulSetVisitor({ name: nameRef.current, page: currentPage });
   useEffect(() => {
-    directorSetContext({ page: currentPage });
+    soulSetVisitor({ page: currentPage });
   }, [currentPage]);
   useEffect(() => {
-    const onName = () => directorSetContext({ name: getName() });
+    const onName = () => soulSetVisitor({ name: getName() });
     window.addEventListener('nd:mascot-name', onName);
     return () => window.removeEventListener('nd:mascot-name', onName);
   }, []);

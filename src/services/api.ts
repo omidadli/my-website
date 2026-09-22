@@ -204,8 +204,8 @@ export const api = {
   /** AI consultant conversation. */
   async sendChat(
     messages: { role: 'user' | 'model'; content: string }[],
-    mascotContext?: { name?: string; page?: string; daypart?: string }
-  ): Promise<{ ok: boolean; answer?: string; mode?: 'ai' | 'local'; error?: string }> {
+    mascotContext?: { name?: string; page?: string; daypart?: string; bodyState?: string }
+  ): Promise<{ ok: boolean; answer?: string; act?: { pose?: string; hold?: number; bubble?: string; then?: string }; mode?: 'ai' | 'local'; error?: string }> {
     try {
       const r = await fetch('/api/chat', {
         method: 'POST',
@@ -213,7 +213,7 @@ export const api = {
         body: JSON.stringify({ messages, mascot: mascotContext }),
       });
       const j = await r.json().catch(() => ({}));
-      return r.ok && j?.ok ? { ok: true, answer: j.answer, mode: j.mode } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+      return r.ok && j?.ok ? { ok: true, answer: j.answer, act: j.act, mode: j.mode } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
     } catch {
       return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
     }

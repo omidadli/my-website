@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { mascot, SCENES } from './mascotBus';
+import { soulJourney } from './soul';
 import { MascotCue } from './useMascotEvents';
 import sprites from './sprites.json';
 
@@ -241,7 +242,7 @@ export function MascotAvatar() {
     }
     window.dispatchEvent(new CustomEvent('nd:mascot-name', { detail: n }));
     if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
-    mascot.scene('celebrate');
+    soulJourney({ pose: 'excited', hold: 2.4, then: 'happy' });
     showBubble(`خوشحالم شناختم، ${n}! هر سوالی بود در خدمتم.`, 4600);
   };
 
@@ -253,7 +254,7 @@ export function MascotAvatar() {
     }
     if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
     setBubble(null);
-    mascot.scene('wave');
+    soulJourney({ pose: 'wave', hold: 2.6 });
   };
 
   // the input row appears right away so the visitor can start typing
