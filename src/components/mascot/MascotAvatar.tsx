@@ -7,35 +7,33 @@ import sprites from './sprites.json';
 /**
  * Mascot figure — the living character.
  *
- * Acting = GIF-style frame sequences driven by the scene director
- * (mascotBus). Looping scenes cycle their frames forever until replaced;
- * finite scenes play once and fall back to idle. On single-frame scenes the
- * pupils additionally track the cursor (per-sprite iris coordinates measured
- * with FaceMesh).
+ * Head tracking: instead of moving pupil overlays (which read as fake), the
+ * WHOLE figure turns toward the cursor in fake-3D — perspective rotateY /
+ * rotateX around the neck pivot (transform-origin 50% 88%), plus a subtle
+ * counter-translate. With no mouse for a few seconds he slowly glances
+ * around on his own, like someone thinking.
  *
- * Used twice — pinned to the bottom edge (`MascotAvatar`) and as the live
- * video bar inside the chat panel — both perfectly in sync via the bus.
+ * Acting = GIF-style frame loops driven by mascotBus (typing, talk, listen,
+ * greet, celebrate, oops…). Used twice: corner widget + chat video bar,
+ * always in sync via the bus.
  */
 
-type Eye = { cx: number; cy: number; r: number };
 type SpriteMeta = { src: string; w: number; h: number; eyes: Eye[] | null };
+type Eye = { cx: number; cy: number; r: number };
 const META = sprites as unknown as Record<string, SpriteMeta>;
 
-// frames where pupils may track the cursor (single-frame, eyes-open art)
-const PUPIL_FRAMES = new Set(['idle', 'wave', 'excited', 'thinking', 'surprised', 'confused']);
-// art that already acts with its own eyes (sunglasses / shut eyes / looking down)
 const ALL_FRAMES = Array.from(new Set(Object.values(SCENES).flatMap((s) => s.frames.map((f) => f.f))));
 
-const BODY_X = 0.014;
-const BODY_Y = 0.008;
-const BODY_R = 1.6;
-const DEAD_ZONE = 22;
+const TURN_Y = 9; // max head-turn, degrees
+const TURN_X = 5.5; // max head tilt, degrees
+const DRIFT_X = 0.012; // body counter-translate (× width)
+const DRIFT_Y = 0.008;
+const GLANCE_AFTER = 4200; // ms without mouse → he starts glancing around
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
 export function MascotFigure({ corner = false }: { corner?: boolean }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  const pupilRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
   const [scene, setScene] = useState('idle');
   const [def, setDef] = useState(SCENES.idle);
@@ -45,7 +43,7 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
   const defRef = useRef(def);
   defRef.current = def;
 
-  // ------------------------------------------------ frame sequencer
+  // ------------------------------------------------ frame sequencer (GIF loops)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const playAt = (i: number) => {
@@ -72,9 +70,8 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
     };
   }, []);
 
-  // warm the frame cache so the first loop doesn't stutter
+  // warm the frame cache so the first loop never stutters
   useEffect(() => {
-    const warm = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
     const run = () => {
       ALL_FRAMES.forEach((f) => {
         const im = new Image();
@@ -82,11 +79,12 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
         im.decode?.().catch(() => undefined);
       });
     };
-    if (warm) warm(run);
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
+    if (ric) ric(run);
     else setTimeout(run, 1500);
   }, []);
 
-  // ------------------------------------------------ eye/body animation
+  // ------------------------------------------------ head tracking
   useEffect(() => {
     const root = rootRef.current;
     const body = bodyRef.current;
@@ -96,73 +94,35 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
     let raf = 0;
     const cur = { x: 0, y: 0 };
     const tgt = { x: 0, y: 0 };
-    const fast = { x: 0, y: 0 };
     let mouse: { x: number; y: number } | null = null;
-    let saccade = { x: 0, y: 0, until: 0, next: 2400 };
+    let lastMove = 0;
 
     const tick = (now: number) => {
-      const frame = defRef.current.frames[frameIdxRef.current]?.f ?? 'idle';
-      const meta = META[frame];
-      const trackable = PUPIL_FRAMES.has(frame) && meta?.eyes;
-
-      if (trackable && mouse) {
+      if (mouse && now - lastMove < GLANCE_AFTER) {
+        // follow the cursor — stronger when he's centered on screen
         const rect = root.getBoundingClientRect();
         const fx = rect.left + rect.width / 2;
-        const fy = rect.top + rect.height * (meta.eyes[0]?.cy ?? 0.3);
+        const fy = rect.top + rect.height * 0.35; // ≈ head height
         const dx = mouse.x - fx;
         const dy = mouse.y - fy;
         const dist = Math.hypot(dx, dy) || 1;
-        if (dist < DEAD_ZONE) {
-          tgt.x = 0;
-          tgt.y = 0;
-        } else {
-          const norm = Math.min(1, dist / (window.innerWidth * 0.4));
-          tgt.x = clamp((dx / dist) * norm, -1, 1);
-          tgt.y = clamp((dy / dist) * norm, -1, 1);
-        }
+        const norm = Math.min(1, dist / (window.innerWidth * 0.42));
+        tgt.x = clamp((dx / dist) * norm, -1, 1);
+        tgt.y = clamp((dy / dist) * norm, -1, 1);
       } else {
-        tgt.x = 0;
-        tgt.y = 0;
+        // no cursor around → slow curious glances left/right
+        const t = now / 1000;
+        tgt.x = 0.3 * Math.sin(t * 0.5);
+        tgt.y = 0.12 * Math.sin(t * 0.33 + 1.1);
       }
 
-      let sx = 0;
-      let sy = 0;
-      if (trackable) {
-        if (now > saccade.next && now > saccade.until) {
-          saccade = {
-            x: (Math.random() - 0.5) * 0.2,
-            y: (Math.random() - 0.5) * 0.12,
-            until: now + 90 + Math.random() * 80,
-            next: now + 2400 + Math.random() * 3200,
-          };
-        }
-        if (now < saccade.until) {
-          sx = saccade.x;
-          sy = saccade.y;
-        }
-      }
-
-      fast.x += (tgt.x - fast.x) * 0.2;
-      fast.y += (tgt.y - fast.y) * 0.2;
-      cur.x += (tgt.x - cur.x) * 0.05;
-      cur.y += (tgt.y - cur.y) * 0.05;
-      const gx = cur.x * 0.72 + fast.x * 0.28 + sx;
-      const gy = cur.y * 0.72 + fast.y * 0.28 + sy;
+      cur.x += (tgt.x - cur.x) * 0.07;
+      cur.y += (tgt.y - cur.y) * 0.07;
 
       const w = root.getBoundingClientRect().width;
-      if (trackable) {
-        const rr = (meta.eyes[0]?.r ?? 0.016) * w;
-        const ex = gx * 1.3 * rr;
-        const ey = gy * 1.3 * rr * 0.85;
-        for (const el of pupilRefs.current) {
-          if (el) el.style.transform = `translate(-50%, -50%) translate3d(${ex.toFixed(2)}px, ${ey.toFixed(2)}px, 0)`;
-        }
-      }
-
-      const hx = gx * BODY_X * w;
-      const hy = gy * BODY_Y * w;
-      const hr = gx * BODY_R;
-      body.style.transform = `translate3d(${hx.toFixed(2)}px, ${hy.toFixed(2)}px, 0) rotate(${hr.toFixed(2)}deg)`;
+      body.style.transform =
+        `perspective(720px) rotateY(${(cur.x * TURN_Y).toFixed(2)}deg) rotateX(${(-cur.y * TURN_X).toFixed(2)}deg) ` +
+        `translate3d(${(cur.x * DRIFT_X * w).toFixed(2)}px, ${(cur.y * DRIFT_Y * w).toFixed(2)}px, 0)`;
 
       raf = requestAnimationFrame(tick);
     };
@@ -170,6 +130,7 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
 
     const onMove = (e: PointerEvent) => {
       mouse = { x: e.clientX, y: e.clientY };
+      lastMove = performance.now();
     };
     const onLeave = () => {
       mouse = null;
@@ -201,22 +162,6 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
             className={`mascot-img ${f === activeFrame ? 'is-active' : ''}`}
           />
         ))}
-        {ALL_FRAMES.filter((f) => PUPIL_FRAMES.has(f)).map((p) =>
-          ((META[p].eyes ?? []) as Eye[]).map((eye, i) => (
-            <span
-              key={`${p}-${i}`}
-              ref={(el) => {
-                pupilRefs.current[ALL_FRAMES.indexOf(p) * 2 + i] = el;
-              }}
-              className={`mascot-pupil ${activeFrame === p ? 'is-active' : ''}`}
-              style={{
-                left: `${(eye.cx * 100).toFixed(3)}%`,
-                top: `${(eye.cy * 100).toFixed(3)}%`,
-                width: `${(eye.r * 1.65 * 100).toFixed(3)}%`,
-              }}
-            />
-          ))
-        )}
       </div>
       {corner && <div className="mascot-shadow" />}
     </div>
@@ -228,14 +173,15 @@ export function MascotAvatar() {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const compactTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [bubble, setBubble] = useState<{ id: number; text: string; shown: string } | null>(null);
+  const [bubble, setBubble] = useState<{ id: number; text: string; shown: string; askName?: boolean } | null>(null);
   const bubbleId = useRef(0);
   const bubbleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typeInt = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [nameInput, setNameInput] = useState('');
 
-  const showBubble = useCallback((text: string, ms: number) => {
+  const showBubble = useCallback((text: string, ms: number, askName = false) => {
     bubbleId.current += 1;
-    setBubble({ id: bubbleId.current, text, shown: '' });
+    setBubble({ id: bubbleId.current, text, shown: '', askName });
     let i = 0;
     if (typeInt.current) clearInterval(typeInt.current);
     typeInt.current = setInterval(() => {
@@ -254,7 +200,7 @@ export function MascotAvatar() {
     const onCue = (e: Event) => {
       const d = (e as CustomEvent<MascotCue>).detail;
       if (!d?.text) return;
-      showBubble(d.text, d.ms ?? 4200);
+      showBubble(d.text, d.ms ?? 4200, d.askName);
     };
     window.addEventListener('mascot:cues', onCue);
     return () => {
@@ -264,8 +210,7 @@ export function MascotAvatar() {
     };
   }, [showBubble]);
 
-  // while the user scrolls: shrink + fade the mascot so it never fights
-  // with section readability; restore ~500ms after scrolling stops
+  // while scrolling: compact + dim so sections stay readable
   useEffect(() => {
     let last = 0;
     const onScroll = () => {
@@ -284,13 +229,34 @@ export function MascotAvatar() {
     };
   }, []);
 
-  const lastHover = useRef(0);
-  const onHover = () => {
-    const now = Date.now();
-    if (now - lastHover.current < 30000) return;
-    lastHover.current = now;
-    if (mascot.currentScene === 'idle') mascot.scene('greet');
+  // ---- name capture ------------------------------------------------------
+  const submitName = (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = nameInput.trim().slice(0, 24);
+    if (!n) return;
+    try {
+      localStorage.setItem('nd-mascot-name', n);
+    } catch {
+      /* private mode */
+    }
+    window.dispatchEvent(new CustomEvent('nd:mascot-name', { detail: n }));
+    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+    mascot.scene('celebrate');
+    showBubble(`خوشحالم شناختم، ${n}! هر سوالی بود در خدمتم.`, 4600);
   };
+
+  const skipName = () => {
+    try {
+      localStorage.setItem('nd-mascot-skip', '1');
+    } catch {
+      /* private mode */
+    }
+    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+    setBubble(null);
+    mascot.scene('wave');
+  };
+
+  const askVisible = !!bubble?.askName && bubble.shown === bubble.text;
 
   return (
     <div ref={rootRef} className="mascot-root fixed bottom-0 right-2 z-[50] sm:right-5">
@@ -303,8 +269,30 @@ export function MascotAvatar() {
             exit={{ opacity: 0, y: 6, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 380, damping: 26 }}
             className="mascot-bubble"
+            onMouseEnter={() => {
+              if (bubbleTimer.current && bubble?.askName) clearTimeout(bubbleTimer.current);
+            }}
           >
             {bubble.shown}
+            {askVisible && (
+              <form onSubmit={submitName} className="mascot-ask-row">
+                <input
+                  autoFocus
+                  maxLength={24}
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="اسمت چیه؟"
+                  className="mascot-ask-input"
+                  aria-label="اسم شما"
+                />
+                <button type="submit" className="mascot-ask-btn mascot-ask-btn--ok">
+                  ثبت
+                </button>
+                <button type="button" onClick={skipName} className="mascot-ask-btn">
+                  بعداً
+                </button>
+              </form>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -312,7 +300,6 @@ export function MascotAvatar() {
       <div
         className="mascot-stage"
         onClick={() => window.dispatchEvent(new CustomEvent('nd:open-chat'))}
-        onMouseEnter={onHover}
         role="button"
         tabIndex={0}
         aria-label="دستیار هوشمند — باز کردن گفتگو"

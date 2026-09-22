@@ -854,6 +854,16 @@ body.chat-open .mascot-root {
 .mascot-body {
   position: relative;
   will-change: transform;
+  transform-origin: 50% 88%; /* neck pivot — the whole figure turns toward the cursor */
+}
+
+/* gentle hover affordance only — no random scenes on hover */
+.mascot-stage {
+  transition: transform 0.3s var(--nd-ease);
+}
+
+.mascot-stage:hover .mascot-figure {
+  transform: scale(1.045);
 }
 
 /* frame stack — first frame lays out, the rest overlay; active shows */
@@ -885,25 +895,6 @@ body.chat-open .mascot-root {
 /* GIF runs: near-instant swaps (no ghost trails) */
 .mascot-figure[data-anim='1'] .mascot-img {
   transition: opacity 0.05s linear;
-}
-
-.mascot-pupil {
-  position: absolute;
-  aspect-ratio: 1;
-  height: auto;
-  border-radius: 999px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle at 35% 30%, #6b4426 0%, #3f2413 55%, #221107 100%);
-  box-shadow: 0 0 0 0.5px rgba(20, 10, 4, 0.55);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-  will-change: transform;
-  z-index: 3;
-}
-
-.mascot-pupil.is-active {
-  opacity: 1;
 }
 
 .mascot-shadow {
@@ -1041,15 +1032,66 @@ body.chat-open .mascot-root {
   scrollbar-width: thin;
 }
 
+/* ---------- name-ask bubble ---------- */
+.mascot-ask-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.mascot-ask-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--nd-line-strong);
+  background: var(--nd-bg);
+  color: var(--nd-ink);
+  font-size: 11px;
+  font-weight: 700;
+  outline: none;
+}
+
+.mascot-ask-input:focus {
+  border-color: color-mix(in srgb, var(--nd-accent) 55%, transparent);
+}
+
+.mascot-ask-btn {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--nd-line-strong);
+  background: transparent;
+  color: var(--nd-muted);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s var(--nd-ease);
+}
+
+.mascot-ask-btn:hover {
+  border-color: var(--nd-line-strong);
+  color: var(--nd-ink);
+}
+
+.mascot-ask-btn--ok {
+  border: none;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+}
+
+.mascot-ask-btn--ok:hover {
+  filter: brightness(1.1);
+}
+
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .mascot-sway,
   .mascot-chat-avatar,
   .mascot-figure[data-scene] .mascot-body {
     animation: none !important;
-  }
-  .mascot-pupil {
-    display: none;
   }
   .mascot-img,
   .mascot-root,
