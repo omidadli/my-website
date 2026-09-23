@@ -20,6 +20,25 @@ interface ChatMsg {
 }
 
 /**
+ * Render model text with clickable markdown links — the AI cites article
+ * sources as `[عنوان](#/blog/…)`. Hash hrefs navigate the SPA through the
+ * global hashchange listener in App.tsx, no router needed.
+ */
+const renderAnswer = (text: string) => {
+  const parts = String(text).split(/(\[[^\]]+\]\([^)\s]+\))/g);
+  return parts.map((p, i) => {
+    const m = p.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+    if (!m) return <React.Fragment key={i}>{p}</React.Fragment>;
+    const href = /^(#|https?:\/\/)/.test(m[2]) ? m[2] : `#${m[2]}`;
+    return (
+      <a key={i} href={href} className="break-words font-extrabold underline decoration-2 underline-offset-2">
+        {m[1]}
+      </a>
+    );
+  });
+};
+
+/**
  * AssistantPanel — the mascot's own chat window.
  *
  * Layout: avatar "video bar" on top (live scene — the SAME scene the corner
@@ -195,7 +214,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
                         : 'rounded-br-sm bg-[color:var(--nd-accent)] text-white shadow-sm'
                   }`}
                 >
-                  {m.content}
+                  {m.role === 'model' ? renderAnswer(m.content) : m.content}
                 </div>
               </div>
             ))}

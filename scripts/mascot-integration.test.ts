@@ -23,6 +23,15 @@ globalThis.document = {
 import { soulAct, applyAIRawAnswer, SOUL_POSES } from '../src/components/mascot/soul';
 import { SCENES, mascot } from '../src/components/mascot/mascotBus';
 import { VIDEO_SCENES } from '../src/components/mascot/mascotVideos';
+import {
+  articleDocs,
+  retrieveSources,
+  buildSourcesBlock,
+  buildSoulPrompt,
+  buildDigest,
+  localAnswer,
+  SOURCES_RULES,
+} from '../lib/assistant';
 
 let failures = 0;
 const check = (name: string, cond: boolean, extra = '') => {
@@ -98,6 +107,68 @@ check('talk loops talking.mp4', VIDEO_SCENES['talk'].steps[0].v === 'talking' &&
 check('typing loops typing.mp4', VIDEO_SCENES['typing'].steps[0].v === 'typing' && VIDEO_SCENES['typing'].steps[0].loop === true);
 check('sad falls back to sprite', VIDEO_SCENES['sad'].steps[0].img === 'sad');
 check('listen falls back to sprite frames', VIDEO_SCENES['listen'].steps.length === 2 && VIDEO_SCENES['listen'].steps.every((s) => !!s.img));
+
+// 6. article RAG — the AI's access to ALL site data, incl. full article bodies
+const siteData = {
+  PERSONAL_INFO: { title: 'امید عدلی', shortBio: 'متخصص رشد دیجیتال', email: 'test@example.com' },
+  SERVICES: [],
+  CASE_STUDIES: [],
+  PRODUCTS: [],
+  BLOG_POSTS: [
+    {
+      id: 'ga4-setup-guide',
+      slug: 'ga4-setup-guide',
+      title: 'راهنمای کامل راه‌اندازی GA4 برای فروشگاه‌های اینترنتی',
+      excerpt: 'از صفر تا صد راه‌اندازی گوگل آنالیتیکس ۴ برای فروشگاه',
+      content: '',
+      categoryFa: 'تحلیل',
+      status: 'published',
+      sections: [
+        { heading: 'شروع کار', content: 'برای راه‌اندازی GA4 در فروشگاه اینترنتی ابتدا اکانت گوگل آنالیتیکس بسازید و ملک فروشگاه را ثبت کنید. بعد از پیوستن تگ گلوبال به سایت، رویدادهای خرید را پیکربندی کنید.', keyPoints: ['ثبت ملک', 'پیکربندی رویداد خرید'] },
+        { heading: 'چالش رایج', content: 'مشکل رایج در فروشگاه‌ها عدم ثبت درستی رویداد conversion است که باعث نادقیق بودن گزارش‌ها می‌شود.', keyPoints: [] },
+      ],
+    },
+    {
+      id: 'cro-checkout',
+      title: 'بهینه‌سازی نرخ تبدیل صفحه پرداخت (CRO)',
+      excerpt: 'کاهش ریزش در سبد خرید',
+      content: 'رایج‌ترین دلیل ریزش در سبد خرید، هزینه ارسال پنهان و فرم پرداخت طولانی است. با ساده‌سازی صفحه پرداخت می‌توان نرخ تبدیل را افزایش داد.',
+      categoryFa: 'تبدیل',
+      status: 'published',
+      sections: [],
+    },
+    { id: 'draft-secret', title: 'مقاله پنهان که هرگز نباید بیاید', content: 'محتوای پیش‌نویس درباره ga4 و فروشگاه', status: 'draft' },
+  ],
+};
+
+const docs = articleDocs(siteData);
+check('article index: 2 published docs (draft excluded)', docs.length === 2, `got ${docs.length}`);
+
+const hits = retrieveSources(siteData, 'چطور GA4 رو برای فروشگاه راه بیندازیم؟');
+check('RAG finds the GA4 article first', hits.length > 0 && hits[0].title.includes('GA4'), hits[0]?.title || 'no hits');
+check('RAG source url is the SPA hash route', hits[0]?.url === '#/blog/ga4-setup-guide', hits[0]?.url || '');
+check('RAG never returns draft posts', hits.every((h) => !h.title.includes('پنهان')));
+check('RAG source text carries the full body (sections merged)', (hits[0]?.text || '').includes('رویداد') && (hits[0]?.text || '').includes('conversion'));
+
+const noHits = retrieveSources(siteData, 'پیش‌بینی آب و هوای قاهره فردا');
+check('RAG stays silent on unrelated questions', noHits.length === 0, `got ${noHits.length}`);
+
+const sourcesBlock = buildSourcesBlock(hits);
+const soulPrompt = buildSoulPrompt({ persona: '', name: '', page: 'blog', daypart: 'عصر', bodyState: '', digest: buildDigest(siteData), sources: sourcesBlock || undefined });
+check('soul prompt injects the sources block', soulPrompt.includes('منابع مرتبط با سوال کاربر') && soulPrompt.includes('#/blog/ga4-setup-guide'));
+check('soul prompt carries the citation rules', soulPrompt.includes(SOURCES_RULES));
+check('soul prompt still has the act contract', soulPrompt.includes('[[act:') && soulPrompt.includes('واژگان بدن'));
+
+// full pipeline: an answer with a cited source + act line parses cleanly
+const raw = 'برای راه‌اندازی GA4 در فروشگاه، ابتدا ملک را ثبت کنید و رویداد خرید را پیکربندی کنید.\n\nمنبع: [راهنمای کامل راه‌اندازی GA4 برای فروشگاه‌های اینترنتی](#/blog/ga4-setup-guide) [[act:{"pose":"talking","hold":6}]]';
+const parsed = applyAIRawAnswer(raw);
+check('cited answer: act line stripped, source link kept', !parsed.text.includes('[[act:') && parsed.text.includes('](#/blog/ga4-setup-guide)'));
+check('cited answer: body acted by the AI directive (talk)', parsed.applied && mascot.currentScene === 'talk');
+
+// local (no-key) mode also cites the article
+const localQ = 'راهنمای GA4 تحلیل چطوریه؟';
+const local = localAnswer(localQ, buildDigest(siteData), 'CTA', retrieveSources(siteData, localQ));
+check('local mode cites the article link', local.includes('منبع: [') && local.includes('#/blog/ga4-setup-guide'));
 
 // let timers run: the last scene is a loop ('talk', ttl = 8s hold) → auto-idle
 setTimeout(() => {
