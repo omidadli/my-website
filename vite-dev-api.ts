@@ -1,24 +1,6 @@
 import type { Plugin } from 'vite';
 import fs from 'fs';
 import path from 'path';
-import { GoogleGenAI } from '@google/genai';
-
-let genAIClient: GoogleGenAI | null = null;
-function getGenAI(): GoogleGenAI | null {
-  const key = (process.env.GEMINI_API_KEY || '').trim();
-  if (!key) return null;
-  if (!genAIClient) {
-    genAIClient = new GoogleGenAI({
-      apiKey: key,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
-  }
-  return genAIClient;
-}
 
 // Local dev persistent storage files
 const CONTENT_FILE = path.resolve(process.cwd(), '.dev-content.json');
@@ -364,43 +346,52 @@ export function cmsDevApiPlugin(): Plugin {
               let answer = '';
               let mode: 'ai' | 'local' = 'local';
 
-              const ai = getGenAI();
-              if (ai) {
+              const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
+              if (geminiKey) {
                 const history = messages.slice(0, -1).filter((m) => m.role === 'user' || m.role === 'model').map((m) => ({
                   role: m.role === 'user' ? 'user' : 'model',
-                  text: String(m.content || '').slice(0, 800),
+                  parts: [{ text: String(m.content || '').slice(0, 800) }],
                 }));
 
-                const candidateModels = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite'];
+                const headers: Record<string, string> = {
+                  'Content-Type': 'application/json',
+                  'x-goog-api-key': geminiKey,
+                };
+
+                const candidateModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
 
                 for (const model of candidateModels) {
                   try {
-                    const responsePromise = ai.models.generateContent({
-                      model,
-                      contents: [
-                        ...history.map((h) => ({ role: h.role, parts: [{ text: h.text }] })),
-                        { role: 'user', parts: [{ text: question }] },
-                      ],
-                      config: {
-                        systemInstruction: soulPrompt,
-                        temperature: 0.6,
-                        maxOutputTokens: 300,
-                      },
+                    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+                    const gRes = await fetch(geminiUrl, {
+                      method: 'POST',
+                      headers,
+                      signal: AbortSignal.timeout(9000),
+                      body: JSON.stringify({
+                        systemInstruction: { parts: [{ text: soulPrompt }] },
+                        contents: [...history, { role: 'user', parts: [{ text: question }] }],
+                        generationConfig: {
+                          temperature: 0.6,
+                          maxOutputTokens: 250,
+                          thinkingConfig: {
+                            thinkingBudget: 0,
+                          },
+                        },
+                      }),
                     });
 
-                    const gRes = await Promise.race([
-                      responsePromise,
-                      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4500)),
-                    ]);
-
-                    const text = gRes?.text;
-                    if (text) {
-                      answer = text.trim();
-                      mode = 'ai';
-                      break;
+                    if (gRes.ok) {
+                      const gj: any = await gRes.json();
+                      const parts = gj?.candidates?.[0]?.content?.parts || [];
+                      const text = parts.find((p: any) => p?.text && !p?.thought)?.text || parts.find((p: any) => p?.text)?.text || parts[0]?.text;
+                      if (text) {
+                        answer = text.trim();
+                        mode = 'ai';
+                        break;
+                      }
                     }
                   } catch {
-                    // Gracefully continue to fallback model or local engine
+                    // Gracefully continue to fallback model or local engine without raising warnings
                   }
                 }
               }
@@ -443,29 +434,50 @@ export function cmsDevApiPlugin(): Plugin {
             const title = String(body.title || '').trim();
             if (!title) return sendJson({ ok: false, error: 'عنوان خالی است.' }, 400);
 
-            const ai = getGenAI();
-            if (ai) {
-              const candidateModels = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite'];
+            const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
+            if (geminiKey) {
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': geminiKey,
+              };
+
+              const candidateModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
 
               for (const model of candidateModels) {
                 try {
-                  const responsePromise = ai.models.generateContent({
-                    model,
-                    contents: `Translate this Persian page or post title into a short, concise, URL-safe English slug (lowercase English words joined by dashes, max 5 words, no punctuation, no explanations). Reply with ONLY the slug itself:\n\nTitle: ${title}`,
-                    config: {
-                      temperature: 0.1,
-                      maxOutputTokens: 100,
-                    },
+                  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+                  const gRes = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers,
+                    signal: AbortSignal.timeout(8000),
+                    body: JSON.stringify({
+                      contents: [
+                        {
+                          role: 'user',
+                          parts: [
+                            {
+                              text: `Translate this Persian page or post title into a short, concise, URL-safe English slug (lowercase English words joined by dashes, max 5 words, no punctuation, no explanations). Reply with ONLY the slug itself:\n\nTitle: ${title}`,
+                            },
+                          ],
+                        },
+                      ],
+                      generationConfig: {
+                        temperature: 0.1,
+                        maxOutputTokens: 150,
+                        thinkingConfig: {
+                          thinkingBudget: 0,
+                        },
+                      },
+                    }),
                   });
-
-                  const gRes = await Promise.race([
-                    responsePromise,
-                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500)),
-                  ]);
-
-                  const cleaned = cleanSlug(gRes?.text || '');
-                  if (cleaned) {
-                    return sendJson({ ok: true, slug: cleaned, source: 'gemini' });
+                  if (gRes.ok) {
+                    const gj: any = await gRes.json();
+                    const parts = gj?.candidates?.[0]?.content?.parts || [];
+                    const slugCandidate = parts.find((p: any) => p?.text)?.text?.trim();
+                    const cleaned = cleanSlug(slugCandidate || '');
+                    if (cleaned) {
+                      return sendJson({ ok: true, slug: cleaned, source: 'gemini' });
+                    }
                   }
                 } catch {
                   // Fall back smoothly to next model or transliteration without console noise
@@ -522,39 +534,6 @@ export function cmsDevApiPlugin(): Plugin {
             const mediaList = safeReadJson<any[]>(MEDIA_FILE, []);
             if (method === 'GET') {
               return sendJson({ ok: true, items: mediaList });
-            }
-            if (method === 'POST') {
-              try {
-                const response = new Response(req as any, {
-                  headers: req.headers as HeadersInit,
-                });
-                const form = await response.formData();
-                const file = form.get('file');
-                if (!(file instanceof Blob)) {
-                  return sendJson({ ok: false, error: 'فایلی ارسال نشده است.' }, 400);
-                }
-                const title = String(form.get('title') || (file as any).name || 'media');
-                const alt = String(form.get('alt') || '');
-                const buffer = Buffer.from(await file.arrayBuffer());
-                const mimeType = file.type || 'image/jpeg';
-                const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
-                const key = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-                const item = {
-                  id: key,
-                  key,
-                  url: dataUrl,
-                  title,
-                  alt,
-                  sizeKb: Math.round(buffer.length / 1024),
-                  contentType: mimeType,
-                  createdAt: new Date().toISOString(),
-                };
-                mediaList.unshift(item);
-                safeWriteJson(MEDIA_FILE, mediaList);
-                return sendJson({ ok: true, item });
-              } catch (err: any) {
-                return sendJson({ ok: false, error: err?.message || 'خطا در آپلود رسانه' }, 500);
-              }
             }
             if (method === 'DELETE') {
               const key = url.searchParams.get('key');
