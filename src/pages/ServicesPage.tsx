@@ -157,7 +157,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ theme, onNavigate })
 
       {/* Mid CTA */}
       <section className="max-w-4xl mx-auto">
-        <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[32px] p-8 sm:p-12 text-center space-y-5`}>
+        <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[var(--nd-radius-panel)] p-8 sm:p-12 text-center space-y-5`}>
           <span className={isDark ? 'nd-glass-dark inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold text-indigo-200' : 'nd-eyebrow inline-flex'}>
             <MessageCircle className="w-4 h-4" />
             <span>مشاوره‌ی اولیه و رایگان</span>

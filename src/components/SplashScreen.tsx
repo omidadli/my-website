@@ -62,7 +62,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
               className="flex flex-col items-center gap-4"
             >
               <span
-                className="w-16 h-16 rounded-[22px] grid place-items-center text-white text-2xl font-black shadow-[var(--nd-shadow-md)]"
+                className="w-16 h-16 rounded-[var(--nd-radius-card)] grid place-items-center text-white text-2xl font-black shadow-[var(--nd-shadow-md)]"
                 style={{ background: 'linear-gradient(135deg, #4f46e5, #7c6cf0)' }}
               >
                 ع

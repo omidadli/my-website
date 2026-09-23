@@ -40,6 +40,26 @@ CREATE TABLE IF NOT EXISTS comments (
 
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments (post_id);
 
+-- Lead capture (contact form + booking calendar)
+CREATE TABLE IF NOT EXISTS leads (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL DEFAULT 'contact',
+  name TEXT NOT NULL,
+  email TEXT DEFAULT '',
+  contact TEXT DEFAULT '',
+  website TEXT DEFAULT '',
+  goal TEXT DEFAULT '',
+  service TEXT DEFAULT '',
+  details TEXT NOT NULL,
+  booking_date TEXT DEFAULT '',
+  booking_time TEXT DEFAULT '',
+  created_at TEXT NOT NULL,
+  ip TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_leads_created ON leads (created_at);
+CREATE INDEX IF NOT EXISTS idx_leads_ip_time ON leads (ip, created_at);
+
 -- Media stored inside D1 (free fallback when R2 is not available)
 CREATE TABLE IF NOT EXISTS media_files (
   id TEXT PRIMARY KEY,

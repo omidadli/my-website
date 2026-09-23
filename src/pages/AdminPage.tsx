@@ -11,7 +11,7 @@ import {
   FolderKanban, UserRound, Home, FileText, Image as ImageIcon, Search, Palette,
   Settings, Lock, ShieldCheck, Cloud, HardDrive, ExternalLink, LogOut, Plus, Bot,
   Trash2, ChevronUp, ChevronDown, Download, Copy, CheckCircle2, XCircle, RotateCcw,
-  History, Eye, EyeOff, Wand2, Link2, Upload, Reply, Menu,
+  History, Eye, EyeOff, Wand2, Link2, Upload, Reply, Menu, Target,
 } from 'lucide-react';
 
 interface AdminPageProps {
@@ -168,7 +168,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
     toggleCommentApproval, deleteBlogComment, replyBlogComment,
   } = useContent();
 
-  type TabId = 'dashboard' | 'posts' | 'comments' | 'services' | 'portfolio' | 'products' | 'projects' | 'about' | 'home' | 'pages' | 'media' | 'seo' | 'chat' | 'appearance' | 'settings';
+  type TabId = 'dashboard' | 'posts' | 'comments' | 'services' | 'portfolio' | 'products' | 'projects' | 'about' | 'home' | 'pages' | 'media' | 'seo' | 'chat' | 'leads' | 'appearance' | 'settings';
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -181,6 +181,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   const [importText, setImportText] = useState('');
   const [mediaBusy, setMediaBusy] = useState(false);
   const [chatLog, setChatLog] = useState<{ id: string; question: string; answer: string; mode: string; created_at: string; ip: string }[] | null>(null);
+  const [leads, setLeads] = useState<Array<{
+    id: string; source: string; name: string; email: string; contact: string; website: string;
+    goal: string; service: string; details: string; booking_date: string; booking_time: string;
+    created_at: string; ip: string;
+  }> | null>(null);
   const mediaFileRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
 
@@ -258,6 +263,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
         { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban },
         { id: 'home', label: 'صفحه اصلی', icon: Home },
         { id: 'about', label: 'درباره من', icon: UserRound },
+      ],
+    },
+    {
+      group: 'دستیار و لیدها',
+      items: [
+        { id: 'chat', label: 'دستیار هوشمند', icon: Bot },
+        { id: 'leads', label: 'لیدها (تماس و رزرو)', icon: Target },
       ],
     },
     {
@@ -1096,6 +1108,56 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                         </div>
                         <p className="text-[11px] nd-muted leading-relaxed whitespace-pre-wrap line-clamp-4">{c.answer}</p>
                         <span className="nd-chip text-[9px]">{c.mode === 'ai' ? '🤖 پاسخ Gemini' : '📚 پاسخ از داده سایت'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ACard>
+            </div>
+          )}
+
+          {/* ---------------- LEADS ---------------- */}
+          {activeTab === 'leads' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle
+                  title="لیدها — درخواست‌های تماس و رزرو"
+                  desc="۲۰۰ درخواست آخر ارسالی از فرم صفحه تماس و تقویم رزرو جلسه"
+                  action={
+                    <button
+                      onClick={async () => { setLeads(await api.listLeads()); showToast('لیدها دریافت شد.'); }}
+                      className="nd-btn nd-btn-ghost px-4 py-2 text-[11px] cursor-pointer"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>دریافت لیدها</span>
+                    </button>
+                  }
+                />
+                {leads === null ? (
+                  <p className="text-xs nd-muted">برای دیدن لیست، دکمه «دریافت لیدها» را بزنید.</p>
+                ) : leads.length === 0 ? (
+                  <p className="text-xs nd-muted">هنوز لیدی ثبت نشده است.</p>
+                ) : (
+                  <div className="space-y-3 max-h-[28rem] overflow-y-auto pl-1">
+                    {leads.map((l) => (
+                      <div key={l.id} className="rounded-xl border border-[color:var(--nd-line)] p-3.5 space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-extrabold">{l.name}</span>
+                            <span className="nd-chip text-[9px]">{l.source === 'booking' ? '📅 رزرو جلسه' : '✉️ فرم تماس'}</span>
+                          </div>
+                          <span className="text-[9px] nd-faint dir-ltr shrink-0">{new Date(l.created_at).toLocaleString('fa-IR')}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] nd-muted">
+                          {l.email && <span>📧 <span className="dir-ltr inline-block">{l.email}</span></span>}
+                          {l.contact && <span>📱 <span className="dir-ltr inline-block">{l.contact}</span></span>}
+                          {l.website && <span>🔗 <span className="dir-ltr inline-block">{l.website}</span></span>}
+                        </div>
+                        {(l.service || l.goal) && <p className="text-[11px] font-bold text-[color:var(--nd-ink-2)]">{l.service || l.goal}</p>}
+                        {l.booking_date && (
+                          <p className="text-[11px] font-bold text-[color:var(--nd-accent)]">🗓 {l.booking_date} — ساعت {l.booking_time}</p>
+                        )}
+                        <p className="text-[11px] nd-muted leading-relaxed whitespace-pre-wrap">{l.details}</p>
                       </div>
                     ))}
                   </div>

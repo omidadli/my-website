@@ -1,11 +1,46 @@
 import type { Plugin } from 'vite';
 import fs from 'fs';
 import path from 'path';
+import {
+  buildDigest,
+  buildSoulPrompt,
+  buildSourcesBlock,
+  localAnswer,
+  retrieveSources,
+  type SourceHit,
+} from './lib/assistant';
+import {
+  PERSONAL_INFO,
+  SERVICES,
+  CASE_STUDIES,
+  PRODUCTS,
+  PROJECTS_PAGE_DATA,
+  BLOG_POSTS,
+  CHAT_CONFIG,
+  HOMEPAGE_HOW_I_WORK_STEPS,
+  HOW_I_WORK_STEPS,
+} from './src/data/content';
+
+// Dev parity with production: when the CMS has not saved content to
+// .dev-content.json yet, the chat brain falls back to the SAME seed content
+// the dev site renders from (src/data/content.ts — see ContentContext).
+const seedData = {
+  PERSONAL_INFO,
+  SERVICES,
+  CASE_STUDIES,
+  PRODUCTS,
+  PROJECTS_PAGE_DATA,
+  BLOG_POSTS,
+  CHAT_CONFIG,
+  HOMEPAGE_HOW_I_WORK_STEPS,
+  HOW_I_WORK_STEPS,
+};
 
 // Local dev persistent storage files
 const CONTENT_FILE = path.resolve(process.cwd(), '.dev-content.json');
 const COMMENTS_FILE = path.resolve(process.cwd(), '.dev-comments.json');
 const MEDIA_FILE = path.resolve(process.cwd(), '.dev-media.json');
+const LEADS_FILE = path.resolve(process.cwd(), '.dev-leads.json');
 
 const safeReadJson = <T>(file: string, fallback: T): T => {
   try {
@@ -52,174 +87,11 @@ const cleanSlug = (input: string): string =>
     .slice(0, 7)
     .join('-');
 
-const STOPWORDS = new Set([
-  'که', 'چه', 'چطور', 'کجا', 'کی', 'آیا', 'و', 'یا', 'در', 'به', 'از', 'با',
-  'برای', 'یک', 'این', 'آن', 'هست', 'هستن', 'میخوام', 'می‌خوام', 'کنم', 'کنید',
-  'شما', 'تو', 'من', 'لطفا', 'بگو', 'بگید', 'داره', 'دارید', 'اید', 'های', 'ها',
-  'روی', 'تا', 'هم', 'دیگه', 'خودم'
-]);
-
-const normalize = (s: string) =>
-  (s || '')
-    .replace(/[\u200c]/g, ' ')
-    .replace(/[يى]/g, 'ی')
-    .replace(/[كک]/g, 'ک')
-    .replace(/[أإآ]/g, 'ا')
-    .replace(/[ة]/g, 'ه')
-    .replace(/[؟?!.,:;()«»"'\-]/g, ' ')
-    .toLowerCase();
-
-const tokens = (s: string) =>
-  normalize(s).split(/\s+/).filter((t) => t.length >= 2 && !STOPWORDS.has(t));
-
-const SYNONYMS: string[][] = [
-  ['هزینه', 'قیمت', 'تعرفه', 'چقدر', 'مبلغ', 'بودجه', 'نرخ'],
-  ['جلسه', 'مشاوره', 'رزرو', 'وقت', 'تماس', 'ارتباط'],
-  ['نمونه', 'کار', 'پروژه', 'کیس', 'رزومه', 'سابقه'],
-  ['تبلیغات', 'کمپین', 'ادز', 'گوگل', 'اعلان'],
-  ['خدمات', 'سرویس', 'پکیج', 'پلن'],
-  ['سایت', 'وب', 'سایتی', 'فروشگاه', 'لندینگ'],
-  ['طراحی', 'ساخت', 'توسعه', 'راه', 'اندازی'],
-  ['تبدیل', 'فروش', 'خرید', 'درآمد', 'roas'],
-  ['سئو', 'seo', 'ارگانیک', 'جستجو'],
-];
-
-const expand = (q: Set<string>): Set<string> => {
-  const out = new Set(q);
-  for (const group of SYNONYMS) {
-    if (group.some((g) => q.has(g))) group.forEach((g) => out.add(g));
-  }
-  return out;
-};
-
-const buildDigest = (data: any): string => {
-  if (!data) return '';
-  const L: string[] = [];
-  const p = data.PERSONAL_INFO;
-  if (p) {
-    L.push(`درباره امید عدلی: ${p.title}. ${p.shortBio || p.bio || ''} سابقه: ${p.experienceYears || ''}، تعداد پروژه: ${p.campaignsCount || ''}. وضعیت همکاری فعلی: ${p.availability || ''}. راه‌های تماس: ایمیل ${p.email || ''}، تلگرام ${p.telegram || ''}، واتساپ/تلفن ${p.phoneFormatted || p.phone || ''}.`);
-  }
-  for (const s of data.SERVICES || []) {
-    if (s.status === 'draft') continue;
-    const pk = (s.packages || []).map((x: any) => `${x.title}: ${x.price}`).join('؛ ') || 'قیمت‌ها توافقی';
-    L.push(`خدمت «${s.title}» (${s.titleEn || ''}): ${s.fullDesc || s.shortDesc || ''} پکیج‌ها → ${pk}. خروجی‌ها: ${(s.deliverables || []).join('، ')}`);
-  }
-  for (const c of (data.CASE_STUDIES || []).slice(0, 8)) {
-    if (c.status === 'draft') continue;
-    L.push(`نمونه‌کار «${c.title}» — مشتری: ${c.client || '-'} (${c.industryFa || ''}): ${c.summary || ''} نتایج: ROAS ${c.metrics?.roas || '-'}، نرخ تبدیل ${c.metrics?.conversionRate || '-'}، کاهش CAC ${c.metrics?.cacReduction || '-'}.`);
-  }
-  for (const pr of data.PRODUCTS || []) {
-    if (pr.status === 'draft') continue;
-    L.push(`محصول/ابزار «${pr.title}»: ${pr.description || ''} قیمت: ${pr.price || '-'}، مخاطب: ${pr.targetAudience || '-'}.`);
-  }
-  for (const b of (data.BLOG_POSTS || []).slice(0, 8)) {
-    if (b.status === 'draft') continue;
-    L.push(`مقاله «${b.title}» (${b.categoryFa || ''}): ${b.excerpt || ''}`);
-  }
-  return L.join('\n').slice(0, 4000);
-};
-
-const localAnswer = (question: string, digest: string, cta: string): string => {
-  const norm = question.trim().toLowerCase();
-
-  // 1. Common greetings & friendly hellos
-  if (/^(سلام|درود|خوبی|چطوری|صبح بخیر|عصر بخیر|سلام علیکم|سلام چطوری|سلام امید)/i.test(norm) || norm === 'سلام' || norm === 'درود') {
-    return `سلام و درود! خوش اومدی رفیق. من مسکات و دستیار هوشمند سایت امید عدلی‌ام. در زمینه‌های تبلیغات دیجیتال (گوگل و متا)، آنالیتیکس GA4، بهینه‌سازی نرخ تبدیل (CRO) و سئو می‌تونم راهنماییت کنم یا مسیر رزرو مشاوره رو بهت نشون بدم. چه کاری از دستم برمی‌آد؟ [[act:{"pose":"wave","hold":3}]]`;
-  }
-
-  // 2. Who is Omid / About
-  if (/(کیستی|کی هستی|امید عدلی کیه|درباره امید|رزومه|بیوگرافی|سابقه|تو کی هستی)/i.test(norm)) {
-    return `امید عدلی متخصص رشد و تبلیغات دیجیتال با سال‌ها سابقه موفق در اجرای کمپین‌های عملکردی گوگل و متا، راه‌اندازی تحلیلی GA4، سئو و افزایش نرخ تبدیل (CRO) کسب‌وکارها است. من هم مسکات سه‌بعدی و همراه هوشمند او در این سایت هستم! [[act:{"pose":"confident","hold":3}]]`;
-  }
-
-  // 3. E-commerce & Online Shops
-  if (/(فروشگاه|آنلاین شاپ|خرید آنلاین|محصولات|سبد خرید)/i.test(norm)) {
-    return `برای فروشگاه‌های اینترنتی، تمرکز اصلی ما روی افزایش نرخ تبدیل سبد خرید، کمپین‌های پربازده گوگل ادز و کاهش هزینه جذب هر خریدار (CAC) است تا فروش خالص شما ماکسیمم شود. برای بررسی تخصصی فروشگاهتان می‌توانید یک جلسه مشاوره رزرو کنید! [[act:{"pose":"talking","hold":4}]]`;
-  }
-
-  // 4. Consultation, contact, booking
-  if (/(مشاوره|تماس|همکاری|شماره|ارتباط|رزرو|جلسه|هزینه|قیمت|پروژه)/i.test(norm)) {
-    return `برای شروع همکاری یا دریافت مشاوره مستقیم از امید عدلی، می‌تونی از بخش «رزرو مشاوره» در بالای صفحه استفاده کنی یا از طریق فرم صفحه تماس پیام بفرستی. همچنین راه‌های مستقیم تلگرام و ایمیل هم در سایت فعاله تا خیلی سریع پاسخ بگیری! [[act:{"pose":"confident","hold":3}]]`;
-  }
-
-  // 5. Keyword matching across site digest
-  const q = tokens(question);
-  if (q.length && digest) {
-    const qSet = expand(new Set(q));
-    const scored = digest
-      .split('\n')
-      .map((line) => {
-        const lt = tokens(line);
-        let score = 0;
-        const seen = new Set<string>();
-        for (const t of lt) {
-          if (qSet.has(t) && !seen.has(t)) {
-            score += 1;
-            seen.add(t);
-          }
-        }
-        return { line, score: score / Math.max(1, Math.min(q.length, 5)) };
-      })
-      .filter((x) => x.score >= 0.2)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
-
-    if (scored.length > 0) {
-      return scored.map((x) => `• ${x.line.trim()}`).join('\n') + (cta ? `\n\n${cta}` : '') + ' [[act:{"pose":"talking"}]]';
-    }
-  }
-
-  // 6. Helpful natural fallback
-  return `در سایت امید عدلی، خدمات تخصصی شامل سئو پیشرفته، تبلیغات گوگل و متا، راه‌اندازی و تحلیل GA4 و بهینه‌سازی نرخ تبدیل (CRO) ارائه می‌شه. می‌تونی هر سوالی درباره کسب‌وکارت، نمونه‌کارها یا نحوه همکاری داری بپرسی تا کمکت کنم! [[act:{"pose":"talking"}]]`;
-};
-
-const ACT_GUIDE = `واژگان بدن (pose) و کِی انتخابش کنی:
-- wave: سلام، خوش‌آمد، خداحافظی، جواب تشکر. hold: ۲-۳
-- happy: خنده‌ی گرم؛ جواب شوخ کاربر یا تشکر صمیمی. hold: ۲-۳
-- excited: خبر خوب، موفقیت کاربر (ارسال فرم، رزرو)، نتیجه‌ی درخشان. hold: ۳
-- thinking: سوال تحلیلی/محاسباتی؛ مکث کوتاه قبل از جواب قطعی. hold: ۳-۵
-- talking: حالت پیش‌فرضِ توضیح دادن — اکثر جواب‌ها همین. hold: برابرِ طول جواب
-- confused: سوال مبهم؛ همراه با یک سوال شفاف‌سازی در متن جواب. hold: ۲-۳
-- confident: پاسخ مطمئن با استناد به داده و نمونه‌کار. hold: ۳
-- sad: ندانستن، عذرخواهی، محدودیت واقعی، خبر بد. hold: ۳-۴
-- surprised: آمار یا خبر واقعاً غافلگیرکننده. hold: ۲
-- sleepy: فقط اگر خود کاربر از خستگی/انتظار طولانی گفته. hold: ۳
-هرگز از typing یا listen استفاده نکن؛ مخصوصِ سیستم است.
-
-قوانین بازیگری:
-۱. هر پاسخ دقیقاً یک دستور act دارد و pose باید با «احساس غالبِ» جواب بخواند — نه تصادفی، نه برای تنوع.
-۲. اقتصاد انرژی: excited/surprised/happy طلا هستند؛ زیادشان نکن. اگر شک داری، talking یا idle.
-۳. تکرار ممنوع: اگر در جواب قبلی مثلاً confident دادی، این‌بار متنوع انتخاب کن مگر دلیل واقعی باشد.
-۴. hold را با طول جواب تنظیم کن: جواب یک‌خطی ≈ ۲-۳، معمولی ≈ ۴-۶، توضیحی ≈ ۷-۱۰.
-۵. then فقط برای روایت دوبخشی: مثلاً excited بعد happy یا surprised بعد sad. بیشتر مواقع خالی.
-
-قرارداد اجرا (خیلی مهم):
-- همیشه دقیقاً یک سطر در «انتهای» پاسخ اضافه کن:
-[[act: {"pose":"...","hold":6,"bubble":"...","then":"idle"}]]
-- pose: یکی از واژگان بالا. hold: چند ثانیه بماند (۱.۵ تا ۱۴).
-- bubble: حداکثر ۱۲۰ کاراکتر، بدون ایموجی؛ معمولاً خالی بگذار.
-- JSON باید معتبر باشد؛ داخل bubble از " استفاده نکن.`;
-
-const buildSoulPrompt = (o: { persona: string; name: string; page: string; daypart: string; bodyState: string; digest: string }) => {
-  const who = o.name
-    ? `مخاطب فعلی تو «${o.name}» است — او را با اسم صدا کن.`
-    : 'اسم مخاطب را نمی‌دانی؛ اگر لازم بود محترمانه بپرس.';
-  const where = `کاربر الان در صفحه‌ی «${o.page}» سایت است.`;
-  const when = `زمان فعلی: ${o.daypart || 'روز'} است.`;
-  const bodyNow = o.bodyState ? `وضعیت بدن در همین لحظه: ${o.bodyState}` : '';
-  return `تو «دستیار هوشمند» سایتی هستی که امید عدلی — متخصص رشد و تبلیغات دیجیتال — ساخته است. تو روحِ یک کاراکتر سه‌بعدی به نام مَسکات هستی.
-شخصیت تو: صمیمی، خودی و محترم. پاسخ‌هایت کوتاه، شفاف و گفتاری باشند (۱ تا ۴ جمله‌ی کوتاه). از ایموجی استفاده نکن.
-
-${who} ${where} ${when}
-${bodyNow}
-
-${ACT_GUIDE}
-
-اطلاعات سایت:
-${o.digest}
-
-${o.persona ? `نکات مدیریت:\n${o.persona}` : ''}`;
-};
+/**
+ * NOTE: the assistant's brain (digest, article RAG, soul prompt, act protocol,
+ * local matcher) lives in ./lib/assistant.ts — shared with functions/api/chat.ts
+ * so local dev and production behave identically.
+ */
 
 export function cmsDevApiPlugin(): Plugin {
   return {
@@ -233,7 +105,7 @@ export function cmsDevApiPlugin(): Plugin {
 
         const url = new URL(reqUrl, 'http://localhost:3000');
         const pathname = url.pathname;
-        const method = req.method?.toUpperCase() || 'GET';
+        const method = req.method?.toUpperCase() || '';
 
         const sendJson = (body: unknown, status = 200) => {
           res.statusCode = status;
@@ -327,13 +199,19 @@ export function cmsDevApiPlugin(): Plugin {
               const mcBody = String(mc.bodyState || '').slice(0, 300);
 
               const saved = safeReadJson<{ data: any } | null>(CONTENT_FILE, null);
-              const data = saved?.data || {};
+              const data = saved?.data || seedData;
               const cfg = {
                 persona: data?.CHAT_CONFIG?.persona || 'شما دستیار هوشمند امید عدلی (متخصص پرفورمنس مارکتینگ و CRO) هستید.',
                 ctaText: data?.CHAT_CONFIG?.ctaText || 'برای مشاوره مستقیم یا بررسی پروژه، از منوی بالای سایت با امید عدلی تماس بگیرید.',
                 fallbackMessage: data?.CHAT_CONFIG?.fallbackMessage || 'پاسخ دقیقی در محتوای سایت برای این مورد نیافتم؛ لطفاً مستقیماً از بخش تماس پیام دهید.',
               };
+
+              // The AI's ground truth: digest of ALL site content…
               const digest = buildDigest(data);
+              // …plus RAG: full text of the articles this question touches.
+              const sources: SourceHit[] = retrieveSources(data, question, 3);
+              const sourcesBlock = buildSourcesBlock(sources);
+
               const soulPrompt = buildSoulPrompt({
                 persona: cfg.persona,
                 name: mcName,
@@ -341,6 +219,7 @@ export function cmsDevApiPlugin(): Plugin {
                 daypart: mcDaypart,
                 bodyState: mcBody,
                 digest,
+                sources: sourcesBlock || undefined,
               });
 
               let answer = '';
@@ -366,13 +245,13 @@ export function cmsDevApiPlugin(): Plugin {
                     const gRes = await fetch(geminiUrl, {
                       method: 'POST',
                       headers,
-                      signal: AbortSignal.timeout(9000),
+                      signal: AbortSignal.timeout(20000),
                       body: JSON.stringify({
                         systemInstruction: { parts: [{ text: soulPrompt }] },
                         contents: [...history, { role: 'user', parts: [{ text: question }] }],
                         generationConfig: {
                           temperature: 0.6,
-                          maxOutputTokens: 250,
+                          maxOutputTokens: 600,
                           thinkingConfig: {
                             thinkingBudget: 0,
                           },
@@ -397,7 +276,7 @@ export function cmsDevApiPlugin(): Plugin {
               }
 
               if (!answer) {
-                answer = localAnswer(question, digest, cfg.ctaText);
+                answer = localAnswer(question, digest, cfg.ctaText, sources);
               }
               if (!answer) {
                 answer = `${cfg.fallbackMessage}\n\n${cfg.ctaText}`;
@@ -424,7 +303,7 @@ export function cmsDevApiPlugin(): Plugin {
                 act = undefined;
               }
 
-              return sendJson({ ok: true, answer, act, mode });
+              return sendJson({ ok: true, answer, act, mode, sources: sources.map(({ title, url }) => ({ title, url })) });
             }
           }
 
@@ -489,7 +368,49 @@ export function cmsDevApiPlugin(): Plugin {
             return sendJson({ ok: true, slug: fallbackSlug, source: 'translit' });
           }
 
-          // --- 5. /api/comments ---
+          // --- 5. /api/leads --- (dev mirror of functions/api/leads.ts)
+          if (pathname === '/api/leads') {
+            const leads = safeReadJson<any[]>(LEADS_FILE, []);
+            if (method === 'GET') {
+              const auth = req.headers['authorization'] || '';
+              if (!auth.startsWith('Bearer ')) {
+                return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
+              }
+              return sendJson({ ok: true, items: leads });
+            }
+            if (method === 'POST') {
+              const body = await readBody();
+              if (body?.homepage) {
+                return sendJson({ ok: true, id: 'ignored' }); // honeypot
+              }
+              const name = String(body?.name || '').trim().slice(0, 80);
+              const email = String(body?.email || '').trim().slice(0, 160);
+              const contact = String(body?.contact || '').trim().slice(0, 40);
+              if (!name || (!email && !contact) || !String(body?.details || '').trim()) {
+                return sendJson({ ok: false, error: 'لطفاً نام و حداقل ایمیل یا شماره تماس و توضیحات را تکمیل کنید.' }, 400);
+              }
+              const lead = {
+                id: `lead-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+                source: String(body?.source || 'contact').slice(0, 20),
+                name,
+                email,
+                contact,
+                website: String(body?.website || '').trim().slice(0, 200),
+                goal: String(body?.goal || '').trim().slice(0, 200),
+                service: String(body?.service || '').trim().slice(0, 200),
+                details: String(body?.details || '').trim().slice(0, 2000),
+                booking_date: String(body?.bookingDate || '').trim().slice(0, 40),
+                booking_time: String(body?.bookingTime || '').trim().slice(0, 40),
+                created_at: new Date().toISOString(),
+                ip: 'localhost',
+              };
+              leads.unshift(lead);
+              safeWriteJson(LEADS_FILE, leads.slice(0, 500));
+              return sendJson({ ok: true, id: lead.id });
+            }
+          }
+
+          // --- 6. /api/comments ---
           if (pathname === '/api/comments') {
             const comments = safeReadJson<any[]>(COMMENTS_FILE, []);
             if (method === 'GET') {
@@ -504,6 +425,7 @@ export function cmsDevApiPlugin(): Plugin {
                 authorEmail: String(body.authorEmail || ''),
                 content: String(body.content || ''),
                 date: new Date().toLocaleDateString('fa-IR'),
+                createdAt: new Date().toISOString(),
                 isApproved: true,
                 reply: '',
               };
@@ -514,7 +436,7 @@ export function cmsDevApiPlugin(): Plugin {
             if (method === 'PATCH') {
               const body = await readBody();
               const idx = comments.findIndex((c) => c.id === body.id);
-              if (idx !== -1) {
+              if (idx >= 0) {
                 if (typeof body.isApproved === 'boolean') comments[idx].isApproved = body.isApproved;
                 if (typeof body.reply === 'string') comments[idx].reply = body.reply;
                 safeWriteJson(COMMENTS_FILE, comments);

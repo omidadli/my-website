@@ -36,7 +36,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
   const rest = filtered.filter((p) => p.id !== featured?.id);
 
   return (
-    <div className="space-y-12 py-4">
+    <div className="space-y-14 py-4">
       <PageHero theme={theme} page="blog" title={pageData.headline} subtitle={pageData.subheadline} badge={pageData.badge} onNavigate={onNavigate}>
         <div className="max-w-md mx-auto pt-2">
           <div className={`${isDark ? 'nd-glass-dark' : 'nd-card'} rounded-full flex items-center gap-3 px-4 py-2.5`}>
@@ -73,7 +73,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           onClick={() => onSelectPost(featured.id)}
-          className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} w-full rounded-[32px] p-6 sm:p-10 text-right grid grid-cols-1 md:grid-cols-2 gap-8 items-center cursor-pointer group`}
+          className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} w-full rounded-[var(--nd-radius-panel)] p-6 sm:p-10 text-right grid grid-cols-1 md:grid-cols-2 gap-8 items-center cursor-pointer group`}
         >
           <div className="space-y-4">
             <span className={isDark ? 'nd-glass-dark inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold text-amber-200' : 'nd-eyebrow inline-flex bg-[color:var(--nd-peach-soft)] text-[#d97706] border-transparent'}>
@@ -88,7 +88,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
               <span>{featured.readTime}</span>
             </div>
           </div>
-          <div className={`rounded-[24px] overflow-hidden aspect-[16/10] border ${isDark ? 'border-white/12' : 'border-white/60'} shadow-md`}>
+          <div className={`rounded-[var(--nd-radius-card)] overflow-hidden aspect-[16/10] border ${isDark ? 'border-white/12' : 'border-white/60'} shadow-md`}>
             <img src={featured.coverImage} alt={featured.title} className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700" referrerPolicy="no-referrer" />
           </div>
         </motion.button>
@@ -139,7 +139,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
       </section>
 
       {/* Newsletter */}
-      <section className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[32px] p-8 sm:p-12 text-center space-y-5 max-w-3xl mx-auto`}>
+      <section className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[var(--nd-radius-panel)] p-8 sm:p-12 text-center space-y-5 max-w-3xl mx-auto`}>
         <span className={isDark ? 'nd-glass-dark inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold text-indigo-200' : 'nd-eyebrow inline-flex'}>
           <Mail className="w-4 h-4" />
           <span>

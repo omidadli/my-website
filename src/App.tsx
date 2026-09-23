@@ -109,9 +109,10 @@ function MainLayout() {
       }
       if (validPages.includes(rawHash as Page)) {
         setCurrentPage(rawHash as Page);
-        if (rawHash !== 'blog') {
-          setSelectedBlogPostId(null);
-        }
+        // bare 'blog' = the article LIST — always drop the selected post so
+        // clicking the "آموزش" nav while reading a post goes back to the list.
+        // (blog/<id> hashes were handled and returned above.)
+        setSelectedBlogPostId(null);
       } else if (!rawHash) {
         setCurrentPage('home');
         setSelectedBlogPostId(null);
@@ -137,9 +138,9 @@ function MainLayout() {
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
     setSelectedCaseStudy(null);
-    if (page !== 'blog') {
-      setSelectedBlogPostId(null);
-    }
+    // Navigating to 'blog' always means the article LIST — drop the selected
+    // post even when coming from a post detail page.
+    setSelectedBlogPostId(null);
     window.location.hash = page === 'home' ? '' : page;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

@@ -27,12 +27,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdminModal }) 
   return (
     <footer className="relative z-10 mt-10">
       <div className="max-w-6xl mx-auto px-4 sm:px-8 pb-28 sm:pb-24">
-        <div className="nd-card rounded-[32px] p-8 sm:p-12">
+        <div className="nd-card rounded-[var(--nd-radius-panel)] p-8 sm:p-12">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
             {/* Brand */}
             <div className="space-y-4 lg:col-span-1">
               <div className="flex items-center gap-3">
-                <span className="w-11 h-11 rounded-2xl grid place-items-center text-white text-lg font-black shadow-sm" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c6cf0)' }}>
+                <span className="w-11 h-11 rounded-2xl nd-grad grid place-items-center text-white text-lg font-black shadow-sm">
                   ع
                 </span>
                 <span className="leading-tight">
@@ -113,7 +113,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdminModal }) 
                     rel="noreferrer"
                     title={s.label}
                     aria-label={s.label}
-                    className="w-9 h-9 rounded-full border border-[color:var(--nd-line)] grid place-items-center text-[color:var(--nd-muted)] hover:text-white hover:bg-[color:var(--nd-ink)] hover:border-[color:var(--nd-ink)] transition-all"
+                    className="w-9 h-9 rounded-full border border-[color:var(--nd-line)] grid place-items-center text-[color:var(--nd-muted)] hover:text-[color:var(--nd-bg)] hover:bg-[color:var(--nd-ink)] hover:border-[color:var(--nd-ink)] transition-all"
                   >
                     <s.icon className="w-3.5 h-3.5" />
                   </a>

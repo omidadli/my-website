@@ -802,22 +802,34 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const generateSitemapXml = () => {
-    const baseUrl = data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli01.site';
-    const pages = ['/', '/services', '/portfolio', '/about', '/projects', '/blog', '/products', '/contact'];
-    
+    const baseUrl = (data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli01.site').replace(/\/$/, '');
+    // The site is hash-routed (no server paths), so sitemap URLs must carry
+    // the route in the hash or they all resolve to the home page.
+    const pageUrl = (hashPath: string) => `${baseUrl}/#${hashPath}`;
+    const pages = [
+      { url: `${baseUrl}/`, priority: '1.0' },
+      { url: pageUrl('services'), priority: '0.8' },
+      { url: pageUrl('portfolio'), priority: '0.8' },
+      { url: pageUrl('about'), priority: '0.8' },
+      { url: pageUrl('projects'), priority: '0.8' },
+      { url: pageUrl('blog'), priority: '0.8' },
+      { url: pageUrl('products'), priority: '0.8' },
+      { url: pageUrl('contact'), priority: '0.8' },
+    ];
+
     (data.CUSTOM_PAGES || []).forEach((cp) => {
-      pages.push(`/${cp.slug}`);
+      pages.push({ url: pageUrl(cp.slug), priority: '0.8' });
     });
 
     (data.BLOG_POSTS || []).forEach((post: any) => {
       if (post?.status !== 'draft') {
-        pages.push(`/blog/${post.slug || post.id}`);
+        pages.push({ url: pageUrl(`blog/${post.slug || post.id}`), priority: '0.7' });
       }
     });
 
     const urlsXml = pages
       .map(
-        (path) => `  <url>\n    <loc>${baseUrl}${path}</loc>\n    <lastmod>${new Date().toISOString().slice(0, 10)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${path === '/' ? '1.0' : '0.8'}</priority>\n  </url>`
+        (p) => `  <url>\n    <loc>${p.url}</loc>\n    <lastmod>${new Date().toISOString().slice(0, 10)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${p.priority}</priority>\n  </url>`
       )
       .join('\n');
 

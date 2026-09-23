@@ -128,7 +128,7 @@ export const CustomPageView: React.FC<CustomPageViewProps> = ({ customPage, them
                       <EditableText path={`${blockPath}.title`} defaultValue={block.title} label="عنوان تصویر" />
                     </h3>
                   )}
-                  <div className={`rounded-[24px] overflow-hidden border ${isDark ? 'border-white/12' : 'border-white/70'} shadow-sm`}>
+                  <div className={`rounded-[var(--nd-radius-card)] overflow-hidden border ${isDark ? 'border-white/12' : 'border-white/70'} shadow-sm`}>
                     <EditableImage
                       path={`${blockPath}.imageUrl`}
                       defaultSrc={block.imageUrl || 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80'}

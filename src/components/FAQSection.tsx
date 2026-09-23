@@ -69,7 +69,7 @@ export const FAQSection: React.FC<FAQSectionProps> = ({ theme }) => {
           return (
             <div
               key={index}
-              className={`nd-card overflow-hidden transition-all duration-300 ${isOpen ? (isDark ? 'shadow-2xl' : 'shadow-xl') : ''}`}
+              className={`nd-card overflow-hidden transition-all duration-300 ${isOpen ? 'shadow-[var(--nd-shadow-md)]' : ''}`}
             >
               <button
                 onClick={() => toggleIndex(index)}
