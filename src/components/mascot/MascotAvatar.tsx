@@ -467,6 +467,9 @@ export function MascotAvatar() {
         tabIndex={0}
         aria-label="دستیار هوشمند — باز کردن گفتگو"
         onKeyDown={(e) => {
+          // only react to keys pressed ON the card itself — the name input
+          // inside must keep Enter/Space for typing + form submit
+          if (e.target !== e.currentTarget) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('nd:open-chat'));
