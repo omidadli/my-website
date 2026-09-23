@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Page } from '../types';
 import { useContent } from '../context/ContentContext';
+import { usePreservedState } from '../utils/statePreserver';
 import { api } from '../services/api';
 import { CollectionEditor } from '../components/admin/CollectionEditor';
 import { FieldsForm, FieldDef } from '../components/admin/FieldsForm';
@@ -169,12 +170,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   } = useContent();
 
   type TabId = 'dashboard' | 'posts' | 'comments' | 'services' | 'portfolio' | 'products' | 'projects' | 'about' | 'home' | 'pages' | 'media' | 'seo' | 'chat' | 'leads' | 'appearance' | 'settings';
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [activeTab, setActiveTab] = usePreservedState<TabId>('admin_active_tab', 'dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [selectedSeoPage, setSelectedSeoPage] = useState('home');
-  const [commentFilter, setCommentFilter] = useState<'all' | 'pending' | 'approved'>('all');
+  const [selectedSeoPage, setSelectedSeoPage] = usePreservedState<string>('admin_selected_seo_page', 'home');
+  const [commentFilter, setCommentFilter] = usePreservedState<'all' | 'pending' | 'approved'>('admin_comment_filter', 'all');
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [sitemapOut, setSitemapOut] = useState('');
   const [robotsOut, setRobotsOut] = useState('');

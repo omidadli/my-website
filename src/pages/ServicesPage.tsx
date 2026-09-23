@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Theme, Page, ServiceItem } from '../types';
 import { useContent } from '../context/ContentContext';
+import { usePreservedState } from '../utils/statePreserver';
 import { SectionEditHeader } from '../components/cms/SectionEditHeader';
 import { IconBadge3D } from '../components/3D/3DIconBadge';
 import { PageHero, Head, CtaPanel } from '../components/nd/Kit';
@@ -20,7 +21,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ theme, onNavigate })
   const { data } = useContent();
   const servicesList: ServiceItem[] = data.SERVICES || [];
   const howIWorkSteps = data.HOW_I_WORK_STEPS || [];
-  const [activeTab, setActiveTab] = useState<'start' | 'sell' | 'grow'>('start');
+  const [activeTab, setActiveTab] = usePreservedState<'start' | 'sell' | 'grow'>('services_active_tab', 'start');
 
   const tabs = [
     { id: 'start' as const, label: 'شروع کنیم', sublabel: 'طراحی سایت، تجربه کاربری و شبکه‌های اجتماعی', icon: Sparkles },

@@ -1,12 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Send, RefreshCw, AlertTriangle } from 'lucide-react';
+import { X, Send, RefreshCw, AlertTriangle, Mic, MicOff, Volume2, VolumeX, RotateCcw } from 'lucide-react';
 import { Theme } from '../../types';
 import { useContent } from '../../context/ContentContext';
 import { api } from '../../services/api';
 import { mascotAct } from './useMascotEvents';
 import { SoulActSpec, applyAIRawAnswer, soulGetContext, soulSnapshotLine } from './soul';
 import { MascotFigure } from './MascotAvatar';
+import { usePreservedState } from '../../utils/statePreserver';
+import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
+import { chatStorage, StoredChatMsg } from '../../utils/chatStorage';
+import { keyboardAudio } from '../../utils/keyboardAudio';
 
 interface AssistantPanelProps {
   theme: Theme;
@@ -56,24 +60,122 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
   const { data } = useContent();
   const cfg = data.CHAT_CONFIG;
 
-  const [available, setAvailable] = useState(false);
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [input, setInput] = useState('');
+  const [available, setAvailable] = usePreservedState<boolean>('assistant_api_available', false);
+  const [messages, setMessages] = usePreservedState<ChatMsg[]>('assistant_chat_messages', () => {
+    const saved = chatStorage.loadMessages();
+    return saved.length > 0 ? saved : [];
+  });
+  const [input, setInput] = usePreservedState<string>('assistant_chat_input', '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [soundMuted, setSoundMuted] = useState<boolean>(() => keyboardAudio.getMuted());
   const [said, setSaid] = useState<string | null>(null);
   const saidTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Play realistic mechanical keyboard sounds while the mascot is in the 'typing' state
+  useEffect(() => {
+    if (busy && !soundMuted && open) {
+      keyboardAudio.startTypingLoop();
+    } else {
+      keyboardAudio.stopTypingLoop();
+    }
+
+    return () => {
+      keyboardAudio.stopTypingLoop();
+    };
+  }, [busy, soundMuted, open]);
+
+  const toggleSoundMute = () => {
+    const next = !soundMuted;
+    setSoundMuted(next);
+    keyboardAudio.setMuted(next);
+  };
+
+  const scrollToBottom = useCallback((smooth: boolean = true) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'auto',
+        block: 'end',
+      });
+    } else if (listRef.current) {
+      listRef.current.scrollTo({
+        top: listRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    }
+  }, []);
+
+  // Sync to localStorage wrapper — ensure last 5 messages persist across browser refresh
+  useEffect(() => {
+    if (messages.length > 0) {
+      chatStorage.saveMessages(messages);
+    }
+  }, [messages]);
+
+  const clearChatHistory = useCallback(() => {
+    chatStorage.clearMessages();
+    setMessages(cfg?.greeting ? [{ role: 'model', content: cfg.greeting }] : []);
+    mascotAct('greet');
+  }, [cfg?.greeting, setMessages]);
+
+  // Web Speech API Integration
+  const handleSpeechResult = useCallback((spokenText: string, isFinal: boolean) => {
+    setInput((prev) => {
+      // If user had existing text, smoothly append; otherwise replace with live speech
+      return spokenText;
+    });
+    // Mascot actively listens while the user speaks
+    mascotAct('listen', 2800);
+  }, [setInput]);
+
+  const handleSpeechError = useCallback((errText: string) => {
+    setError(errText);
+    mascotAct('oops');
+  }, []);
+
+  const {
+    isListening,
+    interimTranscript,
+    isSupported: isSpeechSupported,
+    errorMessage: speechError,
+    startListening,
+    stopListening,
+  } = useSpeechRecognition({
+    lang: 'fa-IR',
+    onResult: handleSpeechResult,
+    onError: handleSpeechError,
+  });
+
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      setError('');
+      startListening();
+      mascotAct('listen', 3000);
+    }
+  };
 
   useEffect(() => {
     api.probe().then(setAvailable);
   }, []);
 
+  // Auto-scroll whenever messages change, the assistant starts typing, or panel opens
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, busy, open]);
+    // Immediate scroll
+    scrollToBottom(true);
+
+    // Follow-up tick to ensure layout and markdown rendering have finished calculating heights
+    const timer = setTimeout(() => {
+      scrollToBottom(true);
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [messages, busy, error, open, scrollToBottom]);
 
   useEffect(() => {
     if (open) {
@@ -182,16 +284,44 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
               {busy ? 'دارم جواب رو می‌نویسم...' : 'آنلاین'}
             </span>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="بستن گفتگو"
-              className={`absolute left-2.5 top-2.5 cursor-pointer rounded-full p-1.5 transition-colors ${
-                isDark ? 'text-slate-300 hover:bg-white/10' : 'text-[color:var(--nd-ink-2)] hover:bg-black/5'
-              }`}
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="absolute left-2.5 top-2.5 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleSoundMute}
+                aria-label={soundMuted ? 'فعال کردن صدای تایپ مسکات' : 'بی‌صدا کردن تایپ مسکات'}
+                title={soundMuted ? 'فعال کردن صدای کیبورد مکانیکی' : 'قطع صدای کیبورد مکانیکی'}
+                className={`cursor-pointer rounded-full p-1.5 transition-colors ${
+                  soundMuted
+                    ? isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-white/10' : 'text-slate-400 hover:text-slate-600 hover:bg-black/5'
+                    : isDark ? 'text-indigo-400 hover:text-indigo-300 hover:bg-white/10' : 'text-[color:var(--nd-accent)] hover:bg-black/5'
+                }`}
+              >
+                {soundMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+              </button>
+              {messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearChatHistory}
+                  aria-label="شروع مجدد گفتگو"
+                  title="شروع مجدد گفتگو و پاک کردن پیام‌های اخیر"
+                  className={`cursor-pointer rounded-full p-1.5 transition-colors ${
+                    isDark ? 'text-slate-400 hover:text-white hover:bg-white/10' : 'text-[color:var(--nd-ink-2)] hover:bg-black/5'
+                  }`}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="بستن گفتگو"
+                className={`cursor-pointer rounded-full p-1.5 transition-colors ${
+                  isDark ? 'text-slate-300 hover:bg-white/10' : 'text-[color:var(--nd-ink-2)] hover:bg-black/5'
+                }`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* ---- messages ---- */}
@@ -234,6 +364,8 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
               </p>
             )}
             {error && <p className="text-center text-[10px] font-extrabold text-red-500">{error}</p>}
+            {/* Scroll-to-bottom anchor */}
+            <div ref={messagesEndRef} className="h-px w-full" aria-hidden="true" />
           </div>
 
           {/* ---- quick questions ---- */}
@@ -261,35 +393,89 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (isListening) stopListening();
               send(input);
             }}
-            className={`flex shrink-0 items-center gap-2 border-t px-3.5 py-3 ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}
+            className={`flex shrink-0 flex-col gap-1.5 border-t px-3.5 py-3 ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}
           >
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                // user is writing → the mascot nods along (rate-limited)
-                if (listenTimer.current) clearTimeout(listenTimer.current);
-                listenTimer.current = setTimeout(() => mascotAct('listen', 2600), 500);
-              }}
-              placeholder="سوالت رو بنویس..."
-              className={`h-10 flex-1 rounded-xl px-3.5 text-xs font-bold outline-none transition-colors ${
-                isDark
-                  ? 'bg-white/8 text-slate-100 placeholder:text-slate-500 focus:bg-white/12'
-                  : 'bg-[color:var(--nd-bg)] text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)] focus:bg-white'
-              }`}
-            />
-            <button
-              type="submit"
-              disabled={busy || !input.trim()}
-              aria-label="ارسال"
-              className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl text-white transition-all hover:brightness-110 disabled:opacity-40"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-            >
-              {busy ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -scale-x-100" />}
-            </button>
+            {/* Live speech feedback pill when active */}
+            {isListening && (
+              <div
+                className={`flex items-center justify-between rounded-xl px-3 py-1.5 text-[11px] animate-pulse ${
+                  isDark
+                    ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                    : 'bg-rose-50 text-rose-600 border border-rose-200'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                  </span>
+                  <span className="font-extrabold">در حال شنیدن صدای شما...</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={stopListening}
+                  className="text-[10px] font-bold underline cursor-pointer hover:opacity-80"
+                >
+                  پایان ضبط
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // user is writing → the mascot nods along (rate-limited)
+                  if (listenTimer.current) clearTimeout(listenTimer.current);
+                  listenTimer.current = setTimeout(() => mascotAct('listen', 2600), 500);
+                }}
+                placeholder={isListening ? 'در حال تبدیل گفتار به متن...' : 'سوالت رو بنویس یا با میکروفون بگو...'}
+                className={`h-10 flex-1 rounded-xl px-3.5 text-xs font-bold outline-none transition-colors ${
+                  isDark
+                    ? 'bg-white/8 text-slate-100 placeholder:text-slate-500 focus:bg-white/12'
+                    : 'bg-[color:var(--nd-bg)] text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)] focus:bg-white'
+                }`}
+              />
+
+              {/* Web Speech API Microphone Button */}
+              {isSpeechSupported && (
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  disabled={busy}
+                  aria-label={isListening ? 'توقف ضبط صدا' : 'شروع ضبط صدا'}
+                  title={isListening ? 'توقف ضبط صدا' : 'صحبت با دستیار صوتی'}
+                  className={`grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl transition-all ${
+                    isListening
+                      ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 animate-pulse scale-105'
+                      : isDark
+                        ? 'bg-white/8 text-slate-300 hover:bg-white/15 hover:text-white'
+                        : 'bg-[color:var(--nd-bg)] text-slate-600 hover:bg-[color:var(--nd-accent-soft)] hover:text-[color:var(--nd-accent)]'
+                  } disabled:opacity-40`}
+                >
+                  {isListening ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+
+              <button
+                type="submit"
+                disabled={busy || !input.trim()}
+                aria-label="ارسال"
+                className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl text-white transition-all hover:brightness-110 disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+              >
+                {busy ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -scale-x-100" />}
+              </button>
+            </div>
           </form>
         </motion.div>
       )}

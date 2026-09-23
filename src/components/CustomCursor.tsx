@@ -23,7 +23,13 @@ export const CustomCursor: React.FC = () => {
       targetPos.current = { x: e.clientX, y: e.clientY };
       setIsVisible(true);
       const t = e.target as HTMLElement | null;
-      setIsHovered(Boolean(t?.closest('a, button, input, textarea, select, [role="button"], [data-hover]')));
+      const isInput = Boolean(t?.closest('input, textarea'));
+      if (isInput) {
+        setIsVisible(false);
+      } else {
+        setIsVisible(true);
+        setIsHovered(Boolean(t?.closest('a, button, select, [role="button"], [data-hover]')));
+      }
     };
     const onLeave = () => setIsVisible(false);
     const onEnter = () => setIsVisible(true);
@@ -57,14 +63,15 @@ export const CustomCursor: React.FC = () => {
   if (!enabled) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] pointer-events-none" aria-hidden>
+    <div className="fixed inset-0 z-[9999] pointer-events-none" aria-hidden>
       <div
         ref={dotRef}
         className="nd-cursor-dot absolute top-0 left-0 rounded-full transition-[width,height,opacity] duration-200"
         style={{
           width: isHovered ? 10 : 7,
           height: isHovered ? 10 : 7,
-          background: '#17171c',
+          background: '#38bdf8',
+          boxShadow: '0 0 10px rgba(56, 189, 248, 0.8)',
           opacity: isVisible ? 1 : 0,
         }}
       />
@@ -74,6 +81,7 @@ export const CustomCursor: React.FC = () => {
         style={{
           width: isHovered ? 46 : 30,
           height: isHovered ? 46 : 30,
+          borderColor: isHovered ? 'rgba(56, 189, 248, 0.9)' : 'rgba(129, 140, 248, 0.65)',
           borderWidth: 1.5,
           opacity: isVisible ? 1 : 0,
         }}

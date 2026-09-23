@@ -4,11 +4,14 @@
   body.custom-cursor-enabled,
   body.custom-cursor-enabled a,
   body.custom-cursor-enabled button,
-  body.custom-cursor-enabled input,
   body.custom-cursor-enabled select,
-  body.custom-cursor-enabled textarea,
   body.custom-cursor-enabled [role="button"] {
     cursor: none !important;
+  }
+  /* Keep standard text cursor for inputs and textareas so typing is natural */
+  body.custom-cursor-enabled input,
+  body.custom-cursor-enabled textarea {
+    cursor: text !important;
   }
 }
 
@@ -1177,11 +1180,88 @@ body.chat-open .mascot-root {
   filter: brightness(1.1);
 }
 
-/* ---------- reduced motion ---------- */
+/* ---------- natural human blinking animation ---------- */
+.mascot-eyelids-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.mascot-eyelid {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mascot-eyelid-flap {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  /* Natural warm skin tone matching the mascot face */
+  background: radial-gradient(
+    circle at 50% 30%,
+    #ffdfba 0%,
+    #f8cda0 60%,
+    #e8b688 100%
+  );
+  box-shadow: inset 0 -1.5px 2px rgba(130, 80, 50, 0.4), 0 1px 2px rgba(0, 0, 0, 0.25);
+  transform: scaleY(0);
+  transform-origin: 50% 0%;
+  opacity: 0;
+  transition: transform 0.045s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.045s ease;
+}
+
+/* When blinking state triggers, eyelid smoothly snaps closed then snaps open */
+.mascot-eyelids--blinking .mascot-eyelid-flap {
+  opacity: 1;
+  animation: mascot-human-blink 0.135s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes mascot-human-blink {
+  0% {
+    transform: scaleY(0);
+    opacity: 0.2;
+  }
+  32% {
+    transform: scaleY(1.08);
+    opacity: 1;
+  }
+  65% {
+    transform: scaleY(0.98);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+}
+
+/* ---------- theme toggle flicker suppression ---------- */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.35s ease,
+              border-color 0.35s ease,
+              color 0.35s ease,
+              box-shadow 0.35s ease !important;
+}
+
+html.theme-transitioning svg,
+html.theme-transitioning canvas {
+  transition: opacity 0.35s ease !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mascot-sway,
   .mascot-chat-avatar,
-  .mascot-figure[data-scene] .mascot-body {
+  .mascot-figure[data-scene] .mascot-body,
+  .mascot-eyelids--blinking .mascot-eyelid-flap {
     animation: none !important;
   }
   .mascot-layer,

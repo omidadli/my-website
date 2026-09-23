@@ -119,7 +119,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       'x-goog-api-key': geminiKey,
     };
 
-    const candidateModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+    const candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-flash-latest',
+      'gemini-3.5-flash',
+      'gemini-3.1-flash-lite',
+    ];
 
     for (const model of candidateModels) {
       try {

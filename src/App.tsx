@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Theme, Page, CaseStudy } from './types';
 import { ContentProvider, useContent } from './context/ContentContext';
+import { StatePreserverProvider } from './utils/statePreserver';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { BackgroundBlobs } from './components/BackgroundBlobs';
@@ -23,16 +24,16 @@ import { CustomPageView } from './pages/CustomPageView';
 import { SEOHead } from './components/SEOHead';
 import { ChatWidget } from './components/ChatWidget';
 import { MascotAvatar } from './components/mascot/MascotAvatar';
+import { MascotWelcomeOverlay } from './components/mascot/MascotWelcomeOverlay';
 import { useMascotEvents } from './components/mascot/useMascotEvents';
 
-function MainLayout() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      return (localStorage.getItem('nd-theme') as Theme) || 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
+function MainLayout({
+  theme,
+  onToggleTheme,
+}: {
+  theme: Theme;
+  onToggleTheme: () => void;
+}) {
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<CaseStudy | null>(null);
   const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(null);
@@ -51,24 +52,12 @@ function MainLayout() {
     }
     setIsThemeTransitioning(true);
 
-    const applyNext = () => {
-      setTheme((t) => {
-        const next: Theme = t === 'light' ? 'dark' : 'light';
-        try {
-          localStorage.setItem('nd-theme', next);
-        } catch {
-          /* private mode */
-        }
-        return next;
-      });
-    };
-
     if (typeof document !== 'undefined' && 'startViewTransition' in document) {
       (document as any).startViewTransition(() => {
-        applyNext();
+        onToggleTheme();
       });
     } else {
-      applyNext();
+      onToggleTheme();
     }
 
     setTimeout(() => {
@@ -77,7 +66,7 @@ function MainLayout() {
         document.documentElement.classList.remove('theme-transitioning');
       }
     }, 480);
-  }, []);
+  }, [onToggleTheme]);
 
   // Read initial page & admin trigger from URL hash or pathname on load
   useEffect(() => {
@@ -331,6 +320,9 @@ function MainLayout() {
       {/* Mascot assistant — avatar reacts to site events, clicks open the chat */}
       {currentPage !== 'admin' && <MascotAvatar />}
 
+      {/* Cinematic Welcome & Waiting Experience */}
+      {currentPage !== 'admin' && <MascotWelcomeOverlay theme={theme} />}
+
       {/* Admin PIN Login Modal */}
       <AdminLoginModal
         isOpen={isAdminModalOpen}
@@ -350,8 +342,36 @@ function MainLayout() {
 export default function App() {
   return (
     <ContentProvider>
-      <MainLayout />
+      <StatePreserverWrapper />
     </ContentProvider>
+  );
+}
+
+function StatePreserverWrapper() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      return (localStorage.getItem('nd-theme') as Theme) || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  const toggleTheme = useCallback(() => {
+    setTheme((t) => {
+      const next: Theme = t === 'light' ? 'dark' : 'light';
+      try {
+        localStorage.setItem('nd-theme', next);
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
+  }, []);
+
+  return (
+    <StatePreserverProvider theme={theme}>
+      <MainLayout theme={theme} onToggleTheme={toggleTheme} />
+    </StatePreserverProvider>
   );
 }
 

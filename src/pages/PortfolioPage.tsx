@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Theme, Page, CaseStudy } from '../types';
 import { useContent } from '../context/ContentContext';
+import { usePreservedState } from '../utils/statePreserver';
 import { SectionEditHeader } from '../components/cms/SectionEditHeader';
 import { IconBadge3D } from '../components/3D/3DIconBadge';
 import { PageHero } from '../components/nd/Kit';
@@ -38,8 +39,8 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
     };
   }, [selectedCaseStudy, onSelectCaseStudy]);
 
-  const [selectedPath, setSelectedPath] = useState<string>('all');
-  const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
+  const [selectedPath, setSelectedPath] = usePreservedState<string>('portfolio_selected_path', 'all');
+  const [selectedIndustry, setSelectedIndustry] = usePreservedState<string>('portfolio_selected_industry', 'all');
 
   const pathFilters = [
     { key: 'all', label: 'همه مسیرها', icon: Layers },

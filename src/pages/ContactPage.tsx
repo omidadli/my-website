@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Theme, Page } from '../types';
 import { useContent } from '../context/ContentContext';
+import { usePreservedState } from '../utils/statePreserver';
 import { api } from '../services/api';
 import { EditableText } from '../components/cms/EditableText';
 import { BookingCalendar } from '../components/BookingCalendar';
@@ -18,9 +19,9 @@ export const ContactPage: React.FC<ContactPageProps> = ({ theme, onNavigate }) =
   const { data } = useContent();
   const personalInfo = data.PERSONAL_INFO;
 
-  const [activeTab, setActiveTab] = useState<'form' | 'calendar'>('form');
+  const [activeTab, setActiveTab] = usePreservedState<'form' | 'calendar'>('contact_active_tab', 'form');
   const [submitted, setSubmitted] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = usePreservedState('contact_form_data', {
     name: '',
     email: '', // email OR phone/telegram — the form field accepts both
     serviceNeeded: 'مدیریت کمپین و تبلیغات (Paid Ads)',

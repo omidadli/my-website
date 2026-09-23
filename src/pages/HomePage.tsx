@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Theme, Page, CaseStudy } from '../types';
 import { useContent } from '../context/ContentContext';
+import { usePreservedState } from '../utils/statePreserver';
 import { EditableText } from '../components/cms/EditableText';
 import { RepeaterControls } from '../components/cms/RepeaterControls';
 import { SectionEditHeader } from '../components/cms/SectionEditHeader';
@@ -95,12 +96,12 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
   const { data } = useContent();
   const isDark = theme === 'dark';
 
-  const [activeServiceTab, setActiveServiceTab] = useState<'start' | 'sell' | 'grow'>('sell');
+  const [activeServiceTab, setActiveServiceTab] = usePreservedState<'start' | 'sell' | 'grow'>('homepage_active_service_tab', 'sell');
   // Two independent lead-capture inputs (hero prompt + insights lead magnet)
   // must NOT share state — typing in one leaks into the other.
-  const [heroPrompt, setHeroPrompt] = useState('');
-  const [auditPrompt, setAuditPrompt] = useState('');
-  const [openFaq, setOpenFaq] = useState<number>(-1);
+  const [heroPrompt, setHeroPrompt] = usePreservedState<string>('homepage_hero_prompt', '');
+  const [auditPrompt, setAuditPrompt] = usePreservedState<string>('homepage_audit_prompt', '');
+  const [openFaq, setOpenFaq] = usePreservedState<number>('homepage_open_faq', -1);
 
   // Cinematic pointer parallax for the hero stage
   const px = useMotionValue(0);
@@ -273,7 +274,12 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   className={`${isDark ? 'nd-glass-dark' : 'nd-glass'} inline-flex items-center gap-3 rounded-full ps-2 pe-4 py-1.5`}
                 >
                   <span className="flex">
-                    <img src={personal.avatar} alt={personal.name} className={`w-7 h-7 rounded-full object-cover ring-2 ${isDark ? 'ring-white/30' : 'ring-white'}`} />
+                    <img
+                      src={personal.avatar}
+                      alt={personal.name}
+                      referrerPolicy="no-referrer"
+                      className={`w-7 h-7 rounded-full object-cover ring-2 ${isDark ? 'ring-white/30' : 'ring-white'}`}
+                    />
                     <span className={`-ms-2 w-7 h-7 rounded-full ring-2 grid place-items-center text-[10px] font-black text-white nd-grad ${isDark ? 'ring-white/30' : 'ring-white'}`}>
                       ۵+
                     </span>
@@ -819,7 +825,11 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                 >
                   <div className="nd-card p-7 h-full flex flex-col gap-5 nd-card-hover">
                     <div className="flex items-center justify-between">
-                      <span className="w-11 h-11 rounded-full grid place-items-center text-sm font-black text-white" style={{ background: 'var(--nd-ink)' }}>
+                      <span className={`w-11 h-11 rounded-full grid place-items-center text-sm font-black transition-colors ${
+                        theme === 'dark'
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 shadow-[0_0_15px_rgba(99,102,241,0.25)]'
+                          : 'bg-slate-900 text-white'
+                      }`}>
                         {String(idx + 1).padStart(2, '0')}
                       </span>
                       <IconBadge3D iconName={stepItem.icon} theme={theme} size="sm" glowColor={(['blue', 'purple', 'emerald', 'cyan'] as const)[idx % 4]} floating={false} />

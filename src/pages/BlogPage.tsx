@@ -5,6 +5,7 @@ import { EditableText } from '../components/cms/EditableText';
 import { PageHero } from '../components/nd/Kit';
 import { Search, Sparkles, Flame, ChevronLeft, Mail, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { usePreservedState } from '../utils/statePreserver';
 
 interface BlogPageProps {
   theme: Theme;
@@ -17,9 +18,9 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
   const { data } = useContent();
   const pageData = data.BLOG_PAGE_DATA;
   const posts: BlogPost[] = data.BLOG_POSTS || [];
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('all');
-  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [query, setQuery] = usePreservedState<string>('blog_search_query', '');
+  const [category, setCategory] = usePreservedState<string>('blog_category_filter', 'all');
+  const [newsletterEmail, setNewsletterEmail] = usePreservedState<string>('blog_newsletter_email', '');
   const [subscribed, setSubscribed] = useState(false);
 
   const categories = useMemo(() => ['all', ...new Set(posts.map((p) => p.categoryFa))], [posts]);

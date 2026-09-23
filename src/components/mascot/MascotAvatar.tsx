@@ -1,19 +1,29 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { mascot } from './mascotBus';
 import { soulJourney } from './soul';
 import { MascotCue } from './useMascotEvents';
 import { VIDEO_SCENES, MascotVisualStep, videoSrc } from './mascotVideos';
+import { useMascotLookAt } from './useMascotLookAt';
 import sprites from './sprites.json';
+
+export { useMascotLookAt } from './useMascotLookAt';
 
 /**
  * Mascot figure — the living character.
  *
- * Head tracking: instead of moving pupil overlays (which read as fake), the
- * WHOLE figure turns toward the cursor in fake-3D — perspective rotateY /
- * rotateX around the neck pivot (transform-origin 50% 88%), plus a subtle
- * counter-translate. With no mouse for a few seconds he slowly glances
- * around on his own, like someone thinking.
+ * Head & Eye tracking: powered by `useMascotLookAt` hook. Instead of static
+ * overlays, the whole figure turns toward the cursor in fake-3D — perspective
+ * rotateY / rotateX around the neck pivot (transform-origin 50% 88%), plus a
+ * subtle body follow-translate and multi-plane eye/face parallax. With no mouse
+ * for a few seconds he slowly glances around on his own, like someone thinking.
+ *
+ * Periodic Natural Eye Blinking:
+ * To mimic natural human behavior, a dedicated blinking loop schedules blinks
+ * at realistic, randomized intervals (typically 2.8s to 6.2s, with occasional
+ * natural double-blinks). During each blink, eyelid overlays cover the eyes for
+ * ~110-140ms with a quick 35ms close and 65ms open curve. Eyelid positions adapt
+ * dynamically to the current scene's eye coordinates from `sprites.json`.
  *
  * Acting: the bus scene is rendered as VIDEO layers — a looping/one-shot
  * <video> per state (see mascotVideos.ts) inside a rounded "avatar screen".
@@ -36,12 +46,6 @@ type SpriteMeta = { src: string; w: number; h: number; eyes: { cx: number; cy: n
 const META = sprites as unknown as Record<string, SpriteMeta>;
 
 const FADE_MS = 320; // crossfade budget (250–400ms per spec)
-const TURN_Y = 17; // max head-turn, degrees — clearly visible
-const TURN_X = 10; // max head tilt, degrees
-const DRIFT_X = 0.045; // body follow-translate (× width) — sells the 3D turn
-const DRIFT_Y = 0.026;
-const GLANCE_AFTER = 4200; // ms without mouse → he starts glancing around
-const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
 interface Layer {
   key: number;
@@ -98,9 +102,132 @@ function LayerView({
   );
 }
 
-export function MascotFigure({ corner = false }: { corner?: boolean }) {
+/**
+ * Natural human blinking overlay.
+ * Uses randomized intervals between 2.6s - 6.5s with occasional natural double-blinks.
+ */
+function MascotEyelids({
+  scene,
+  activeStep,
+}: {
+  scene: string;
+  activeStep?: MascotVisualStep;
+}) {
+  const [isBlinking, setIsBlinking] = useState(false);
+  const blinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Retrieve eye coordinates from sprites metadata based on active sprite or scene name
+  const eyes = useMemo(() => {
+    // 1. If step explicitly specifies an img sprite
+    if (activeStep?.img && META[activeStep.img]?.eyes) {
+      return META[activeStep.img].eyes;
+    }
+    // 2. If step has a poster with eye meta
+    if (activeStep?.poster && META[activeStep.poster]?.eyes) {
+      return META[activeStep.poster].eyes;
+    }
+    // 3. Fallback to scene-specific eyes or idle eyes
+    if (META[scene]?.eyes !== undefined) {
+      return META[scene].eyes; // may be null for sunglasses e.g. confident
+    }
+    return META.idle?.eyes ?? null;
+  }, [scene, activeStep]);
+
+  useEffect(() => {
+    // If character wears sunglasses or eyes are closed/null, don't blink
+    if (!eyes || eyes.length === 0) {
+      setIsBlinking(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const scheduleNextBlink = (delay?: number) => {
+      // Natural human blinking distribution:
+      // Normal pause between 2800ms and 6200ms
+      // Occasionally (~18% chance) a natural double-blink (220ms pause)
+      const nextDelay =
+        delay !== undefined
+          ? delay
+          : Math.random() < 0.18
+          ? Math.floor(220 + Math.random() * 140)
+          : Math.floor(2600 + Math.random() * 3400);
+
+      blinkTimerRef.current = setTimeout(() => {
+        if (!isMounted) return;
+
+        // Perform the blink: duration ~120-140ms
+        const blinkDuration = Math.floor(115 + Math.random() * 25);
+        setIsBlinking(true);
+
+        setTimeout(() => {
+          if (!isMounted) return;
+          setIsBlinking(false);
+
+          // If this was a primary blink, 16% chance to fire a rapid second blink
+          if (Math.random() < 0.16) {
+            scheduleNextBlink(Math.floor(180 + Math.random() * 120));
+          } else {
+            scheduleNextBlink();
+          }
+        }, blinkDuration);
+      }, nextDelay);
+    };
+
+    // Initial random offset so avatars don't all blink at identical timestamps
+    const initialDelay = Math.floor(1200 + Math.random() * 2400);
+    scheduleNextBlink(initialDelay);
+
+    return () => {
+      isMounted = false;
+      if (blinkTimerRef.current) clearTimeout(blinkTimerRef.current);
+    };
+  }, [eyes]);
+
+  if (!eyes || eyes.length === 0) return null;
+
+  return (
+    <div
+      className={`mascot-eyelids-container ${isBlinking ? 'mascot-eyelids--blinking' : ''}`}
+      aria-hidden="true"
+    >
+      {eyes.map((eye, idx) => {
+        // Expand the eyelid slightly beyond pupil radius to cleanly cover the eye aperture
+        const widthPct = Math.max(3.2, eye.r * 200 * 1.55);
+        const heightPct = Math.max(3.0, eye.r * 200 * 1.45);
+        const leftPct = (eye.cx * 100);
+        const topPct = (eye.cy * 100);
+
+        return (
+          <div
+            key={idx}
+            className="mascot-eyelid"
+            style={{
+              left: `${leftPct}%`,
+              top: `${topPct}%`,
+              width: `${widthPct}%`,
+              height: `${heightPct}%`,
+            }}
+          >
+            {/* The animated lid flap with subtle crease / skin shading */}
+            <div className="mascot-eyelid-flap" />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function MascotFigure({
+  corner = false,
+  lookAtOptions,
+}: {
+  corner?: boolean;
+  lookAtOptions?: Parameters<typeof useMascotLookAt>[3];
+}) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const screenRef = useRef<HTMLDivElement | null>(null);
 
   const [scene, setScene] = useState('idle');
   const [front, setFront] = useState<Layer>({ key: 0, step: { v: 'idle', loop: true } });
@@ -266,65 +393,9 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
     return () => mo.disconnect();
   }, [corner]);
 
-  // ------------------------------------------------ head tracking (unchanged)
-  useEffect(() => {
-    const root = rootRef.current;
-    const body = bodyRef.current;
-    if (!root || !body) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    let raf = 0;
-    const cur = { x: 0, y: 0 };
-    const tgt = { x: 0, y: 0 };
-    let mouse: { x: number; y: number } | null = null;
-    let lastMove = 0;
-
-    const tick = (now: number) => {
-      if (mouse && now - lastMove < GLANCE_AFTER) {
-        // follow the cursor — stronger when he's centered on screen
-        const rect = root.getBoundingClientRect();
-        const fx = rect.left + rect.width / 2;
-        const fy = rect.top + rect.height * 0.35; // ≈ head height
-        const dx = mouse.x - fx;
-        const dy = mouse.y - fy;
-        const dist = Math.hypot(dx, dy) || 1;
-        const norm = Math.min(1, dist / (window.innerWidth * 0.42));
-        tgt.x = clamp((dx / dist) * norm, -1, 1);
-        tgt.y = clamp((dy / dist) * norm, -1, 1);
-      } else {
-        // no cursor around → slow curious glances left/right
-        const t = now / 1000;
-        tgt.x = 0.3 * Math.sin(t * 0.5);
-        tgt.y = 0.12 * Math.sin(t * 0.33 + 1.1);
-      }
-
-      cur.x += (tgt.x - cur.x) * 0.09;
-      cur.y += (tgt.y - cur.y) * 0.09;
-
-      const w = root.getBoundingClientRect().width;
-      body.style.transform =
-        `perspective(520px) rotateY(${(cur.x * TURN_Y).toFixed(2)}deg) rotateX(${(-cur.y * TURN_X).toFixed(2)}deg) ` +
-        `translate3d(${(cur.x * DRIFT_X * w).toFixed(2)}px, ${(cur.y * DRIFT_Y * w).toFixed(2)}px, 0)`;
-
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
-    const onMove = (e: PointerEvent) => {
-      mouse = { x: e.clientX, y: e.clientY };
-      lastMove = performance.now();
-    };
-    const onLeave = () => {
-      mouse = null;
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    document.documentElement.addEventListener('pointerleave', onLeave);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      document.documentElement.removeEventListener('pointerleave', onLeave);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
+  // ------------------------------------------------ head & eye gaze tracking
+  // Smooth transition (lerp) allows the gaze/eyes to follow the cursor with a natural slight delay
+  useMascotLookAt(rootRef, bodyRef, screenRef, lookAtOptions);
 
   return (
     <div
@@ -334,7 +405,7 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
       data-anim="1"
     >
       <div className="mascot-body" ref={bodyRef}>
-        <div className="mascot-screen">
+        <div className="mascot-screen" ref={screenRef}>
           {/* keys are stable across the front↔back hand-over: React moves the
               same <video> DOM node (keeps playing) instead of remounting it */}
           <LayerView
@@ -355,6 +426,12 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
               onVideoEl={attachVideo(back.key)}
             />
           )}
+
+          {/* Periodic natural blinking animation */}
+          <MascotEyelids
+            scene={scene}
+            activeStep={backIn && back ? back.step : front.step}
+          />
         </div>
       </div>
     </div>

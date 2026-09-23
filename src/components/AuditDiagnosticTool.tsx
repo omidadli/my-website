@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Theme } from '../types';
 import { Search, Sparkles, CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, Gauge } from 'lucide-react';
+import { usePreservedState } from '../utils/statePreserver';
 
 interface AuditDiagnosticToolProps {
   theme: Theme;
@@ -8,15 +9,15 @@ interface AuditDiagnosticToolProps {
 
 export const AuditDiagnosticTool: React.FC<AuditDiagnosticToolProps> = ({ theme }) => {
   const isDark = theme === 'dark';
-  const [url, setUrl] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [results, setResults] = useState<null | {
+  const [url, setUrl] = usePreservedState<string>('audit_tool_url', '');
+  const [analyzing, setAnalyzing] = usePreservedState<boolean>('audit_tool_analyzing', false);
+  const [results, setResults] = usePreservedState<null | {
     score: number;
     ga4Status: 'ok' | 'warning' | 'error';
     serverSideCapi: 'ok' | 'warning' | 'error';
     hookQuality: 'ok' | 'warning' | 'error';
     mobileUx: 'ok' | 'warning' | 'error';
-  }>(null);
+  }>('audit_tool_results', null);
 
   const handleAnalyze = (e: React.FormEvent) => {
     e.preventDefault();

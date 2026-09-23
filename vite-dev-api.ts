@@ -201,7 +201,7 @@ export function cmsDevApiPlugin(): Plugin {
               const saved = safeReadJson<{ data: any } | null>(CONTENT_FILE, null);
               const data = saved?.data || seedData;
               const cfg = {
-                persona: data?.CHAT_CONFIG?.persona || 'شما دستیار هوشمند امید عدلی (متخصص پرفورمنس مارکتینگ و CRO) هستید.',
+                persona: data?.CHAT_CONFIG?.persona || 'شما مسکات هوشمند و منتور ارشد پرفورمنس مارکتینگ و CRO امید عدلی هستید؛ با لحن بسیار حرفه‌ای، خوش‌برخورد، داده‌محور و راهگشا پاسخ دهید.',
                 ctaText: data?.CHAT_CONFIG?.ctaText || 'برای مشاوره مستقیم یا بررسی پروژه، از منوی بالای سایت با امید عدلی تماس بگیرید.',
                 fallbackMessage: data?.CHAT_CONFIG?.fallbackMessage || 'پاسخ دقیقی در محتوای سایت برای این مورد نیافتم؛ لطفاً مستقیماً از بخش تماس پیام دهید.',
               };
@@ -237,7 +237,12 @@ export function cmsDevApiPlugin(): Plugin {
                   'x-goog-api-key': geminiKey,
                 };
 
-                const candidateModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+                const candidateModels = [
+                  'gemini-2.5-flash',
+                  'gemini-flash-latest',
+                  'gemini-3.5-flash',
+                  'gemini-3.1-flash-lite',
+                ];
 
                 for (const model of candidateModels) {
                   try {

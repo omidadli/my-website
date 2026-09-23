@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Theme } from '../../types';
 import { IconBadge3D } from './3DIconBadge';
 import { TrendingUp, Users, ArrowUpRight, ShieldCheck, Zap, Activity, CheckCircle2 } from 'lucide-react';
+import { usePreservedState, useThemeSwitching } from '../../utils/statePreserver';
 
 interface IsometricDashboardProps {
   theme: Theme;
@@ -9,7 +10,8 @@ interface IsometricDashboardProps {
 
 export const IsometricDashboard: React.FC<IsometricDashboardProps> = ({ theme }) => {
   const isDark = theme === 'dark';
-  const [activeTab, setActiveTab] = useState<'roas' | 'cro' | 'cac'>('roas');
+  const [activeTab, setActiveTab] = usePreservedState<'roas' | 'cro' | 'cac'>('isometric_dashboard_active_tab', 'roas');
+  const isThemeSwitching = useThemeSwitching();
 
   return (
     <div className="relative w-full max-w-xl mx-auto py-6">

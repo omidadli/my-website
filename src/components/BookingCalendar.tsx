@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Theme } from '../types';
 import { api } from '../services/api';
 import { Calendar as CalendarIcon, CheckCircle2, ArrowUpLeft, Video } from 'lucide-react';
 import { inputCls } from './nd/Kit';
+import { usePreservedState } from '../utils/statePreserver';
 
 interface BookingCalendarProps {
   theme: Theme;
@@ -10,11 +11,11 @@ interface BookingCalendarProps {
 
 export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
   const isDark = theme === 'dark';
-  const [selectedIso, setSelectedIso] = useState('');
-  const [selectedTime, setSelectedTime] = useState('۱۴:۰۰ بعدازظهر');
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [selectedIso, setSelectedIso] = usePreservedState<string>('booking_selected_iso', '');
+  const [selectedTime, setSelectedTime] = usePreservedState<string>('booking_selected_time', '۱۴:۰۰ بعدازظهر');
+  const [step, setStep] = usePreservedState<1 | 2 | 3>('booking_step', 1);
 
-  const [bookingForm, setBookingForm] = useState({
+  const [bookingForm, setBookingForm] = usePreservedState('booking_form_data', {
     name: '',
     email: '',
     website: '',

@@ -87,10 +87,11 @@ export interface SoulContext {
   page: string;
   daypart: string;
   timeGreet: string;
+  sessionGoal?: string;
 }
 
 const state = {
-  visitor: { name: '', page: 'home' },
+  visitor: { name: '', page: 'home', sessionGoal: '' },
   chatOpen: false,
   pose: 'idle' as SoulPose,
   poseUntil: 0,
@@ -105,9 +106,10 @@ const daypartFa = () => {
   return h >= 5 && h < 12 ? 'صبح' : h >= 12 && h < 15 ? 'ظهر' : h >= 15 && h < 19 ? 'عصر' : 'شب';
 };
 
-export function soulSetVisitor(v: { name?: string; page?: string }) {
+export function soulSetVisitor(v: { name?: string; page?: string; sessionGoal?: string }) {
   if (v.name !== undefined) state.visitor.name = v.name;
   if (v.page !== undefined) state.visitor.page = v.page;
+  if (v.sessionGoal !== undefined) state.visitor.sessionGoal = v.sessionGoal;
 }
 
 export function soulSetChatOpen(open: boolean) {
@@ -116,7 +118,13 @@ export function soulSetChatOpen(open: boolean) {
 
 export function soulGetContext(): SoulContext {
   const dp = daypartFa();
-  return { name: state.visitor.name, page: state.visitor.page, daypart: dp, timeGreet: `${dp}ت بخیر` };
+  return {
+    name: state.visitor.name,
+    page: state.visitor.page,
+    daypart: dp,
+    timeGreet: `${dp}ت بخیر`,
+    sessionGoal: state.visitor.sessionGoal,
+  };
 }
 
 /** Rich one-line state for the AI prompt — behavioral continuity. */
@@ -130,9 +138,11 @@ export function soulSnapshotLine(): string {
   return [
     c.name ? `نام مخاطب: «${c.name}» — طبیعی و گاهی صدا‌ش کن` : 'نام مخاطب را نمی‌دانی',
     `صفحه‌ی فعلی: «${c.page}»`,
+    c.sessionGoal ? `هدف/مسیر کاربر در این نشست: «${c.sessionGoal}»` : '',
     `زمان: ${c.daypart}`,
     `بدن الان: ${state.pose} (${poseMeta?.body ?? ''})`,
     recent ? `اکت‌های اخیر: ${recent} — همین‌ها را تکرار نکن` : '',
+    'نقش: منتور ارشد پرفورمنس مارکتینگ و CRO با لحن حرفه‌ای و بسیار خوش‌برخورد',
   ]
     .filter(Boolean)
     .join(' | ');

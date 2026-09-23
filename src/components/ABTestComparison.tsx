@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Theme } from '../types';
 import { Sparkles, ArrowLeft, ArrowRight, Eye, MousePointer, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { usePreservedState } from '../utils/statePreserver';
 
 interface ABTestComparisonProps {
   theme: Theme;
@@ -8,7 +9,7 @@ interface ABTestComparisonProps {
 
 export const ABTestComparison: React.FC<ABTestComparisonProps> = ({ theme }) => {
   const isDark = theme === 'dark';
-  const [activeVariant, setActiveVariant] = useState<'A' | 'B'>('B');
+  const [activeVariant, setActiveVariant] = usePreservedState<'A' | 'B'>('ab_test_active_variant', 'B');
 
   return (
     <div className={`p-6 sm:p-8 rounded-[36px] border transition-all ${
