@@ -30,7 +30,7 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
   const postComments = (data.BLOG_COMMENTS || []).filter((c) => c.postId === post?.id && c.isApproved);
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+    navigator.clipboard.writeText(window.location.href).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };

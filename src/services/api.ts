@@ -231,6 +231,60 @@ export const api = {
     }
   },
 
+  /** Lead capture — contact form + booking calendar. Never let a lead vanish. */
+  async postLead(lead: {
+    source: string;
+    name: string;
+    email?: string;
+    contact?: string;
+    website?: string;
+    goal?: string;
+    service?: string;
+    details: string;
+    bookingDate?: string;
+    bookingTime?: string;
+  }): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const r = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lead),
+      });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok ? { ok: true } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+    } catch {
+      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Admin: lead list (contact + bookings). */
+  async listLeads(): Promise<
+    Array<{
+      id: string;
+      source: string;
+      name: string;
+      email: string;
+      contact: string;
+      website: string;
+      goal: string;
+      service: string;
+      details: string;
+      booking_date: string;
+      booking_time: string;
+      created_at: string;
+      ip: string;
+    }>
+  > {
+    try {
+      const r = await fetch('/api/leads', { headers: headers() });
+      if (!r.ok) return [];
+      const j = await r.json();
+      return j?.ok ? j.items : [];
+    } catch {
+      return [];
+    }
+  },
+
   /** English slug for a Persian title — Gemini translation on the server, transliteration fallback. */
   async makeSlug(title: string): Promise<string | null> {
     try {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Theme, Page } from '../types';
 import { useContent } from '../context/ContentContext';
+import { api } from '../services/api';
 import { EditableText } from '../components/cms/EditableText';
 import { BookingCalendar } from '../components/BookingCalendar';
 import { PageHero, inputCls } from '../components/nd/Kit';
@@ -21,15 +22,27 @@ export const ContactPage: React.FC<ContactPageProps> = ({ theme, onNavigate }) =
   const [submitted, setSubmitted] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
-    phoneOrTelegram: '',
-    budget: '۵۰ تا ۱۰۰ میلیون تومان',
+    email: '', // email OR phone/telegram — the form field accepts both
     serviceNeeded: 'مدیریت کمپین و تبلیغات (Paid Ads)',
     details: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const value = formData.email.trim();
+    const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    // Persist the lead server-side (D1 in prod / .dev-leads.json in dev) so
+    // the admin can follow up — the form data must never just vanish.
+    api
+      .postLead({
+        source: 'contact',
+        name: formData.name.trim(),
+        email: looksLikeEmail ? value : '',
+        contact: looksLikeEmail ? '' : value,
+        service: formData.serviceNeeded,
+        details: formData.details.trim(),
+      })
+      .catch(() => {});
     setSubmitted(true);
     window.dispatchEvent(new CustomEvent('nd:form-success'));
   };

@@ -45,11 +45,12 @@ export const SEOHead: React.FC<SEOHeadProps> = ({ currentPage, blogPostId }) => 
     setMetaProperty('og:type', isPost ? 'article' : 'website');
     setMetaProperty('og:locale', 'fa_IR');
 
-    // Canonical
+    // Canonical — the site is hash-routed, so canonicals must carry the route
+    // in the hash too (path URLs all resolve to the home page).
     const base = (globalSeo.canonicalBaseUrl || '').replace(/\/$/, '');
     const canonical = isPost
-      ? post!.seo?.canonicalUrl || `${base}/blog/${post!.slug || post!.id}`
-      : pageSeo.canonicalUrl || `${base}/${currentPage === 'home' ? '' : currentPage}`;
+      ? post!.seo?.canonicalUrl || `${base}/#/blog/${post!.slug || post!.id}`
+      : pageSeo.canonicalUrl || `${base}/${currentPage === 'home' ? '' : `#/${currentPage}`}`;
     setLinkRel('canonical', canonical);
 
     // Robots / noindex — drafts are always hidden from crawlers (admin still previews them).

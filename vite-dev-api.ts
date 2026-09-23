@@ -40,6 +40,7 @@ const seedData = {
 const CONTENT_FILE = path.resolve(process.cwd(), '.dev-content.json');
 const COMMENTS_FILE = path.resolve(process.cwd(), '.dev-comments.json');
 const MEDIA_FILE = path.resolve(process.cwd(), '.dev-media.json');
+const LEADS_FILE = path.resolve(process.cwd(), '.dev-leads.json');
 
 const safeReadJson = <T>(file: string, fallback: T): T => {
   try {
@@ -367,7 +368,49 @@ export function cmsDevApiPlugin(): Plugin {
             return sendJson({ ok: true, slug: fallbackSlug, source: 'translit' });
           }
 
-          // --- 5. /api/comments ---
+          // --- 5. /api/leads --- (dev mirror of functions/api/leads.ts)
+          if (pathname === '/api/leads') {
+            const leads = safeReadJson<any[]>(LEADS_FILE, []);
+            if (method === 'GET') {
+              const auth = req.headers['authorization'] || '';
+              if (!auth.startsWith('Bearer ')) {
+                return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
+              }
+              return sendJson({ ok: true, items: leads });
+            }
+            if (method === 'POST') {
+              const body = await readBody();
+              if (body?.homepage) {
+                return sendJson({ ok: true, id: 'ignored' }); // honeypot
+              }
+              const name = String(body?.name || '').trim().slice(0, 80);
+              const email = String(body?.email || '').trim().slice(0, 160);
+              const contact = String(body?.contact || '').trim().slice(0, 40);
+              if (!name || (!email && !contact) || !String(body?.details || '').trim()) {
+                return sendJson({ ok: false, error: 'لطفاً نام و حداقل ایمیل یا شماره تماس و توضیحات را تکمیل کنید.' }, 400);
+              }
+              const lead = {
+                id: `lead-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+                source: String(body?.source || 'contact').slice(0, 20),
+                name,
+                email,
+                contact,
+                website: String(body?.website || '').trim().slice(0, 200),
+                goal: String(body?.goal || '').trim().slice(0, 200),
+                service: String(body?.service || '').trim().slice(0, 200),
+                details: String(body?.details || '').trim().slice(0, 2000),
+                booking_date: String(body?.bookingDate || '').trim().slice(0, 40),
+                booking_time: String(body?.bookingTime || '').trim().slice(0, 40),
+                created_at: new Date().toISOString(),
+                ip: 'localhost',
+              };
+              leads.unshift(lead);
+              safeWriteJson(LEADS_FILE, leads.slice(0, 500));
+              return sendJson({ ok: true, id: lead.id });
+            }
+          }
+
+          // --- 6. /api/comments ---
           if (pathname === '/api/comments') {
             const comments = safeReadJson<any[]>(COMMENTS_FILE, []);
             if (method === 'GET') {
@@ -382,6 +425,7 @@ export function cmsDevApiPlugin(): Plugin {
                 authorEmail: String(body.authorEmail || ''),
                 content: String(body.content || ''),
                 date: new Date().toLocaleDateString('fa-IR'),
+                createdAt: new Date().toISOString(),
                 isApproved: true,
                 reply: '',
               };

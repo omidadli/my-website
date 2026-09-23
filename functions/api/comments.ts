@@ -40,14 +40,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const ip = getClientIp(request);
 
   // Rate limit: max 5 comments per IP per hour.
+  // NOTE: the `date` column is a PERSIAN locale string (display only) and can't
+  // be compared against ISO windows — use the ISO `created_at` column when the
+  // DB has been migrated (0002), and fail open otherwise.
   try {
     const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const row = await env.DB.prepare(`SELECT COUNT(*) AS c FROM comments WHERE ip = ?1 AND date > ?2`).bind(ip, since).first<{ c: number }>();
+    const row = await env.DB.prepare(`SELECT COUNT(*) AS c FROM comments WHERE ip = ?1 AND created_at > ?2`).bind(ip, since).first<{ c: number }>();
     if ((row?.c || 0) >= 5) {
       return json({ ok: false, error: 'تعداد دیدگاه‌های ارسالی شما در یک ساعت اخیر بیش از حد مجاز است. لطفاً بعداً دوباره تلاش کنید.' }, { status: 429 });
     }
   } catch {
-    /* table missing — fall through, insert will fail loudly instead */
+    /* table or created_at column missing (pre-migration) — continue */
   }
 
   let body: any;
@@ -73,12 +76,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const rand = Array.from(crypto.getRandomValues(new Uint8Array(4))).map((b) => b.toString(16).padStart(2, '0')).join('');
   const id = `c-${Date.now()}-${rand}`;
-  const date = new Date().toLocaleString('fa-IR');
+  const date = new Date().toLocaleString('fa-IR'); // display date (Persian)
+  const now = new Date().toISOString(); // machine-readable (rate limiting)
 
-  await env.DB.prepare(
-    `INSERT INTO comments (id, post_id, author_name, author_email, content, date, is_approved, reply, ip)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, '', ?7)`
-  ).bind(id, postId, authorName, authorEmail, content, date, ip).run();
+  // `created_at` may be missing on databases that predate migration 0002 —
+  // fall back to the legacy insert so posting never hard-fails.
+  try {
+    await env.DB.prepare(
+      `INSERT INTO comments (id, post_id, author_name, author_email, content, date, is_approved, reply, ip, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, '', ?7, ?8)`
+    ).bind(id, postId, authorName, authorEmail, content, date, ip, now).run();
+  } catch {
+    await env.DB.prepare(
+      `INSERT INTO comments (id, post_id, author_name, author_email, content, date, is_approved, reply, ip)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, '', ?7)`
+    ).bind(id, postId, authorName, authorEmail, content, date, ip).run();
+  }
 
   return json({ ok: true, id });
 };

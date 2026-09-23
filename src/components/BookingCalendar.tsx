@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Theme } from '../types';
+import { api } from '../services/api';
 import { Calendar as CalendarIcon, CheckCircle2, ArrowUpLeft, Video } from 'lucide-react';
 import { inputCls } from './nd/Kit';
 
@@ -9,7 +10,7 @@ interface BookingCalendarProps {
 
 export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
   const isDark = theme === 'dark';
-  const [selectedDate, setSelectedDate] = useState('۱۴۰۴/۰۵/۲۵ - شنبه');
+  const [selectedIso, setSelectedIso] = useState('');
   const [selectedTime, setSelectedTime] = useState('۱۴:۰۰ بعدازظهر');
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -20,17 +21,41 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
     goal: 'بررسی کمپین و افزایش ROAS',
   });
 
-  const dates = [
-    { day: 'شنبه', date: '۲۵ مرداد', full: '۱۴۰۴/۰۵/۲۵ - شنبه' },
-    { day: 'یکشنبه', date: '۲۶ مرداد', full: '۱۴۰۴/۰۵/۲۶ - یکشنبه' },
-    { day: 'دوشنبه', date: '۲۷ مرداد', full: '۱۴۰۴/۰۵/۲۷ - دوشنبه' },
-    { day: 'سه‌شنبه', date: '۲۸ مرداد', full: '۱۴۰۴/۰۵/۲۸ - سه‌شنبه' },
-  ];
+  // The next 4 days, generated at render time (Persian calendar via Intl) —
+  // never hard-coded, so the calendar can't show past dates.
+  const dates = useMemo(() => {
+    const fmtWeekday = new Intl.DateTimeFormat('fa-IR', { weekday: 'long' });
+    const fmtDayMonth = new Intl.DateTimeFormat('fa-IR', { day: 'numeric', month: 'long' });
+    const out: { iso: string; day: string; date: string; full: string }[] = [];
+    for (let i = 1; i <= 4; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const day = fmtWeekday.format(d);
+      const dm = fmtDayMonth.format(d);
+      out.push({ iso: d.toISOString().slice(0, 10), day, date: dm, full: `${dm} - ${day}` });
+    }
+    return out;
+  }, []);
+
+  const selectedDate = dates.find((d) => d.iso === selectedIso) || dates[0];
 
   const timeSlots = ['۱۰:۰۰ صبح', '۱۲:۳۰ ظهر', '۱۴:۰۰ بعدازظهر', '۱۶:۳۰ عصر', '۱۹:۰۰ شب'];
 
   const handleConfirmBooking = (e: React.FormEvent) => {
     e.preventDefault();
+    // Persist the booking as a lead (admin sees it in پیشخوان → لیدها).
+    api
+      .postLead({
+        source: 'booking',
+        name: bookingForm.name.trim(),
+        email: bookingForm.email.trim(),
+        website: bookingForm.website.trim(),
+        goal: bookingForm.goal,
+        details: `رزرو جلسه مشاوره: ${selectedDate.full} - ساعت ${selectedTime}`,
+        bookingDate: selectedDate.iso,
+        bookingTime: selectedTime,
+      })
+      .catch(() => {});
     setStep(3);
     window.dispatchEvent(new CustomEvent('nd:booking-success'));
   };
@@ -56,12 +81,12 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
             <label className={`block text-xs font-extrabold mb-3 ${isDark ? 'text-slate-300' : 'text-[color:var(--nd-ink-2)]'}`}>۱. انتخاب روز جلسه</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {dates.map((d) => {
-                const isActive = selectedDate === d.full;
+                const isActive = selectedDate.iso === d.iso;
                 return (
                   <button
-                    key={d.full}
+                    key={d.iso}
                     type="button"
-                    onClick={() => setSelectedDate(d.full)}
+                    onClick={() => setSelectedIso(d.iso)}
                     className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[color:var(--nd-accent)] border-transparent text-white shadow-md'
@@ -121,7 +146,7 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
           <div className={`p-4 rounded-2xl border flex items-center justify-between text-xs ${isDark ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-[color:var(--nd-bg-soft)] border-[color:var(--nd-line)] text-[color:var(--nd-ink-2)]'}`}>
             <div className="flex items-center gap-2">
               <CalendarIcon className="w-4 h-4 text-[color:var(--nd-accent)]" />
-              <span className="font-extrabold">{selectedDate}</span>
+              <span className="font-extrabold">{selectedDate.full}</span>
               <span>·</span>
               <span className="font-extrabold">{selectedTime}</span>
             </div>
@@ -189,9 +214,9 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
           <div className="w-16 h-16 rounded-full bg-[color:var(--nd-mint-soft)] text-[color:var(--nd-success)] flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />
           </div>
-          <h4 className={`nd-h2 text-2xl ${isDark ? 'text-white' : ''}`}>جلسه شما با موفقیت رزرو شد!</h4>
+          <h4 className={`nd-h2 text-2xl ${isDark ? 'text-white' : ''}`}>رزرو شما ثبت شد!</h4>
           <p className={`text-xs max-w-md mx-auto leading-relaxed ${isDark ? 'text-slate-400' : 'nd-muted'}`}>
-            لینک دعوت Google Meet برای تاریخ <strong className="text-[color:var(--nd-accent)]">{selectedDate} - ساعت {selectedTime}</strong> به ایمیل {bookingForm.email} ارسال شد.
+            درخواست جلسه‌ی <strong className="text-[color:var(--nd-accent)]">{selectedDate.full} - ساعت {selectedTime}</strong> ثبت شد؛ لینک Google Meet به ایمیل {bookingForm.email} ارسال می‌شود.
           </p>
           <div className="pt-4">
             <button
