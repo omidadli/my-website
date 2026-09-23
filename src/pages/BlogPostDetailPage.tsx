@@ -113,7 +113,7 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
           <span className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" />{postComments.length} دیدگاه</span>
         </div>
         {post.coverImage && (
-          <div className={`rounded-[28px] overflow-hidden border shadow-md aspect-[21/9] ${isDark ? 'border-white/12' : 'border-white/70'}`}>
+          <div className={`rounded-[var(--nd-radius-card)] overflow-hidden border shadow-md aspect-[21/9] ${isDark ? 'border-white/12' : 'border-white/70'}`}>
             <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </div>
         )}

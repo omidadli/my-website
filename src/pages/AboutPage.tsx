@@ -65,9 +65,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onNavigate }) => {
       {/* Identity + story */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         <div className="lg:col-span-5">
-          <div className="nd-card rounded-[32px] p-7 space-y-6 relative overflow-hidden">
+          <div className="nd-card rounded-[var(--nd-radius-panel)] p-7 space-y-6 relative overflow-hidden">
             <div className="relative w-fit mx-auto">
-              <img src={personal.avatar} alt={personal.name} className="w-40 h-40 rounded-[28px] object-cover shadow-md" />
+              <img src={personal.avatar} alt={personal.name} className="w-40 h-40 rounded-[var(--nd-radius-card)] object-cover shadow-md" />
               <div className="absolute -bottom-4 -right-4">
                 <IconBadge3D iconName="award" theme={theme} size="lg" glowColor="magenta" />
               </div>

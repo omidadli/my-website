@@ -68,7 +68,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ theme = 'dark', onNa
         </div>
       </section>
 
-      <section className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[32px] p-8 sm:p-10 text-center space-y-5`}>
+      <section className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[var(--nd-radius-panel)] p-8 sm:p-10 text-center space-y-5`}>
         <h3 className={`nd-h2 text-lg sm:text-xl ${isDark ? 'text-white' : ''}`}>
           <EditableText path="PROJECTS_PAGE_DATA.portfolioHeadline">{projectsData.portfolioHeadline}</EditableText>
         </h3>

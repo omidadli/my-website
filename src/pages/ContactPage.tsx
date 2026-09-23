@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Theme, Page } from '../types';
 import { useContent } from '../context/ContentContext';
 import { api } from '../services/api';
@@ -26,6 +26,24 @@ export const ContactPage: React.FC<ContactPageProps> = ({ theme, onNavigate }) =
     serviceNeeded: 'مدیریت کمپین و تبلیغات (Paid Ads)',
     details: '',
   });
+
+  // The home page lead magnets hand over the visitor's typed need/site —
+  // drop it straight into the form so nothing is lost in the hand-off.
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const value = String((e as CustomEvent<string>).detail || '').trim();
+      if (!value) return;
+      setSubmitted(false);
+      setFormData((f) => ({
+        ...f,
+        details: f.details.trim() ? `${f.details}\n\n${value}` : value,
+      }));
+      const ta = document.querySelector<HTMLTextAreaElement>('textarea');
+      ta?.focus();
+    };
+    window.addEventListener('nd:prefill-contact', onPrefill);
+    return () => window.removeEventListener('nd:prefill-contact', onPrefill);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +74,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ theme, onNavigate }) =
   ];
 
   return (
-    <div className="space-y-12 py-4">
+    <div className="space-y-14 py-4">
       <PageHero
         theme={theme}
         page="contact"

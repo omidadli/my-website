@@ -77,9 +77,8 @@ const SectionHead: React.FC<{
   icon?: React.ReactNode;
   title: string;
   desc?: string;
-  align?: 'center' | 'start';
-}> = ({ eyebrow, icon, title, desc, align = 'center' }) => (
-  <div className={`${align === 'center' ? 'text-center mx-auto' : 'text-right'} max-w-2xl space-y-4`}>
+}> = ({ eyebrow, icon, title, desc }) => (
+  <div className="text-center mx-auto max-w-2xl space-y-4">
     <span className="nd-eyebrow">
       {icon}
       <span>{eyebrow}</span>
@@ -89,22 +88,6 @@ const SectionHead: React.FC<{
   </div>
 );
 
-const IconTile: React.FC<{ name: string; tint: { bg: string; fg: string }; size?: 'sm' | 'md' }> = ({
-  name,
-  tint,
-  size = 'md',
-}) => {
-  const Icon = iconFor(name);
-  return (
-    <span
-      className={`inline-flex items-center justify-center rounded-2xl ${size === 'md' ? 'w-12 h-12' : 'w-10 h-10'}`}
-      style={{ background: tint.bg, color: tint.fg }}
-    >
-      <Icon className={size === 'md' ? 'w-6 h-6' : 'w-5 h-5'} />
-    </span>
-  );
-};
-
 /* ------------------------------------------------------------------ */
 /*  HomePage                                                           */
 /* ------------------------------------------------------------------ */
@@ -113,7 +96,10 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
   const isDark = theme === 'dark';
 
   const [activeServiceTab, setActiveServiceTab] = useState<'start' | 'sell' | 'grow'>('sell');
-  const [promptValue, setPromptValue] = useState('');
+  // Two independent lead-capture inputs (hero prompt + insights lead magnet)
+  // must NOT share state — typing in one leaks into the other.
+  const [heroPrompt, setHeroPrompt] = useState('');
+  const [auditPrompt, setAuditPrompt] = useState('');
   const [openFaq, setOpenFaq] = useState<number>(-1);
 
   // Cinematic pointer parallax for the hero stage
@@ -163,8 +149,12 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
     el.scrollBy({ left: dir * -1 * (el.clientWidth * 0.75), behavior: 'smooth' });
   };
 
-  const handlePromptSubmit = (e?: React.FormEvent) => {
+  const handlePromptSubmit = (e?: React.FormEvent, value: string = '') => {
     e?.preventDefault();
+    // Hand the visitor's typed need to the contact form instead of losing it.
+    if (value.trim()) {
+      window.dispatchEvent(new CustomEvent('nd:prefill-contact', { detail: value.trim() }));
+    }
     onNavigate('contact');
   };
 
@@ -240,7 +230,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
               onMouseMove={isDark ? handleStageMove : undefined}
               className={
                 isDark
-                  ? 'nd-stage nd-hairline-top relative w-full rounded-b-[44px] sm:rounded-b-[56px] pt-28 sm:pt-32 pb-16 sm:pb-20 overflow-hidden'
+                  ? 'nd-stage nd-hairline-top relative w-full rounded-b-[var(--nd-radius-hero)] pt-28 sm:pt-32 pb-16 sm:pb-20 overflow-hidden'
                   : 'relative w-full pt-28 sm:pt-32 pb-10'
               }
             >
@@ -284,7 +274,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                 >
                   <span className="flex">
                     <img src={personal.avatar} alt={personal.name} className={`w-7 h-7 rounded-full object-cover ring-2 ${isDark ? 'ring-white/30' : 'ring-white'}`} />
-                    <span className={`-ms-2 w-7 h-7 rounded-full ring-2 grid place-items-center text-[10px] font-black text-white ${isDark ? 'ring-white/30' : 'ring-white'}`} style={{ background: 'linear-gradient(135deg,#4f46e5,#38bdf8)' }}>
+                    <span className={`-ms-2 w-7 h-7 rounded-full ring-2 grid place-items-center text-[10px] font-black text-white nd-grad ${isDark ? 'ring-white/30' : 'ring-white'}`}>
                       ۵+
                     </span>
                   </span>
@@ -330,17 +320,17 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
 
                 {/* Prompt box — dark glass */}
                 <motion.form
-                  onSubmit={handlePromptSubmit}
+                  onSubmit={(e) => handlePromptSubmit(e, heroPrompt)}
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                  className={`${isDark ? 'nd-glass-dark' : 'nd-card'} rounded-[26px] p-3 sm:p-4 max-w-2xl mx-auto text-right`}
+                  className={`${isDark ? 'nd-glass-dark' : 'nd-card'} rounded-[var(--nd-radius-card)] p-3 sm:p-4 max-w-2xl mx-auto text-right`}
                 >
                   <div className="flex items-center gap-3 px-2 sm:px-3 pt-2 pb-3">
                     <Search className={`w-5 h-5 shrink-0 ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`} />
                     <input
-                      value={promptValue}
-                      onChange={(e) => setPromptValue(e.target.value)}
+                      value={heroPrompt}
+                      onChange={(e) => setHeroPrompt(e.target.value)}
                       placeholder="نیازت رو بنویس؛ مثلاً: بازدید میاد ولی فروش نه…"
                       className={`w-full bg-transparent text-sm sm:text-base font-medium focus:outline-none ${isDark ? 'text-white placeholder:text-slate-500' : 'text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)]'}`}
                     />
@@ -350,7 +340,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                       <button
                         key={s}
                         type="button"
-                        onClick={() => setPromptValue(s)}
+                        onClick={() => setHeroPrompt(s)}
                         className={`nd-chip transition-colors cursor-pointer ${isDark ? 'bg-white/5 border-white/10 text-slate-300 hover:text-white hover:border-indigo-400/50' : 'hover:text-[color:var(--nd-accent)] hover:border-[rgba(79,70,229,0.4)]'}`}
                       >
                         {s}
@@ -461,7 +451,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       case 'PROOF':
         return (
           <section className="py-6 sm:py-10">
-            <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[36px] sm:rounded-[44px] p-7 sm:p-14 space-y-10`}>
+            <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} rounded-[var(--nd-radius-panel)] sm:rounded-[var(--nd-radius-hero)] p-7 sm:p-14 space-y-10`}>
               <div className="text-center space-y-4 max-w-2xl mx-auto">
                 <span className={`${isDark ? 'nd-glass-dark text-indigo-200' : 'nd-eyebrow'} inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold`}>
                   <TrendingUp className="w-3.5 h-3.5" />
@@ -506,7 +496,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     viewport={{ once: true, margin: '-60px' }}
                     transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => onSelectCaseStudy(study)}
-                    className={`${isDark ? 'nd-glass-dark hover:bg-white/10' : 'nd-card nd-card-hover'} rounded-[28px] p-6 sm:p-7 text-right flex flex-col gap-4 cursor-pointer transition-colors group`}>
+                    className={`${isDark ? 'nd-glass-dark hover:bg-white/10' : 'nd-card nd-card-hover'} p-6 sm:p-7 text-right flex flex-col gap-4 cursor-pointer transition-colors group`}>
                     <div className="flex items-center justify-between">
                       <span className={`nd-chip ${isDark ? 'bg-white/8 border-white/12 text-slate-300' : ''}`}>{study.industryFa}</span>
                       <span className={`text-[11px] font-bold ${isDark ? 'text-slate-500' : 'text-[color:var(--nd-faint)]'}`}>{study.client}</span>
@@ -600,7 +590,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
               title="نتیجه‌هایی که تا الان گرفتم"
               desc="این‌ها فقط عدد نیستن؛ نتیجه‌ی کار روی کسب‌وکارهای واقعیه."
             />
-            <div className="nd-card rounded-[28px] sm:rounded-[32px] p-6 sm:p-10 grid grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-6">
+            <div className="nd-card rounded-[var(--nd-radius-panel)] p-6 sm:p-10 grid grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-6">
               {stats.map((stat, idx) => (
                 <div key={idx} className="relative text-center lg:text-right space-y-1.5">
                   <RepeaterControls arrayPath="STATS" index={idx} totalCount={stats.length} className="absolute top-0 left-0" />
@@ -710,7 +700,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                           </div>
                           <button
                             onClick={() => onNavigate('services')}
-                            className="w-full py-3 rounded-full border border-[color:var(--nd-line-strong)] text-xs font-extrabold text-[color:var(--nd-ink-2)] hover:bg-[color:var(--nd-ink)] hover:text-white hover:border-[color:var(--nd-ink)] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="nd-btn nd-btn-ghost w-full py-3 text-xs"
                           >
                             <span>مشاهده جزئیات کامل</span>
                             <ChevronLeft className="w-3.5 h-3.5" />
@@ -858,7 +848,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       case 'WHY_OMID':
         return (
           <section id="why-omid" className="py-14 sm:py-20">
-            <div className="nd-panel rounded-[32px] sm:rounded-[40px] p-7 sm:p-14 space-y-10">
+            <div className="nd-panel rounded-[var(--nd-radius-panel)] sm:rounded-[var(--nd-radius-hero)] p-7 sm:p-14 space-y-10">
               <SectionHead
                 eyebrow="تمایز و رویکرد"
                 icon={<Target className="w-3.5 h-3.5" />}
@@ -873,7 +863,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: '-60px' }}
                     transition={{ duration: 0.55, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
-                    className="nd-panel-card rounded-[24px] p-7 space-y-4 h-full"
+                    className="nd-panel-card rounded-[var(--nd-radius-card)] p-7 space-y-4 h-full"
                   >
                     <IconBadge3D iconName={item.icon} theme={theme} size="sm" glowColor={(['cyan', 'gold', 'magenta'] as const)[idx % 3]} floating={false} />
                     <h3 className="nd-h2 text-base sm:text-lg">{item.title}</h3>
@@ -884,7 +874,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
 
               {/* Testimonial */}
               {testimonials[0] && (
-                <div className="nd-surface-bg rounded-[28px] border border-[color:var(--nd-line)] shadow-sm p-7 sm:p-9 flex flex-col sm:flex-row gap-6 items-start max-w-4xl mx-auto">
+                <div className="nd-card p-7 sm:p-9 flex flex-col sm:flex-row gap-6 items-start max-w-4xl mx-auto">
                   <Quote className="w-8 h-8 text-[color:var(--nd-accent)] opacity-40 shrink-0 rotate-180" />
                   <div className="space-y-4">
                     <p className="text-sm sm:text-base leading-relaxed font-medium text-[color:var(--nd-ink-2)]">{testimonials[0].quote}</p>
@@ -983,7 +973,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                 transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                 className="lg:col-span-2"
               >
-                <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-card'} rounded-[32px] p-7 sm:p-9 h-full flex flex-col gap-5`} style={isDark ? undefined : { background: 'linear-gradient(150deg, var(--nd-accent-soft), var(--nd-sky-soft) 60%, var(--nd-mint-soft))' }}>
+                <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-card'} rounded-[var(--nd-radius-panel)] p-7 sm:p-9 h-full flex flex-col gap-5`} style={isDark ? undefined : { background: 'linear-gradient(150deg, var(--nd-accent-soft), var(--nd-sky-soft) 60%, var(--nd-mint-soft))' }}>
                   <span className={`${isDark ? 'nd-glass-dark text-indigo-200' : 'nd-eyebrow'} inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold w-fit`}>
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>بدون هزینه، بدون تعهد</span>
@@ -992,10 +982,10 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   <p className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-xs sm:text-sm leading-relaxed`}>
                     آدرس سایتت رو بنویس؛ تا ۴۸ ساعت یه بررسی اولیه از مسیر خرید، سرعت و نقاط ریزشت برات می‌فرستم — همین‌طوری، برای آشنایی.
                   </p>
-                  <form onSubmit={handlePromptSubmit} className="mt-auto space-y-3">
+                  <form onSubmit={(e) => handlePromptSubmit(e, auditPrompt)} className="mt-auto space-y-3">
                     <input
-                      value={promptValue}
-                      onChange={(e) => setPromptValue(e.target.value)}
+                      value={auditPrompt}
+                      onChange={(e) => setAuditPrompt(e.target.value)}
                       placeholder="example.com"
                       className={`w-full rounded-2xl px-4 py-3.5 text-sm focus:outline-none dir-ltr text-left ${isDark ? 'nd-glass-dark text-white placeholder:text-slate-500 focus:border-indigo-400/60' : 'bg-white border border-[color:var(--nd-line)] text-[color:var(--nd-ink)] placeholder:text-[color:var(--nd-faint)] focus:border-[color:var(--nd-accent)]'}`}
                     />
@@ -1069,7 +1059,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
             />
             <div className="max-w-3xl mx-auto space-y-3">
               {faqs.map((f, idx) => (
-                <div key={idx} className="nd-card rounded-[22px] overflow-hidden">
+                <div key={idx} className="nd-card overflow-hidden">
                   <button
                     onClick={() => setOpenFaq(openFaq === idx ? -1 : idx)}
                     className="w-full flex items-center justify-between gap-4 p-5 sm:p-6 text-right cursor-pointer"
@@ -1103,7 +1093,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       case 'CTA':
         return (
           <section id="final-cta" className="py-10 sm:py-16">
-            <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} relative rounded-[36px] sm:rounded-[44px] p-9 sm:p-16 text-center space-y-6`}>
+            <div className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} relative rounded-[var(--nd-radius-panel)] sm:rounded-[var(--nd-radius-hero)] p-9 sm:p-16 text-center space-y-6`}>
               <div className="absolute w-[30rem] h-[30rem] -top-32 -right-24 rounded-full blur-3xl opacity-40 nd-float-slow" style={{ background: 'radial-gradient(circle, rgba(99,91,255,0.5), transparent 65%)' }} aria-hidden />
               <div className="absolute w-[26rem] h-[26rem] -bottom-28 -left-20 rounded-full blur-3xl opacity-30 nd-float" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.4), transparent 65%)' }} aria-hidden />
               <h2 className={`nd-h1 relative ${isDark ? 'text-white' : ''} text-2xl sm:text-4xl lg:text-[3rem] max-w-2xl mx-auto`}>

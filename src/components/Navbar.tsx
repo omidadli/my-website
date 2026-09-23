@@ -86,7 +86,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2 ps-2 pe-2 sm:ps-3 sm:pe-2.5 py-2">
           {/* Brand */}
           <button onClick={() => go('home')} className="flex items-center gap-2.5 shrink-0 cursor-pointer me-1 sm:me-3">
-            <span className="w-9 h-9 rounded-xl grid place-items-center text-white font-black text-sm shadow-sm" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c6cf0)' }}>
+            <span className="w-9 h-9 rounded-xl nd-grad grid place-items-center text-white font-black text-sm shadow-sm">
               ع
             </span>
             <span className="hidden md:block text-right leading-tight">
@@ -148,7 +148,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="lg:hidden max-w-6xl mx-auto mt-2 nd-glass rounded-[28px] p-4 space-y-1"
+            className="lg:hidden max-w-6xl mx-auto mt-2 nd-glass rounded-[var(--nd-radius-card)] p-4 space-y-1"
           >
             {navItems.map((item) => {
               const active = currentPage === item.pageSlug;

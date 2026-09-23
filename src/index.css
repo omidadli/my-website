@@ -160,7 +160,7 @@ h1, h2, h3, h4, h5, h6 {
   animation: spin-slow 20s linear infinite;
 }
 
-/* Custom Scrollbar — light & neutral */
+/* Custom Scrollbar — token-driven so it works in BOTH themes */
 ::-webkit-scrollbar {
   width: 10px;
 }
@@ -168,12 +168,12 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--nd-bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(23, 23, 28, 0.18);
+  background: color-mix(in srgb, var(--nd-ink) 18%, transparent);
   border-radius: 999px;
   border: 3px solid var(--nd-bg);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(23, 23, 28, 0.32);
+  background: color-mix(in srgb, var(--nd-ink) 34%, transparent);
 }
 
 /* ==========================================================================
@@ -199,8 +199,12 @@ h1, h2, h3, h4, h5, h6 {
   --nd-mint-soft: #e4f6ee;
   --nd-peach-soft: #fff0e6;
   --nd-success: #0f9d6e;
+  --nd-radius-sm: 12px;
+  --nd-radius-input: 16px;
   --nd-radius-card: 24px;
   --nd-radius-panel: 32px;
+  --nd-radius-hero: 40px;
+  --nd-grad-brand: linear-gradient(135deg, #4f46e5 0%, #6366f1 55%, #7c6cf0 100%);
   --nd-shadow-sm: 0 1px 2px rgba(23, 23, 28, 0.05), 0 10px 28px -14px rgba(23, 23, 28, 0.14);
   --nd-shadow-md: 0 2px 4px rgba(23, 23, 28, 0.04), 0 20px 44px -20px rgba(23, 23, 28, 0.16);
   --nd-shadow-lg: 0 4px 8px rgba(23, 23, 28, 0.04), 0 36px 72px -28px rgba(23, 23, 28, 0.2);
@@ -336,6 +340,19 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--nd-ink-2);
     font-size: 0.7rem;
     font-weight: 700;
+  }
+
+  /* Brand gradient — the single canonical accent gradient (off-palette
+     violet gradients in components must migrate to this). */
+  .nd-grad {
+    background: var(--nd-grad-brand);
+  }
+
+  .nd-grad-text {
+    background: var(--nd-grad-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .no-scrollbar::-webkit-scrollbar {
