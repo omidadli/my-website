@@ -790,20 +790,73 @@ html.theme-transitioning *::after {
 }
 
 /* ==========================================================================
-   Mascot v4 — GIF-style frame acting, flush with the bottom edge
-   - corner avatar = chat launcher; hides (body.chat-open) while panel open
-   - looping scenes (typing/talk/listen) cycle frames like a GIF; body bobs
+   Mascot v5 — video acting in a 3D glass card, floating bottom-right
+   - corner card = chat launcher; hides (body.chat-open) while panel open
+   - RTL row: avatar (right, 5:4 rounded video tile) + his words inside the
+     card, beside him — no floating bubble above his head
+   - looping scenes (typing/talk/listen) play video loops; body bobs per scene
    - compact+dim while the user scrolls so sections stay readable
    ========================================================================== */
 
 .mascot-root {
-  width: clamp(112px, 12vw, 172px);
   pointer-events: none;
   transition: opacity 0.3s var(--nd-ease), transform 0.3s var(--nd-ease);
 }
 
+/* the mascot's 3D glass card — RTL: avatar first (right), his words inside,
+   beside him. Beveled glass + accent rim, matching the site's glass language */
+.mascot-card {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-radius: 30px;
+  max-width: min(440px, calc(100vw - 28px));
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.97) 0%, rgba(243, 241, 255, 0.92) 55%, rgba(238, 246, 255, 0.9) 100%);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1.5px 0 rgba(122, 112, 190, 0.16),
+    0 20px 44px -18px rgba(35, 28, 92, 0.42),
+    0 6px 18px -8px rgba(35, 28, 92, 0.2);
+  transition: transform 0.35s var(--nd-ease);
+}
+
+/* accent rim — the same conic-light language as the site's stages */
+.mascot-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(140deg, rgba(99, 102, 241, 0.55) 0%, rgba(56, 189, 248, 0.28) 38%, transparent 62%, rgba(139, 92, 246, 0.34) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+[data-theme='dark'] .mascot-card {
+  background: linear-gradient(150deg, rgba(32, 32, 52, 0.94) 0%, rgba(19, 19, 33, 0.92) 60%, rgba(15, 15, 26, 0.92) 100%);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.45),
+    0 24px 52px -18px rgba(0, 0, 0, 0.68),
+    0 8px 22px -10px rgba(0, 0, 0, 0.45);
+}
+[data-theme='dark'] .mascot-card::before {
+  background: linear-gradient(140deg, rgba(129, 140, 248, 0.5) 0%, rgba(56, 189, 248, 0.22) 38%, transparent 62%, rgba(139, 92, 246, 0.3) 100%);
+}
+
 .mascot-stage {
   pointer-events: auto;
+  flex: 0 0 auto;
+  width: clamp(106px, 11vw, 148px);
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
@@ -824,8 +877,8 @@ body.chat-open .mascot-root {
 .mascot-root.mascot-compact {
   opacity: 0.45;
 }
-.mascot-root.mascot-compact .mascot-figure {
-  transform: scale(0.8);
+.mascot-root.mascot-compact .mascot-card {
+  transform: scale(0.85);
   transform-origin: 100% 100%;
 }
 .mascot-figure {
@@ -866,25 +919,30 @@ body.chat-open .mascot-root {
   transform: scale(1.045);
 }
 
-/* avatar screen — the rounded video tile (same 640:698 box as the old sprite
-   canvas, so the figure's layout size is unchanged). The bottom fade mask
-   blends the tile into the page edge exactly like the sprite did. */
+/* avatar screen — wide rounded video tile (5:4, big corners) inside the 3D
+   card. object-cover framing was verified per-clip: the character stays
+   whole at this aspect even with raised hands/fists. */
 .mascot-screen {
   position: relative;
   width: 100%;
-  aspect-ratio: 640 / 698;
-  border-radius: 16px;
+  aspect-ratio: 5 / 4;
+  border-radius: 22px;
   overflow: hidden;
-  background: #f1f2f6;
-  border: 1px solid color-mix(in srgb, var(--nd-ink) 10%, transparent);
-  box-shadow: 0 14px 34px -16px rgba(13, 13, 26, 0.4);
-  -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
+  background: #eef0f5;
+  border: 1px solid color-mix(in srgb, var(--nd-ink) 8%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -10px 22px -16px rgba(13, 13, 26, 0.28),
+    0 4px 12px -6px rgba(13, 13, 26, 0.22);
 }
 
 [data-theme='dark'] .mascot-screen {
   background: #1d1d30;
   border-color: color-mix(in srgb, #fff 12%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -10px 22px -16px rgba(0, 0, 0, 0.5),
+    0 4px 12px -6px rgba(0, 0, 0, 0.4);
 }
 
 /* video/img layers crossfade inside the screen (two layers max, driven by
@@ -908,16 +966,42 @@ body.chat-open .mascot-root {
   object-fit: contain;
 }
 
-.mascot-shadow {
-  height: 9px;
-  width: 70%;
-  margin: -3px auto 0;
-  border-radius: 999px;
-  background: radial-gradient(closest-side, rgba(23, 23, 28, 0.24), transparent);
+/* ---------- his words: inside the card, left of the avatar (RTL) ---------- */
+.mascot-say {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: max-width 0.5s var(--nd-ease), opacity 0.28s ease, transform 0.5s var(--nd-ease);
 }
 
-[data-theme='dark'] .mascot-shadow {
-  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+.mascot-card.is-speaking .mascot-say {
+  max-width: 268px;
+  opacity: 1;
+  transform: none;
+}
+
+.mascot-say-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 6px 4px 4px;
+  margin-inline-start: 8px; /* breathing room between avatar and words */
+  min-height: 1.6em;
+}
+
+.mascot-say-text {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.75;
+  color: var(--nd-ink);
+  word-break: keep-all;
+}
+
+[data-theme='dark'] .mascot-say-text {
+  color: var(--nd-ink-2);
 }
 
 /* ---------- acting: body language while a loop scene plays ---------- */
@@ -966,39 +1050,6 @@ body.chat-open .mascot-root {
   70% {
     margin-top: 0.4px;
   }
-}
-
-/* ---------- speech bubble ---------- */
-.mascot-bubble {
-  position: absolute;
-  bottom: calc(100% - 12px);
-  right: 6px;
-  max-width: min(250px, 62vw);
-  padding: 0.55rem 0.8rem;
-  border-radius: 14px 14px 4px 14px;
-  background: var(--nd-surface);
-  border: 1px solid var(--nd-line-strong);
-  box-shadow: var(--nd-shadow-md);
-  color: var(--nd-ink);
-  font-size: 11.5px;
-  font-weight: 700;
-  line-height: 1.65;
-  white-space: normal;
-  pointer-events: none;
-  z-index: 4;
-}
-
-.mascot-bubble::after {
-  content: '';
-  position: absolute;
-  bottom: -5px;
-  right: 14px;
-  width: 9px;
-  height: 9px;
-  background: var(--nd-surface);
-  border-right: 1px solid var(--nd-line-strong);
-  border-bottom: 1px solid var(--nd-line-strong);
-  transform: rotate(45deg);
 }
 
 /* ==========================================================================
@@ -1123,6 +1174,8 @@ body.chat-open .mascot-root {
     animation: none !important;
   }
   .mascot-layer,
+  .mascot-card,
+  .mascot-say,
   .mascot-root,
   .mascot-figure {
     transition: none !important;
