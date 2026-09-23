@@ -362,9 +362,11 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
 }
 
 /**
- * Corner widget: the mascot's 3D glass card — RTL row, avatar first (right),
- * and everything he says INSIDE the card next to him (no floating bubble
- * above his head anymore). Clicking the avatar opens the chat.
+ * Corner widget — a 3D rounded-rect card, RTL: the avatar comes first (right)
+ * and everything the mascot says lives in its own dedicated text box right
+ * beside it — INSIDE the frame, never floating above its head. With no
+ * message the card is just the framed avatar (chat launcher); when a message
+ * arrives the card springs open to reveal the text box.
  */
 export function MascotAvatar() {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -457,52 +459,56 @@ export function MascotAvatar() {
   const askVisible = !!bubble?.askName;
 
   return (
-    <div ref={rootRef} className="mascot-root fixed bottom-3 right-3 z-[50] sm:bottom-5 sm:right-5">
-      <div className={`mascot-card ${bubble ? 'is-speaking' : ''}`} dir="rtl">
-        {/* 1) the avatar — first in RTL (rightmost) */}
-        <div
-          className="mascot-stage"
-          onClick={() => window.dispatchEvent(new CustomEvent('nd:open-chat'))}
-          role="button"
-          tabIndex={0}
-          aria-label="دستیار هوشمند — باز کردن گفتگو"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              window.dispatchEvent(new CustomEvent('nd:open-chat'));
-            }
-          }}
-        >
+    <div ref={rootRef} className="mascot-root fixed bottom-2 right-2 z-[50] sm:bottom-4 sm:right-5">
+      <div
+        className="mascot-card"
+        onClick={() => window.dispatchEvent(new CustomEvent('nd:open-chat'))}
+        role="button"
+        tabIndex={0}
+        aria-label="دستیار هوشمند — باز کردن گفتگو"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('nd:open-chat'));
+          }
+        }}
+      >
+        {/* avatar first (right in RTL) */}
+        <div className="mascot-card-avatar">
           <div className="mascot-sway">
             <MascotFigure corner />
           </div>
         </div>
 
-        {/* 2) everything he says — inside the card, next to him */}
-        <div className="mascot-say" aria-live="polite">
-          <AnimatePresence initial={false}>
-            {bubble && (
-              <motion.div
-                key={bubble.id}
-                initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-                className="mascot-say-inner"
-                onMouseEnter={() => {
-                  if (bubbleTimer.current && bubble?.askName) clearTimeout(bubbleTimer.current);
-                }}
-              >
-                <span className="mascot-say-text">{bubble.shown}</span>
+        {/* the mascot's words — its own box, inside the frame */}
+        <AnimatePresence initial={false}>
+          {bubble && (
+            <motion.div
+              key={bubble.id}
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: 'auto' }}
+              exit={{ opacity: 0, width: 0 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+              className="mascot-card-text"
+              onMouseEnter={() => {
+                if (bubbleTimer.current && bubble?.askName) clearTimeout(bubbleTimer.current);
+              }}
+            >
+              <div className="mascot-card-text-inner">
+                <span className="mascot-card-said">{bubble.shown}</span>
                 {askVisible && (
-                  <form onSubmit={submitName} className="mascot-ask-row">
+                  <form
+                    onSubmit={submitName}
+                    className="mascot-ask-row"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <input
                       autoFocus
                       maxLength={24}
                       value={nameInput}
                       onChange={(e) => setNameInput(e.target.value)}
                       onFocus={() => {
-                        // user is answering — stop the bubble from dismissing
+                        // user is answering — stop the box from dismissing
                         if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
                       }}
                       placeholder="اسمت چیه؟"
@@ -517,10 +523,10 @@ export function MascotAvatar() {
                     </button>
                   </form>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -790,11 +790,10 @@ html.theme-transitioning *::after {
 }
 
 /* ==========================================================================
-   Mascot v5 — video acting in a 3D glass card, floating bottom-right
-   - corner card = chat launcher; hides (body.chat-open) while panel open
-   - RTL row: avatar (right, 5:4 rounded video tile) + his words inside the
-     card, beside him — no floating bubble above his head
-   - looping scenes (typing/talk/listen) play video loops; body bobs per scene
+   Mascot v5 — video acting inside a 3D rounded-rect card
+   - corner card = chat launcher (RTL: avatar right, words in a box beside it);
+     hides (body.chat-open) while the panel is open
+   - each state plays its looping/one-shot clip (mascotVideos.ts), crossfaded
    - compact+dim while the user scrolls so sections stay readable
    ========================================================================== */
 
@@ -803,67 +802,109 @@ html.theme-transitioning *::after {
   transition: opacity 0.3s var(--nd-ease), transform 0.3s var(--nd-ease);
 }
 
-/* the mascot's 3D glass card — RTL: avatar first (right), his words inside,
-   beside him. Beveled glass + accent rim, matching the site's glass language */
+/* the 3D rounded-rect card — RTL row: avatar first (right), its words in
+   their own box beside it, all INSIDE the frame. Layered shadows + inner
+   highlight give the frame depth, tokens keep it in the site's design. */
 .mascot-card {
-  position: relative;
   pointer-events: auto;
   display: flex;
   align-items: center;
-  padding: 8px;
-  border-radius: 30px;
-  max-width: min(440px, calc(100vw - 28px));
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.97) 0%, rgba(243, 241, 255, 0.92) 55%, rgba(238, 246, 255, 0.9) 100%);
-  backdrop-filter: blur(18px) saturate(1.5);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1.5px 0 rgba(122, 112, 190, 0.16),
-    0 20px 44px -18px rgba(35, 28, 92, 0.42),
-    0 6px 18px -8px rgba(35, 28, 92, 0.2);
-  transition: transform 0.35s var(--nd-ease);
-}
-
-/* accent rim — the same conic-light language as the site's stages */
-.mascot-card::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1.5px;
-  background: linear-gradient(140deg, rgba(99, 102, 241, 0.55) 0%, rgba(56, 189, 248, 0.28) 38%, transparent 62%, rgba(139, 92, 246, 0.34) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-[data-theme='dark'] .mascot-card {
-  background: linear-gradient(150deg, rgba(32, 32, 52, 0.94) 0%, rgba(19, 19, 33, 0.92) 60%, rgba(15, 15, 26, 0.92) 100%);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.1),
-    inset 0 -1.5px 0 rgba(0, 0, 0, 0.45),
-    0 24px 52px -18px rgba(0, 0, 0, 0.68),
-    0 8px 22px -10px rgba(0, 0, 0, 0.45);
-}
-[data-theme='dark'] .mascot-card::before {
-  background: linear-gradient(140deg, rgba(129, 140, 248, 0.5) 0%, rgba(56, 189, 248, 0.22) 38%, transparent 62%, rgba(139, 92, 246, 0.3) 100%);
-}
-
-.mascot-stage {
-  pointer-events: auto;
-  flex: 0 0 auto;
-  width: clamp(106px, 11vw, 148px);
+  gap: 10px;
+  direction: rtl;
+  padding: 9px;
+  border-radius: 24px;
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
+  background: linear-gradient(160deg, #ffffff 0%, #f2f3f8 100%);
+  border: 1px solid color-mix(in srgb, var(--nd-ink) 10%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(23, 23, 28, 0.06),
+    0 1px 2px rgba(13, 13, 26, 0.1),
+    0 18px 42px -16px rgba(13, 13, 26, 0.4),
+    0 0 0 1px color-mix(in srgb, var(--nd-accent) 7%, transparent);
+  transition: transform 0.3s var(--nd-ease), box-shadow 0.3s var(--nd-ease);
 }
 
-.mascot-stage:focus-visible .mascot-figure {
-  filter: drop-shadow(0 0 1.5px color-mix(in srgb, var(--nd-accent) 80%, transparent));
+[data-theme='dark'] .mascot-card {
+  background: linear-gradient(160deg, #23233a 0%, #14141f 100%);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    0 24px 52px -18px rgba(0, 0, 0, 0.78),
+    0 0 26px -6px color-mix(in srgb, var(--nd-accent) 30%, transparent);
+}
+
+/* gentle hover affordance only — no random scenes on hover */
+.mascot-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(23, 23, 28, 0.06),
+    0 2px 4px rgba(13, 13, 26, 0.1),
+    0 26px 54px -18px rgba(13, 13, 26, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--nd-accent) 14%, transparent);
+}
+
+[data-theme='dark'] .mascot-card:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 30px 60px -18px rgba(0, 0, 0, 0.85),
+    0 0 34px -4px color-mix(in srgb, var(--nd-accent) 40%, transparent);
+}
+
+.mascot-card:focus-visible {
+  border-color: color-mix(in srgb, var(--nd-accent) 55%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 3px color-mix(in srgb, var(--nd-accent) 28%, transparent);
+}
+
+/* avatar zone (first in RTL) — the framed video tile */
+.mascot-card-avatar {
+  width: 92px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .mascot-card-avatar {
+    width: 100px;
+  }
+}
+
+/* the mascot's words — a dedicated box inside the frame (never above the head) */
+.mascot-card-text {
+  overflow: hidden;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.mascot-card-text-inner {
+  width: min(220px, 54vw);
+  padding: 9px 11px;
+  border-radius: 15px;
+  background: var(--nd-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--nd-accent) 14%, transparent);
+  color: var(--nd-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.75;
+  text-align: right;
+}
+
+[data-theme='dark'] .mascot-card-text-inner {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+.mascot-card-said {
+  display: inline;
 }
 
 /* chat panel is open → the mascot "walked into" the chat */
@@ -876,11 +917,10 @@ body.chat-open .mascot-root {
 /* user is scrolling → step back so content stays readable */
 .mascot-root.mascot-compact {
   opacity: 0.45;
-}
-.mascot-root.mascot-compact .mascot-card {
-  transform: scale(0.85);
+  transform: scale(0.92);
   transform-origin: 100% 100%;
 }
+
 .mascot-figure {
   transition: transform 0.35s var(--nd-ease);
 }
@@ -910,39 +950,25 @@ body.chat-open .mascot-root {
   transform-origin: 50% 88%; /* neck pivot — the whole figure turns toward the cursor */
 }
 
-/* gentle hover affordance only — no random scenes on hover */
-.mascot-stage {
-  transition: transform 0.3s var(--nd-ease);
-}
-
-.mascot-stage:hover .mascot-figure {
-  transform: scale(1.045);
-}
-
-/* avatar screen — wide rounded video tile (5:4, big corners) inside the 3D
-   card. object-cover framing was verified per-clip: the character stays
-   whole at this aspect even with raised hands/fists. */
+/* avatar screen — the rounded video tile (same 640:698 box as the old sprite
+   canvas, so the figure's layout size is unchanged). The bottom fade mask
+   blends the tile into the page edge exactly like the sprite did. */
 .mascot-screen {
   position: relative;
   width: 100%;
-  aspect-ratio: 5 / 4;
-  border-radius: 22px;
+  aspect-ratio: 640 / 698;
+  border-radius: 12px;
   overflow: hidden;
-  background: #eef0f5;
-  border: 1px solid color-mix(in srgb, var(--nd-ink) 8%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -10px 22px -16px rgba(13, 13, 26, 0.28),
-    0 4px 12px -6px rgba(13, 13, 26, 0.22);
+  background: #f1f2f6;
+  border: 1px solid color-mix(in srgb, var(--nd-ink) 10%, transparent);
+  box-shadow: 0 6px 18px -8px rgba(13, 13, 26, 0.35);
+  -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
 }
 
 [data-theme='dark'] .mascot-screen {
   background: #1d1d30;
   border-color: color-mix(in srgb, #fff 12%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    inset 0 -10px 22px -16px rgba(0, 0, 0, 0.5),
-    0 4px 12px -6px rgba(0, 0, 0, 0.4);
 }
 
 /* video/img layers crossfade inside the screen (two layers max, driven by
@@ -964,44 +990,6 @@ body.chat-open .mascot-root {
 
 .mascot-layer--img {
   object-fit: contain;
-}
-
-/* ---------- his words: inside the card, left of the avatar (RTL) ---------- */
-.mascot-say {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 0;
-  overflow: hidden;
-  opacity: 0;
-  transform: translateX(10px);
-  transition: max-width 0.5s var(--nd-ease), opacity 0.28s ease, transform 0.5s var(--nd-ease);
-}
-
-.mascot-card.is-speaking .mascot-say {
-  max-width: 268px;
-  opacity: 1;
-  transform: none;
-}
-
-.mascot-say-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 4px 6px 4px 4px;
-  margin-inline-start: 8px; /* breathing room between avatar and words */
-  min-height: 1.6em;
-}
-
-.mascot-say-text {
-  font-size: 11.5px;
-  font-weight: 700;
-  line-height: 1.75;
-  color: var(--nd-ink);
-  word-break: keep-all;
-}
-
-[data-theme='dark'] .mascot-say-text {
-  color: var(--nd-ink-2);
 }
 
 /* ---------- acting: body language while a loop scene plays ---------- */
@@ -1116,8 +1104,8 @@ body.chat-open .mascot-root {
 .mascot-ask-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 4px;
+  margin-top: 7px;
 }
 
 .mascot-ask-input {
@@ -1139,8 +1127,8 @@ body.chat-open .mascot-root {
 }
 
 .mascot-ask-btn {
-  height: 30px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 8px;
   border-radius: 9px;
   border: 1px solid var(--nd-line-strong);
   background: transparent;
@@ -1174,10 +1162,9 @@ body.chat-open .mascot-root {
     animation: none !important;
   }
   .mascot-layer,
-  .mascot-card,
-  .mascot-say,
   .mascot-root,
-  .mascot-figure {
+  .mascot-figure,
+  .mascot-card {
     transition: none !important;
   }
 }
