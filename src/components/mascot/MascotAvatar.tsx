@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { mascot, SCENES } from './mascotBus';
+import { mascot } from './mascotBus';
 import { soulJourney } from './soul';
 import { MascotCue } from './useMascotEvents';
+import { VIDEO_SCENES, MascotVisualStep, videoSrc } from './mascotVideos';
 import sprites from './sprites.json';
 
 /**
@@ -14,17 +15,27 @@ import sprites from './sprites.json';
  * counter-translate. With no mouse for a few seconds he slowly glances
  * around on his own, like someone thinking.
  *
- * Acting = GIF-style frame loops driven by mascotBus (typing, talk, listen,
- * greet, celebrate, oops…). Used twice: corner widget + chat video bar,
- * always in sync via the bus.
+ * Acting: the bus scene is rendered as VIDEO layers — a looping/one-shot
+ * <video> per state (see mascotVideos.ts) inside a rounded "avatar screen".
+ * Transitions are a 320ms crossfade: the incoming layer mounts at opacity 0
+ * under/over the outgoing one, starts at frame 0, and only fades in once its
+ * first frame is decodable — the outgoing video keeps playing underneath, so
+ * a slow first fetch never flashes blank. After the fade the old element is
+ * unmounted (key hand-over) to release its decoder.
+ *
+ * Looping videos do NOT use the native `loop` attribute: on `ended` a fresh
+ * copy of the same video crossfades in (self-crossfade), so the loop cut is
+ * masked even when the clip's last frame ≠ first frame. One-shot videos play
+ * once, hold their last frame, and yield to the bus's next state (idle or the
+ * hold/then choreography soul.ts already scheduled).
+ *
+ * Used twice: corner widget + chat video bar, always in sync via the bus.
  */
 
-type SpriteMeta = { src: string; w: number; h: number; eyes: Eye[] | null };
-type Eye = { cx: number; cy: number; r: number };
+type SpriteMeta = { src: string; w: number; h: number; eyes: { cx: number; cy: number; r: number }[] | null };
 const META = sprites as unknown as Record<string, SpriteMeta>;
 
-const ALL_FRAMES = Array.from(new Set(Object.values(SCENES).flatMap((s) => s.frames.map((f) => f.f))));
-
+const FADE_MS = 320; // crossfade budget (250–400ms per spec)
 const TURN_Y = 17; // max head-turn, degrees — clearly visible
 const TURN_X = 10; // max head tilt, degrees
 const DRIFT_X = 0.045; // body follow-translate (× width) — sells the 3D turn
@@ -32,60 +43,230 @@ const DRIFT_Y = 0.026;
 const GLANCE_AFTER = 4200; // ms without mouse → he starts glancing around
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
+interface Layer {
+  key: number;
+  step: MascotVisualStep;
+}
+
+const posterOf = (step: MascotVisualStep): string | undefined =>
+  step.poster && META[step.poster] ? META[step.poster].src : undefined;
+
+function LayerView({
+  layer,
+  visible,
+  onReady,
+  onEnded,
+  onVideoEl,
+}: {
+  layer: Layer;
+  visible: boolean;
+  onReady: () => void;
+  onEnded: () => void;
+  onVideoEl: (el: HTMLVideoElement | null) => void;
+}) {
+  const style: React.CSSProperties = {
+    opacity: visible ? 1 : 0,
+    transition: `opacity ${FADE_MS}ms ease`,
+  };
+  if (layer.step.img) {
+    return (
+      <img
+        src={META[layer.step.img].src}
+        alt=""
+        draggable={false}
+        decoding="async"
+        onLoad={onReady}
+        className="mascot-layer mascot-layer--img"
+        style={style}
+      />
+    );
+  }
+  return (
+    <video
+      ref={onVideoEl}
+      src={videoSrc(layer.step) ?? undefined}
+      poster={posterOf(layer.step)}
+      autoPlay
+      muted
+      playsInline
+      preload="auto"
+      onCanPlay={onReady}
+      onEnded={onEnded}
+      className="mascot-layer mascot-layer--video"
+      style={style}
+    />
+  );
+}
+
 export function MascotFigure({ corner = false }: { corner?: boolean }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const [scene, setScene] = useState('idle');
-  const [def, setDef] = useState(SCENES.idle);
-  const [frameIdx, setFrameIdx] = useState(0);
-  const frameIdxRef = useRef(0);
-  frameIdxRef.current = frameIdx;
-  const defRef = useRef(def);
-  defRef.current = def;
+  const [front, setFront] = useState<Layer>({ key: 0, step: { v: 'idle', loop: true } });
+  const [back, setBack] = useState<Layer | null>(null);
+  const [backIn, setBackIn] = useState(false);
 
-  // ------------------------------------------------ frame sequencer (GIF loops)
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const playAt = (i: number) => {
-      const d = defRef.current;
-      const step = d.frames[i];
-      if (!step) return;
-      setFrameIdx(i);
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (d.loop) playAt((i + 1) % d.frames.length);
-        else if (i + 1 < d.frames.length) playAt(i + 1);
-      }, Math.max(60, step.ms));
+  const frontRef = useRef(front);
+  frontRef.current = front;
+  const backRef = useRef(back);
+  backRef.current = back;
+  const keyRef = useRef(0);
+  const sceneRef = useRef('idle');
+  const pendingRef = useRef<string | null>(null); // deferred switch (one-shot still playing)
+  const stepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readyKeys = useRef(new Set<number>());
+  const videoEls = useRef(new Map<number, HTMLVideoElement>());
+
+  const attachVideo = useCallback(
+    (key: number) => (el: HTMLVideoElement | null) => {
+      if (el) {
+        videoEls.current.set(key, el);
+        // corner figure is hidden while the chat panel is open → keep it quiet
+        if (corner && document.body.classList.contains('chat-open')) el.pause();
+      } else {
+        videoEls.current.delete(key);
+      }
+    },
+    [corner]
+  );
+
+  // ------------------------------------------------ scene → visual layers
+  const startScene = useCallback((name: string) => {
+    const visual = VIDEO_SCENES[name] ?? VIDEO_SCENES.idle;
+    sceneRef.current = name;
+    if (stepTimer.current) clearTimeout(stepTimer.current);
+
+    // first step in
+    const first = visual.steps[0];
+    keyRef.current += 1;
+    const layer: Layer = { key: keyRef.current, step: first };
+    setBack(layer);
+    setBackIn(false);
+    pendingRef.current = null;
+
+    // choreography: advance through timed steps (celebrate / oops / listen…)
+    const advance = (idx: number) => {
+      const step = visual.steps[idx];
+      if (!step?.ms) return;
+      const next = visual.loop ? (idx + 1) % visual.steps.length : idx + 1;
+      if (next >= visual.steps.length) return;
+      stepTimer.current = setTimeout(() => {
+        if (sceneRef.current !== name) return; // a newer scene took over
+        keyRef.current += 1;
+        setBack({ key: keyRef.current, step: visual.steps[next] });
+        setBackIn(false);
+        advance(next);
+      }, step.ms);
     };
-    const unsub = mascot.subscribe((name) => {
-      const d = SCENES[name] ?? SCENES.idle;
-      setDef(d);
-      defRef.current = d;
+    advance(0);
+  }, []);
+
+  useEffect(() => {
+    const onScene = (name: string) => {
       setScene(name);
-      playAt(0);
-    });
+      // one-shot courtesy: while a one-shot VIDEO is still playing (wave… or
+      // the tail of a choreography), a plain return to idle waits for its
+      // natural end (onEnded) instead of cutting the gesture; any other scene
+      // interrupts immediately.
+      const busyOneShot = [frontRef.current, backRef.current].some(
+        (l) => l && l.step.v && !l.step.loop
+      );
+      if (name === 'idle' && sceneRef.current !== 'idle' && busyOneShot) {
+        pendingRef.current = 'idle';
+        return;
+      }
+      startScene(name);
+    };
+    const unsub = mascot.subscribe(onScene);
     return () => {
       unsub();
-      if (timer) clearTimeout(timer);
+      if (stepTimer.current) clearTimeout(stepTimer.current);
+      if (fadeTimer.current) clearTimeout(fadeTimer.current);
     };
+  }, [startScene]);
+
+  // when the incoming layer's first frame is decodable → start it at 0 and fade in
+  const handleReady = useCallback((key: number) => {
+    if (readyKeys.current.has(key)) return;
+    readyKeys.current.add(key);
+    const el = videoEls.current.get(key);
+    if (el) {
+      try {
+        if (el.currentTime > 0.05) el.currentTime = 0; // never resume mid-clip
+      } catch {
+        /* not seekable yet */
+      }
+      el.play().catch(() => undefined); // iOS Safari: muted+playsInline autoplay
+    }
+    setBackIn(true);
+    // hand the DOM node over: back becomes front (same key → no remount,
+    // no restart), the old front unmounts and releases its decoder.
+    // Guard: if a newer layer superseded this one mid-fade, leave it alone.
+    if (fadeTimer.current) clearTimeout(fadeTimer.current);
+    fadeTimer.current = setTimeout(() => {
+      const b = backRef.current;
+      if (!b || b.key !== key) return;
+      const oldKey = frontRef.current.key;
+      setFront(b);
+      setBack(null);
+      setBackIn(false);
+      if (oldKey !== key) readyKeys.current.delete(oldKey);
+    }, FADE_MS + 60);
   }, []);
 
-  // warm the frame cache so the first loop never stutters
+  // looping step finished → seamless self-crossfade; one-shot → hold last frame
+  const handleEnded = useCallback(
+    (key: number) => {
+      if (key !== frontRef.current.key) return;
+      const step = frontRef.current.step;
+      if (step.loop) {
+        keyRef.current += 1;
+        setBack({ key: keyRef.current, step });
+        setBackIn(false);
+      }
+      if (pendingRef.current) {
+        const p = pendingRef.current;
+        pendingRef.current = null;
+        startScene(p);
+      }
+    },
+    [startScene]
+  );
+
+  // tab hidden → resume the front video when the user comes back
   useEffect(() => {
-    const run = () => {
-      ALL_FRAMES.forEach((f) => {
-        const im = new Image();
-        im.src = META[f].src;
-        im.decode?.().catch(() => undefined);
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      const f = frontRef.current;
+      const el = videoEls.current.get(f.key);
+      if (el && !el.ended && el.paused) el.play().catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
+  // corner figure: the chat panel "owns" the mascot while open → pause corner video
+  useEffect(() => {
+    if (!corner) return;
+    const apply = () => {
+      const hidden = document.body.classList.contains('chat-open');
+      videoEls.current.forEach((el) => {
+        if (hidden) {
+          el.pause();
+        } else if (!el.ended && el.paused && el.currentTime < Math.max(0, (el.duration || 1) - 0.3)) {
+          el.play().catch(() => undefined);
+        }
       });
     };
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
-    if (ric) ric(run);
-    else setTimeout(run, 1500);
-  }, []);
+    const mo = new MutationObserver(apply);
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    apply();
+    return () => mo.disconnect();
+  }, [corner]);
 
-  // ------------------------------------------------ head tracking
+  // ------------------------------------------------ head tracking (unchanged)
   useEffect(() => {
     const root = rootRef.current;
     const body = bodyRef.current;
@@ -145,24 +326,36 @@ export function MascotFigure({ corner = false }: { corner?: boolean }) {
     };
   }, []);
 
-  const activeFrame = def.frames[frameIdx]?.f ?? 'idle';
-  const isMultiFrame = def.frames.length > 1;
-
   return (
-    <div ref={rootRef} className={`mascot-figure ${corner ? 'mascot-figure--corner' : ''}`} data-scene={scene} data-anim={isMultiFrame ? '1' : '0'}>
+    <div
+      ref={rootRef}
+      className={`mascot-figure ${corner ? 'mascot-figure--corner' : ''}`}
+      data-scene={scene}
+      data-anim="1"
+    >
       <div className="mascot-body" ref={bodyRef}>
-        {ALL_FRAMES.map((f) => (
-          <img
-            key={f}
-            src={META[f].src}
-            alt=""
-            width={META[f].w}
-            height={META[f].h}
-            draggable={false}
-            decoding="async"
-            className={`mascot-img ${f === activeFrame ? 'is-active' : ''}`}
+        <div className="mascot-screen">
+          {/* keys are stable across the front↔back hand-over: React moves the
+              same <video> DOM node (keeps playing) instead of remounting it */}
+          <LayerView
+            key={front.key}
+            layer={front}
+            visible
+            onReady={() => undefined}
+            onEnded={() => handleEnded(front.key)}
+            onVideoEl={attachVideo(front.key)}
           />
-        ))}
+          {back && (
+            <LayerView
+              key={back.key}
+              layer={back}
+              visible={backIn}
+              onReady={() => handleReady(back.key)}
+              onEnded={() => handleEnded(back.key)}
+              onVideoEl={attachVideo(back.key)}
+            />
+          )}
+        </div>
       </div>
       {corner && <div className="mascot-shadow" />}
     </div>

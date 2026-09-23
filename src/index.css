@@ -866,35 +866,46 @@ body.chat-open .mascot-root {
   transform: scale(1.045);
 }
 
-/* frame stack — first frame lays out, the rest overlay; active shows */
-.mascot-img {
-  display: block;
-  width: 100%;
-  height: auto;
+/* avatar screen — the rounded video tile (same 640:698 box as the old sprite
+   canvas, so the figure's layout size is unchanged). The bottom fade mask
+   blends the tile into the page edge exactly like the sprite did. */
+.mascot-screen {
   position: relative;
-  opacity: 0;
-  transition: opacity 0.16s ease;
-  user-select: none;
-  -webkit-user-drag: none;
+  width: 100%;
+  aspect-ratio: 640 / 698;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #f1f2f6;
+  border: 1px solid color-mix(in srgb, var(--nd-ink) 10%, transparent);
+  box-shadow: 0 14px 34px -16px rgba(13, 13, 26, 0.4);
   -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 88%, transparent 100%);
 }
 
-.mascot-img + .mascot-img {
+[data-theme='dark'] .mascot-screen {
+  background: #1d1d30;
+  border-color: color-mix(in srgb, #fff 12%, transparent);
+}
+
+/* video/img layers crossfade inside the screen (two layers max, driven by
+   MascotFigure: incoming layer fades in over the outgoing one) */
+.mascot-layer {
   position: absolute;
   inset: 0;
+  width: 100%;
   height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.mascot-layer--video {
+  object-fit: cover;
+}
+
+.mascot-layer--img {
   object-fit: contain;
-}
-
-.mascot-img.is-active {
-  opacity: 1;
-  z-index: 2;
-}
-
-/* GIF runs: near-instant swaps (no ghost trails) */
-.mascot-figure[data-anim='1'] .mascot-img {
-  transition: opacity 0.05s linear;
 }
 
 .mascot-shadow {
@@ -1111,7 +1122,7 @@ body.chat-open .mascot-root {
   .mascot-figure[data-scene] .mascot-body {
     animation: none !important;
   }
-  .mascot-img,
+  .mascot-layer,
   .mascot-root,
   .mascot-figure {
     transition: none !important;
