@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Page } from '../types';
 import { useContent } from '../context/ContentContext';
 import { usePreservedState } from '../utils/statePreserver';
@@ -13,7 +13,10 @@ import {
   Settings, Lock, ShieldCheck, Cloud, HardDrive, ExternalLink, LogOut, Plus, Bot,
   Trash2, ChevronUp, ChevronDown, Download, Copy, CheckCircle2, XCircle, RotateCcw,
   History, Eye, EyeOff, Wand2, Link2, Upload, Reply, Menu, Target,
+  KeyRound, Smartphone, ShieldOff,
 } from 'lucide-react';
+import { AI_TOOLS } from '../data/tools';
+import { getPlans, getPlan } from '../../lib/toolPlans';
 
 interface AdminPageProps {
   onNavigate: (page: Page) => void;
@@ -169,7 +172,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
     toggleCommentApproval, deleteBlogComment, replyBlogComment,
   } = useContent();
 
-  type TabId = 'dashboard' | 'posts' | 'comments' | 'services' | 'portfolio' | 'products' | 'projects' | 'about' | 'home' | 'pages' | 'media' | 'seo' | 'chat' | 'leads' | 'appearance' | 'settings';
+  type TabId = 'dashboard' | 'posts' | 'comments' | 'services' | 'portfolio' | 'products' | 'projects' | 'about' | 'home' | 'pages' | 'media' | 'seo' | 'chat' | 'leads' | 'toolaccess' | 'appearance' | 'settings';
   const [activeTab, setActiveTab] = usePreservedState<TabId>('admin_active_tab', 'dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -189,6 +192,81 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   }> | null>(null);
   const mediaFileRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
+
+  // AI tool access management
+  const [grants, setGrants] = useState<Array<{ id: string; phone: string; productId: string; code: string; status: string; maxDevices: number; messageQuota?: number; devicesUsed: number; note: string; createdAt: string; expiresAt: string }> | null>(null);
+  const [grantForm, setGrantForm] = useState({ phone: '', productId: 'all', planId: '', days: '30', maxDevices: '1', messageQuota: '0', note: '' });
+  const [grantBusy, setGrantBusy] = useState(false);
+  const [lastGrant, setLastGrant] = useState<{ phone: string; productId: string; code: string; expiresAt?: string } | null>(null);
+  const [toolMsgs, setToolMsgs] = useState<Array<{ id: string; phone: string; product_id: string; question: string; answer: string; created_at: string }> | null>(null);
+  // Per-tool behavior + AI connection management
+  const [selectedTool, setSelectedTool] = useState<string>(AI_TOOLS[0]?.id || '');
+  const [toolSettings, setToolSettings] = useState<Array<{ productId: string; name: string; provider: string; baseUrl: string; model: string; hasKey: boolean; keyMask: string; usingEnvFallback: boolean }>>([]);
+  const [envKeyPresent, setEnvKeyPresent] = useState(false);
+  const [keyForm, setKeyForm] = useState({ provider: 'gemini', baseUrl: '', model: '', apiKey: '' });
+  const [keyBusy, setKeyBusy] = useState(false);
+
+  const loadGrants = async () => setGrants(await api.listToolAccess());
+  const loadToolSettings = async () => {
+    const r = await api.listToolSettings();
+    setToolSettings(r.items);
+    setEnvKeyPresent(r.envKeyPresent);
+  };
+  // Load AI-connection status when the tab opens (once).
+  useEffect(() => {
+    if (activeTab === 'toolaccess' && isAdmin) loadToolSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isAdmin]);
+  // Populate the key form from the selected tool's stored settings.
+  useEffect(() => {
+    const s = toolSettings.find((x) => x.productId === selectedTool);
+    setKeyForm({ provider: s?.provider || 'gemini', baseUrl: s?.baseUrl || '', model: s?.model || '', apiKey: '' });
+  }, [selectedTool, toolSettings]);
+
+  const currentSetting = toolSettings.find((x) => x.productId === selectedTool);
+  const handleSaveKey = async () => {
+    setKeyBusy(true);
+    const r = await api.setToolKey({ productId: selectedTool, provider: keyForm.provider, baseUrl: keyForm.baseUrl, model: keyForm.model, apiKey: keyForm.apiKey });
+    setKeyBusy(false);
+    if (r.ok) { showToast('اتصال هوش مصنوعی ذخیره شد.'); await loadToolSettings(); }
+    else showToast(r.error || 'ذخیره ناموفق بود.');
+  };
+  const handleClearKey = async () => {
+    if (await api.clearToolKey(selectedTool)) { showToast('کلید حذف شد؛ به کلید پیش‌فرض بازگشت.'); await loadToolSettings(); }
+  };
+  const toolName = (id: string) => (id === 'all' ? 'همه ابزارها' : (AI_TOOLS.find((t) => t.id === id)?.name || id));
+  // Apply a plan's defaults into the grant form (still editable afterwards).
+  const applyPlan = (productId: string, planId: string) => {
+    const plan = planId ? getPlan(productId, planId) : undefined;
+    setGrantForm((f) => ({
+      ...f,
+      productId,
+      planId,
+      days: plan ? String(plan.durationDays) : f.days,
+      maxDevices: plan ? String(plan.maxDevices) : f.maxDevices,
+      messageQuota: plan ? String(plan.messageQuota) : f.messageQuota,
+    }));
+  };
+  const handleGrant = async () => {
+    setGrantBusy(true);
+    const r = await api.grantToolAccess({
+      phone: grantForm.phone,
+      productId: grantForm.productId,
+      planId: grantForm.planId || undefined,
+      days: parseInt(grantForm.days, 10) || 30,
+      maxDevices: parseInt(grantForm.maxDevices, 10) || 1,
+      messageQuota: parseInt(grantForm.messageQuota, 10) || 0,
+      note: grantForm.note,
+    });
+    setGrantBusy(false);
+    if (r.ok && r.code) {
+      setLastGrant({ phone: grantForm.phone, productId: grantForm.productId, code: r.code, expiresAt: r.expiresAt });
+      showToast('دسترسی صادر شد — کد را برای مشتری بفرست.');
+      await loadGrants();
+    } else {
+      showToast(r.error || 'صدور دسترسی ناموفق بود.');
+    }
+  };
 
   // login form
   const [loginUser, setLoginUser] = useState('');
@@ -271,6 +349,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
       items: [
         { id: 'chat', label: 'دستیار هوشمند', icon: Bot },
         { id: 'leads', label: 'لیدها (تماس و رزرو)', icon: Target },
+        { id: 'toolaccess', label: 'دسترسی ابزارهای هوشمند', icon: KeyRound },
       ],
     },
     {
@@ -1159,6 +1238,314 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                           <p className="text-[11px] font-bold text-[color:var(--nd-accent)]">🗓 {l.booking_date} — ساعت {l.booking_time}</p>
                         )}
                         <p className="text-[11px] nd-muted leading-relaxed whitespace-pre-wrap">{l.details}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ACard>
+            </div>
+          )}
+
+          {/* ---------------- AI TOOL ACCESS ---------------- */}
+          {activeTab === 'toolaccess' && (
+            <div className="space-y-8">
+              <ACard>
+                <ASectionTitle
+                  title="تنظیمات و تعرفه ابزارهای هوشمند"
+                  desc="روشن/خاموش کردن کل بخش، قیمت هر ابزار، متن راهنمای خرید و کانال‌های ارتباطی (تلگرام، واتساپ، بله)."
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <FieldsForm basePath="AI_TOOLS_CONFIG" item={data.AI_TOOLS_CONFIG} fields={[
+                    { key: 'enabled', label: 'بخش ابزارهای هوشمند فعال باشد', type: 'toggle', hint: 'خاموش = به‌جای ابزارها پیام «به‌زودی» نمایش داده می‌شود' },
+                    { key: 'purchaseNote', label: 'متن راهنمای خرید (داخل قفلِ ابزار)', type: 'textarea', rows: 3 },
+                  ]} />
+                </div>
+                <div className="mt-4">
+                  <ALabel>کانال‌های ارتباطی خرید</ALabel>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-2">
+                    <FieldsForm basePath="AI_TOOLS_CONFIG.channels" item={data.AI_TOOLS_CONFIG.channels} fields={[
+                      { key: 'telegramUrl', label: 'لینک تلگرام' },
+                      { key: 'whatsappUrl', label: 'لینک واتساپ' },
+                      { key: 'baleUrl', label: 'لینک بله' },
+                      { key: 'phone', label: 'شماره تماس (نمایشی)' },
+                    ]} />
+                  </div>
+                </div>
+                {/* Gamification: free trial + persuasion copy */}
+                <div className="mt-5 rounded-2xl border border-[color:var(--nd-line)] bg-[color:var(--nd-bg-soft)] p-4 space-y-3">
+                  <p className="text-xs font-black flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-[color:var(--nd-accent)]" /> بازی‌وارسازی و تشویق به خرید</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div className="space-y-1.5">
+                      <ALabel>تعداد پیام رایگان (هر ابزار / هر دستگاه)</ALabel>
+                      <AInput dir="ltr" type="number" min={0} value={String(data.AI_TOOLS_CONFIG.freeTrialCount ?? 3)} onChange={(e) => updateField('AI_TOOLS_CONFIG.freeTrialCount', parseInt(e.target.value, 10) || 0)} />
+                      <p className="text-[10px] nd-faint">۰ = بدون تست رایگان (کاملاً قفل)</p>
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <ALabel>جمله‌ی اعتمادساز (Social Proof)</ALabel>
+                      <AInput value={data.AI_TOOLS_CONFIG.socialProof || ''} onChange={(e) => updateField('AI_TOOLS_CONFIG.socialProof', e.target.value)} placeholder="مثلاً: به بیش از ۱۲۰ مارکتر کمک کرده‌ایم" />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-3">
+                      <ALabel>جمله‌ی فوریت (Urgency)</ALabel>
+                      <AInput value={data.AI_TOOLS_CONFIG.urgency || ''} onChange={(e) => updateField('AI_TOOLS_CONFIG.urgency', e.target.value)} placeholder="مثلاً: ظرفیت پشتیبانی این ماه محدود است" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-tool pricing (3 plans) + visibility */}
+                <div className="mt-4 space-y-2">
+                  <ALabel>قیمت پلن‌ها و نمایش هر ابزار</ALabel>
+                  <p className="text-[10.5px] nd-faint">هر ابزار سه پلن بر اساس میزان مصرف دارد. برچسبِ قیمت هر پلن را می‌توانی اینجا بازنویسی کنی؛ خالی = قیمت پیش‌فرض.</p>
+                  {AI_TOOLS.map((t) => {
+                    const tc = (data.AI_TOOLS_CONFIG.tools?.[t.id] || { enabled: true }) as any;
+                    return (
+                      <div key={t.id} className="rounded-xl border border-[color:var(--nd-line)] bg-[color:var(--nd-surface)] p-3 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-extrabold">{t.name}</span>
+                          <button
+                            onClick={() => updateField(`AI_TOOLS_CONFIG.tools.${t.id}.enabled`, !(tc.enabled !== false))}
+                            className={`nd-chip cursor-pointer ${tc.enabled !== false ? 'bg-[color:var(--nd-mint-soft)] text-[color:var(--nd-success)] border-transparent' : 'bg-[color:var(--nd-peach-soft)] text-[#d97706] border-transparent'}`}
+                          >
+                            {tc.enabled !== false ? 'نمایش' : 'مخفی'}
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {getPlans(t.id).map((p) => (
+                            <div key={p.id} className="space-y-1">
+                              <span className="text-[10.5px] font-bold nd-muted">{p.name}{p.popular ? ' ⭐' : ''}</span>
+                              <AInput
+                                dir="rtl"
+                                placeholder={p.price}
+                                value={tc.planPrices?.[p.id] || ''}
+                                onChange={(e) => updateField(`AI_TOOLS_CONFIG.tools.${t.id}.planPrices.${p.id}`, e.target.value)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ACard>
+
+              <ACard>
+                <ASectionTitle
+                  title="مدیریت رفتار و اتصال هوش مصنوعی (هر ابزار جداگانه)"
+                  desc="برای هر ابزار، شخصیت و پیام‌ها را ویرایش کن و کلید API اختصاصیِ خودش را وصل کن. فیلدهای رفتار اگر خالی باشند، از مقدار پیش‌فرض ابزار استفاده می‌شود."
+                />
+                <div className="space-y-1.5 mb-4">
+                  <ALabel>انتخاب ابزار</ALabel>
+                  <ASelect value={selectedTool} onChange={(e) => setSelectedTool(e.target.value)}>
+                    {AI_TOOLS.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </ASelect>
+                </div>
+
+                {/* Behavior */}
+                <div className="rounded-2xl border border-[color:var(--nd-line)] bg-[color:var(--nd-bg-soft)] p-4 space-y-3">
+                  <p className="text-xs font-black flex items-center gap-1.5"><Bot className="w-4 h-4 text-[color:var(--nd-accent)]" /> مدیریت رفتار</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <FieldsForm
+                      key={`beh-${selectedTool}`}
+                      basePath={`AI_TOOLS_CONFIG.tools.${selectedTool}.behavior`}
+                      item={(data.AI_TOOLS_CONFIG.tools?.[selectedTool] as any)?.behavior || {}}
+                      fields={[
+                        { key: 'persona', label: 'شخصیت و دستورالعمل (System Prompt)', type: 'textarea', rows: 8, hint: 'خالی = پرامپت پیش‌فرضِ همین ابزار' },
+                        { key: 'welcome', label: 'پیام خوش‌آمدگویی', type: 'textarea', rows: 3 },
+                        { key: 'suggestions', label: 'سوال‌های پیشنهادی (چیپ‌ها)', type: 'tags' },
+                        { key: 'temperature', label: 'دما / خلاقیت (۰ تا ۲)', type: 'number', min: 0, max: 2, half: true },
+                        { key: 'useDigest', label: 'اتصال به داده‌های سایت (Digest)', type: 'toggle', hint: 'برای ارجاع به خدمات امید عدلی' },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                {/* AI connection / API token */}
+                <div className="rounded-2xl border border-[color:var(--nd-line)] bg-[color:var(--nd-bg-soft)] p-4 space-y-3 mt-4">
+                  <p className="text-xs font-black flex items-center gap-1.5"><KeyRound className="w-4 h-4 text-emerald-500" /> اتصال و توکن API</p>
+                  <div className={`text-[11px] rounded-lg px-3 py-2 ${currentSetting?.hasKey ? 'bg-[color:var(--nd-mint-soft)] text-[color:var(--nd-success)]' : currentSetting?.usingEnvFallback ? 'bg-[color:var(--nd-peach-soft)] text-[#d97706]' : 'bg-red-50 text-red-600'}`}>
+                    {currentSetting?.hasKey
+                      ? <>کلید اختصاصی فعال است — <code dir="ltr">{currentSetting.keyMask}</code> ({currentSetting.provider})</>
+                      : currentSetting?.usingEnvFallback
+                        ? 'کلید اختصاصی ندارد؛ از کلید پیش‌فرض GEMINI_API_KEY استفاده می‌شود.'
+                        : 'هیچ کلیدی تنظیم نشده — بدون کلید، ابزار با پاسخ‌های نمونه‌ی محلی کار می‌کند.'}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <ALabel>سرویس‌دهنده</ALabel>
+                      <ASelect value={keyForm.provider} onChange={(e) => setKeyForm((f) => ({ ...f, provider: e.target.value }))}>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openai">OpenAI / سازگار با OpenAI</option>
+                      </ASelect>
+                    </div>
+                    <div className="space-y-1.5">
+                      <ALabel>مدل (اختیاری)</ALabel>
+                      <AInput dir="ltr" placeholder={keyForm.provider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.5-flash'} value={keyForm.model} onChange={(e) => setKeyForm((f) => ({ ...f, model: e.target.value }))} />
+                    </div>
+                    {keyForm.provider === 'openai' && (
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <ALabel>Base URL (برای پروکسی‌های سازگار با OpenAI)</ALabel>
+                        <AInput dir="ltr" placeholder="https://api.openai.com/v1" value={keyForm.baseUrl} onChange={(e) => setKeyForm((f) => ({ ...f, baseUrl: e.target.value }))} />
+                      </div>
+                    )}
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <ALabel>کلید API {currentSetting?.hasKey && '(خالی = بدون تغییر)'}</ALabel>
+                      <AInput dir="ltr" type="password" placeholder="کلید API را اینجا وارد کن…" value={keyForm.apiKey} onChange={(e) => setKeyForm((f) => ({ ...f, apiKey: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handleSaveKey} disabled={keyBusy} className="nd-btn nd-btn-accent px-5 py-2.5 text-[12px] cursor-pointer disabled:opacity-50">
+                      <KeyRound className="w-4 h-4" /><span>{keyBusy ? 'در حال ذخیره…' : 'ذخیره اتصال'}</span>
+                    </button>
+                    {currentSetting?.hasKey && (
+                      <button onClick={handleClearKey} className="nd-btn nd-btn-ghost px-4 py-2.5 text-[11px] cursor-pointer text-red-500">
+                        <Trash2 className="w-3.5 h-3.5" /><span>حذف کلید</span>
+                      </button>
+                    )}
+                    <button onClick={loadToolSettings} className="nd-btn nd-btn-ghost px-4 py-2.5 text-[11px] cursor-pointer">
+                      <RotateCcw className="w-3.5 h-3.5" /><span>بازخوانی وضعیت</span>
+                    </button>
+                  </div>
+                  <p className="text-[10.5px] nd-faint leading-relaxed">🔒 کلیدهای API فقط روی سرور و به‌صورت امن ذخیره می‌شوند و هرگز به‌صورت کامل به مرورگر برنمی‌گردند (فقط نمایش ماسک‌شده).</p>
+                </div>
+              </ACard>
+
+              <ACard>
+                <ASectionTitle
+                  title="صدور دسترسی ابزار هوشمند"
+                  desc="بعد از دریافت فیش واریزی، دسترسی را روی شماره‌ی موبایل مشتری باز کن. یک کد اختصاصی ساخته می‌شود که باید برای مشتری بفرستی."
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1.5">
+                    <ALabel>شماره موبایل مشتری</ALabel>
+                    <AInput dir="ltr" placeholder="09xxxxxxxxx" value={grantForm.phone} onChange={(e) => setGrantForm((f) => ({ ...f, phone: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <ALabel>ابزار</ALabel>
+                    <ASelect value={grantForm.productId} onChange={(e) => applyPlan(e.target.value, '')}>
+                      <option value="all">همه ابزارها (اشتراک کامل)</option>
+                      {AI_TOOLS.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </ASelect>
+                  </div>
+                  <div className="space-y-1.5">
+                    <ALabel>پلن (اختیاری — مقادیر زیر را پر می‌کند)</ALabel>
+                    <ASelect value={grantForm.planId} onChange={(e) => applyPlan(grantForm.productId, e.target.value)} disabled={grantForm.productId === 'all'}>
+                      <option value="">— دستی —</option>
+                      {getPlans(grantForm.productId).map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} — {p.price}</option>
+                      ))}
+                    </ASelect>
+                    {grantForm.productId === 'all' && <p className="text-[10px] nd-faint">برای انتخاب پلن، یک ابزار مشخص را انتخاب کن.</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <ALabel>مدت اعتبار (روز)</ALabel>
+                    <AInput dir="ltr" type="number" value={grantForm.days} onChange={(e) => setGrantForm((f) => ({ ...f, days: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <ALabel>حداکثر دستگاه مجاز</ALabel>
+                    <AInput dir="ltr" type="number" value={grantForm.maxDevices} onChange={(e) => setGrantForm((f) => ({ ...f, maxDevices: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <ALabel>سهمیه‌ی پیام (۰ = نامحدود)</ALabel>
+                    <AInput dir="ltr" type="number" value={grantForm.messageQuota} onChange={(e) => setGrantForm((f) => ({ ...f, messageQuota: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <ALabel>یادداشت (اختیاری — مثلاً نام یا مبلغ)</ALabel>
+                    <AInput value={grantForm.note} onChange={(e) => setGrantForm((f) => ({ ...f, note: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 mt-4">
+                  <button onClick={handleGrant} disabled={grantBusy} className="nd-btn nd-btn-accent px-5 py-2.5 text-[12px] cursor-pointer disabled:opacity-50">
+                    <KeyRound className="w-4 h-4" /><span>{grantBusy ? 'در حال صدور…' : 'صدور / تمدید دسترسی'}</span>
+                  </button>
+                  <button onClick={loadGrants} className="nd-btn nd-btn-ghost px-4 py-2.5 text-[11px] cursor-pointer">
+                    <History className="w-3.5 h-3.5" /><span>دریافت لیست دسترسی‌ها</span>
+                  </button>
+                </div>
+
+                {lastGrant && (
+                  <div className="mt-4 rounded-xl border border-[color:var(--nd-success)]/40 bg-[color:var(--nd-mint-soft)] p-4 space-y-2">
+                    <p className="text-[12px] font-black text-[color:var(--nd-success)] flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> دسترسی صادر شد</p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
+                      <span>شماره: <b dir="ltr" className="inline-block">{lastGrant.phone}</b></span>
+                      <span>ابزار: <b>{toolName(lastGrant.productId)}</b></span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px]">کد دسترسی:</span>
+                      <code dir="ltr" className="px-3 py-1 rounded-lg bg-white text-[color:var(--nd-ink)] font-black tracking-widest text-sm border border-[color:var(--nd-line)]">{lastGrant.code}</code>
+                      <button onClick={() => { navigator.clipboard?.writeText(lastGrant.code); showToast('کد کپی شد.'); }} className="nd-btn nd-btn-ghost px-3 py-1.5 text-[11px] cursor-pointer"><Copy className="w-3.5 h-3.5" /><span>کپی</span></button>
+                    </div>
+                    <p className="text-[11px] nd-muted">این کد و شماره را به مشتری بده تا داخل ابزار وارد کند. دسترسی فقط روی {grantForm.maxDevices} دستگاه فعال می‌شود.</p>
+                  </div>
+                )}
+              </ACard>
+
+              <ACard>
+                <ASectionTitle title="دسترسی‌های صادرشده" desc="مدیریت اشتراک‌ها — لغو یا آزادسازی دستگاه‌ها" />
+                {grants === null ? (
+                  <p className="text-xs nd-muted">برای دیدن لیست، دکمه «دریافت لیست دسترسی‌ها» را بزنید.</p>
+                ) : grants.length === 0 ? (
+                  <p className="text-xs nd-muted">هنوز دسترسی‌ای صادر نشده است.</p>
+                ) : (
+                  <div className="space-y-3 max-h-[30rem] overflow-y-auto pl-1">
+                    {grants.map((g) => {
+                      const expired = g.expiresAt && new Date(g.expiresAt).getTime() < Date.now();
+                      return (
+                        <div key={g.id} className="rounded-xl border border-[color:var(--nd-line)] p-3.5 space-y-2">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-extrabold flex items-center gap-1"><Smartphone className="w-3.5 h-3.5" /><span dir="ltr">{g.phone}</span></span>
+                              <span className="nd-chip text-[9px]">{toolName(g.productId)}</span>
+                              <code dir="ltr" className="text-[10px] px-2 py-0.5 rounded bg-[color:var(--nd-bg-soft)] border border-[color:var(--nd-line)] tracking-widest">{g.code}</code>
+                            </div>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${g.status !== 'active' ? 'bg-red-100 text-red-600' : expired ? 'bg-amber-100 text-amber-700' : 'bg-[color:var(--nd-mint-soft)] text-[color:var(--nd-success)]'}`}>
+                              {g.status !== 'active' ? 'لغو‌شده' : expired ? 'منقضی' : 'فعال'}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] nd-muted">
+                            <span>دستگاه‌ها: <b>{g.devicesUsed}/{g.maxDevices}</b></span>
+                            <span>سهمیه پیام: <b>{g.messageQuota ? g.messageQuota : 'نامحدود'}</b></span>
+                            {g.expiresAt && <span>انقضا: <span dir="ltr">{new Date(g.expiresAt).toLocaleDateString('fa-IR')}</span></span>}
+                            {g.note && <span>یادداشت: {g.note}</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <button onClick={async () => { if (await api.resetToolDevices(g.id)) { showToast('دستگاه‌ها آزاد شد.'); loadGrants(); } }} className="nd-btn nd-btn-ghost px-3 py-1.5 text-[10px] cursor-pointer"><RotateCcw className="w-3 h-3" /><span>آزادسازی دستگاه‌ها</span></button>
+                            {g.status === 'active' && (
+                              <button onClick={async () => { if (await api.revokeToolAccess(g.id)) { showToast('دسترسی لغو شد.'); loadGrants(); } }} className="nd-btn nd-btn-ghost px-3 py-1.5 text-[10px] cursor-pointer text-red-500"><ShieldOff className="w-3 h-3" /><span>لغو دسترسی</span></button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </ACard>
+
+              <ACard>
+                <ASectionTitle
+                  title="تاریخچه استفاده از ابزارها"
+                  desc="۲۰۰ پیام آخرِ کاربران در ابزارهای هوشمند — برای پایش کیفیت و رفتار."
+                  action={
+                    <button
+                      onClick={async () => { setToolMsgs(await api.listToolMessages()); showToast('تاریخچه دریافت شد.'); }}
+                      className="nd-btn nd-btn-ghost px-4 py-2 text-[11px] cursor-pointer"
+                    >
+                      <History className="w-3.5 h-3.5" /><span>دریافت تاریخچه</span>
+                    </button>
+                  }
+                />
+                {toolMsgs === null ? (
+                  <p className="text-xs nd-muted">برای دیدن تاریخچه، دکمه «دریافت تاریخچه» را بزنید.</p>
+                ) : toolMsgs.length === 0 ? (
+                  <p className="text-xs nd-muted">هنوز پیامی ثبت نشده است.</p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto pl-1">
+                    {toolMsgs.map((m) => (
+                      <div key={m.id} className="rounded-xl border border-[color:var(--nd-line)] p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="nd-chip text-[9px]">{toolName(m.product_id)}</span>
+                          <span className="text-[9px] nd-faint dir-ltr shrink-0">{m.phone} — {new Date(m.created_at).toLocaleString('fa-IR')}</span>
+                        </div>
+                        <p className="text-[11px] font-extrabold text-[color:var(--nd-accent)]">سوال: <span className="text-[color:var(--nd-ink)] font-normal">{m.question}</span></p>
+                        <p className="text-[11px] nd-muted leading-relaxed whitespace-pre-wrap line-clamp-4">{m.answer}</p>
                       </div>
                     ))}
                   </div>

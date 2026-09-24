@@ -81,3 +81,53 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_ip_time ON chat_messages (ip, created_at);
+
+-- Paid AI tools (محصولات هوشمند): per-phone access grants, bound to a limited
+-- number of devices so a buyer cannot freely re-share the access code.
+CREATE TABLE IF NOT EXISTS tool_access (
+  id TEXT PRIMARY KEY,
+  phone TEXT NOT NULL,
+  product_id TEXT NOT NULL DEFAULT 'all',   -- specific tool id, or 'all'
+  code TEXT NOT NULL,                        -- secret access code given to the buyer
+  status TEXT NOT NULL DEFAULT 'active',     -- active | revoked
+  max_devices INTEGER NOT NULL DEFAULT 1,
+  message_quota INTEGER NOT NULL DEFAULT 0,  -- messages allowed over the plan window; 0 = unlimited
+  devices TEXT NOT NULL DEFAULT '[]',        -- JSON array of bound device ids
+  note TEXT DEFAULT '',
+  created_at TEXT NOT NULL,                  -- also the start of the current plan/quota window
+  expires_at TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_tool_access_phone ON tool_access (phone, product_id);
+
+-- Device-based free-trial counters (gamification): N free messages per tool per device.
+CREATE TABLE IF NOT EXISTS tool_trials (
+  device_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (device_id, product_id)
+);
+
+-- Message log for the paid AI tools (usage monitoring + per-phone rate limit).
+CREATE TABLE IF NOT EXISTS tool_messages (
+  id TEXT PRIMARY KEY,
+  phone TEXT DEFAULT '',
+  product_id TEXT NOT NULL,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tool_messages_phone_time ON tool_messages (phone, created_at);
+
+-- Per-tool AI connection (provider / model / API key). API KEYS live ONLY here,
+-- are admin-only, and are NEVER returned to the public content API.
+CREATE TABLE IF NOT EXISTS tool_settings (
+  product_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL DEFAULT 'gemini',   -- 'gemini' | 'openai'
+  base_url TEXT DEFAULT '',                    -- for OpenAI-compatible proxies
+  model TEXT DEFAULT '',
+  api_key TEXT DEFAULT '',
+  updated_at TEXT NOT NULL
+);

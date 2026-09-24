@@ -998,10 +998,43 @@ export const CHAT_CONFIG = {
   fallbackMessage: 'در حال حاضر به موتور هوش مصنوعی دسترسی ندارم، ولی می‌تونم بر اساس متدولوژی‌ها و داده‌های سایت به سوالات رایج پرفورمنس مارکتینگ جواب بدم.',
 };
 
+// Config for the paid AI TOOLS (محصولات هوشمند) — fully editable from the admin panel.
+// The AI personas/prompts and security live server-side in lib/tools.ts; pricing
+// plans live in lib/toolPlans.ts. This controls display, the purchase funnel, the
+// free-trial gamification, and lets the admin override plan prices per tool.
+export const AI_TOOLS_CONFIG = {
+  // Master switch for the whole AI-tools section on the products page.
+  enabled: true,
+  // Gamification: number of free "taster" messages per device per tool (0 = fully locked).
+  freeTrialCount: 3,
+  // Persuasion copy shown on the plans/paywall.
+  socialProof: 'به بیش از ۱۲۰ مارکتر و صاحب کسب‌وکار در تصمیم‌های واقعی کمک کرده‌ایم.',
+  urgency: 'ظرفیت پشتیبانی این ماه محدود است — دسترسی‌ها به‌ترتیب فعال می‌شوند.',
+  // Shown to the buyer inside the unlock gate, above the contact buttons.
+  purchaseNote: 'برای دریافت دسترسی، پلن دلخواهت را انتخاب کن و در تلگرام / واتساپ / بله فیش واریزی به‌همراه شماره موبایلت را بفرست. دسترسی روی شماره‌ی تو باز می‌شود و یک کد اختصاصی برایت ارسال می‌گردد.',
+  // Purchase channels. Leave empty to fall back to PERSONAL_INFO defaults.
+  channels: {
+    telegramUrl: 'https://t.me/omidadli01',
+    whatsappUrl: 'https://wa.me/989933773515',
+    baleUrl: 'https://ble.ir/omidadli01',
+    phone: '۰۹۹۳۳۷۷۳۵۱۵',
+  },
+  // Per-tool: availability, behavior overrides, and optional plan-price overrides.
+  // planPrices keys = plan ids (basic|pro|vip). Empty = use defaults from lib/toolPlans.ts.
+  tools: {
+    'business-therapist': { enabled: true, planPrices: {} as Record<string, string> },
+    'growth-path': { enabled: true, planPrices: {} as Record<string, string> },
+    'problem-solver': { enabled: true, planPrices: {} as Record<string, string> },
+    'mock-customer': { enabled: true, planPrices: {} as Record<string, string> },
+  } as Record<string, { enabled: boolean; planPrices?: Record<string, string>; behavior?: any }>,
+};
+
+
+
 export const PRODUCTS_PAGE_DATA = {
-  badge: 'ابزارها و محصولات کاربردی',
-  headline: 'راه‌حل‌های آماده، برای شروع سریع‌تر',
-  subheadline: 'چند ابزار، قالب و جلسه‌ی تخصصی برای کسانی که می‌خوان سریع‌تر دست به کار بشن.'
+  badge: 'ابزارهای هوش مصنوعی',
+  headline: 'دستیارهای هوشمند، برای رشد سریع‌تر',
+  subheadline: 'چهار ابزارِ هوش مصنوعیِ تخصصی که همین‌جا در سایت باهاشون گفتگو می‌کنی: از مشاوره‌ی مارکتینگ تا ساختِ مسیر، حل مسئله و تمرینِ فروش.'
 };
 
 export const PRODUCTS: ProductItem[] = [

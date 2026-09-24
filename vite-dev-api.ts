@@ -10,6 +10,22 @@ import {
   type SourceHit,
 } from './lib/assistant';
 import {
+  TOOLS,
+  getTool,
+  buildToolSystemPrompt,
+  resolveBehavior,
+  callAiProvider,
+  localToolAnswer,
+  normalizePhone,
+  isValidIranMobile,
+  genCode,
+  signAccessToken,
+  verifyAccessToken,
+  scopeCovers,
+  type AiSettings,
+} from './lib/tools';
+import { getPlan, resolveFreeTrial } from './lib/toolPlans';
+import {
   PERSONAL_INFO,
   SERVICES,
   CASE_STUDIES,
@@ -41,6 +57,12 @@ const CONTENT_FILE = path.resolve(process.cwd(), '.dev-content.json');
 const COMMENTS_FILE = path.resolve(process.cwd(), '.dev-comments.json');
 const MEDIA_FILE = path.resolve(process.cwd(), '.dev-media.json');
 const LEADS_FILE = path.resolve(process.cwd(), '.dev-leads.json');
+const TOOL_ACCESS_FILE = path.resolve(process.cwd(), '.dev-tool-access.json');
+const TOOL_MSGS_FILE = path.resolve(process.cwd(), '.dev-tool-msgs.json');
+const TOOL_SETTINGS_FILE = path.resolve(process.cwd(), '.dev-tool-settings.json');
+const TOOL_TRIALS_FILE = path.resolve(process.cwd(), '.dev-tool-trials.json');
+// Dev-only signing secret for AI-tool access tokens (prod uses env.AUTH_SECRET).
+const DEV_TOOL_SECRET = process.env.AUTH_SECRET || 'dev-tool-secret-v1';
 
 const safeReadJson = <T>(file: string, fallback: T): T => {
   try {
@@ -309,6 +331,218 @@ export function cmsDevApiPlugin(): Plugin {
               }
 
               return sendJson({ ok: true, answer, act, mode, sources: sources.map(({ title, url }) => ({ title, url })) });
+            }
+          }
+
+          // --- 3b. /api/tools --- (dev mirror of functions/api/tools.ts)
+          if (pathname === '/api/tools') {
+            const isAdmin = String(req.headers['authorization'] || '').startsWith('Bearer ');
+            type DevGrant = { id: string; phone: string; productId: string; code: string; status: string; maxDevices: number; messageQuota?: number; devices: string[]; note: string; createdAt: string; expiresAt: string };
+            const grants = safeReadJson<DevGrant[]>(TOOL_ACCESS_FILE, []);
+            type DevTrial = { deviceId: string; productId: string; count: number };
+            const usageSinceDev = (phone: string, productId: string, sinceIso: string) => {
+              const since = new Date(sinceIso).getTime();
+              return safeReadJson<any[]>(TOOL_MSGS_FILE, []).filter((m) => m.phone === phone && m.productId === productId && new Date(m.createdAt).getTime() >= since).length;
+            };
+            type DevSettings = { productId: string; provider: string; baseUrl: string; model: string; apiKey: string };
+            const readSettings = () => safeReadJson<DevSettings[]>(TOOL_SETTINGS_FILE, []);
+            const maskKey = (k: string) => { const s = (k || '').trim(); return !s ? '' : s.length <= 8 ? '••••' : `${s.slice(0, 4)}••••${s.slice(-4)}`; };
+            const contentData = () => (safeReadJson<{ data: any } | null>(CONTENT_FILE, null)?.data || seedData);
+            const publicTool = (id: string) => {
+              const t = getTool(id);
+              if (!t) return null;
+              const b = resolveBehavior(t, contentData());
+              return { id: t.id, name: t.name, welcome: b.welcome, suggestions: b.suggestions, placeholder: b.placeholder };
+            };
+            const resolveSettings = (productId: string): AiSettings => {
+              const row = readSettings().find((s) => s.productId === productId);
+              const envKey = (process.env.GEMINI_API_KEY || '').trim();
+              if (row && (row.apiKey || '').trim()) return { provider: (row.provider as any) || 'gemini', baseUrl: row.baseUrl || '', model: row.model || '', apiKey: row.apiKey };
+              return { provider: 'gemini', baseUrl: '', model: row?.model || '', apiKey: envKey };
+            };
+
+            if (method === 'GET') {
+              if (!isAdmin) return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
+              const view = url.searchParams.get('view');
+              if (view === 'messages') {
+                const msgs = safeReadJson<any[]>(TOOL_MSGS_FILE, []);
+                return sendJson({ ok: true, items: msgs.slice(0, 200).map((m) => ({ id: m.id, phone: m.phone, product_id: m.productId, question: m.question, answer: m.answer, created_at: m.createdAt })) });
+              }
+              if (view === 'settings') {
+                const rows = readSettings();
+                const envKey = (process.env.GEMINI_API_KEY || '').trim();
+                const items = TOOLS.map((t) => {
+                  const row = rows.find((x) => x.productId === t.id);
+                  return { productId: t.id, name: t.name, provider: row?.provider || 'gemini', baseUrl: row?.baseUrl || '', model: row?.model || '', hasKey: !!(row?.apiKey || '').trim(), keyMask: maskKey(row?.apiKey || ''), usingEnvFallback: !(row?.apiKey || '').trim() && !!envKey };
+                });
+                return sendJson({ ok: true, items, envKeyPresent: !!envKey });
+              }
+              return sendJson({ ok: true, items: grants.map((g) => ({ ...g, devicesUsed: g.devices.length })) });
+            }
+
+            if (method === 'POST') {
+              const body = await readBody();
+              const action = String(body?.action || '');
+
+              // ---- ADMIN ----
+              if (action === 'grant' || action === 'revoke' || action === 'resetDevices' || action === 'setKey' || action === 'clearKey') {
+                if (!isAdmin) return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
+                if (action === 'setKey') {
+                  const productId = String(body.productId || '');
+                  if (!getTool(productId)) return sendJson({ ok: false, error: 'محصول نامعتبر است.' }, 400);
+                  const rows = readSettings();
+                  const provider = body.provider === 'openai' ? 'openai' : 'gemini';
+                  const baseUrl = String(body.baseUrl || '').trim().slice(0, 200);
+                  const model = String(body.model || '').trim().slice(0, 80);
+                  const newKey = String(body.apiKey || '').trim();
+                  const existing = rows.find((s) => s.productId === productId);
+                  const apiKey = newKey || existing?.apiKey || '';
+                  const next: DevSettings = { productId, provider, baseUrl, model, apiKey };
+                  const idx = rows.findIndex((s) => s.productId === productId);
+                  if (idx >= 0) rows[idx] = next; else rows.push(next);
+                  safeWriteJson(TOOL_SETTINGS_FILE, rows);
+                  return sendJson({ ok: true, hasKey: !!apiKey, keyMask: maskKey(apiKey) });
+                }
+                if (action === 'clearKey') {
+                  const productId = String(body.productId || '');
+                  safeWriteJson(TOOL_SETTINGS_FILE, readSettings().filter((s) => s.productId !== productId));
+                  return sendJson({ ok: true });
+                }
+                if (action === 'grant') {
+                  const phone = normalizePhone(String(body.phone || ''));
+                  if (!isValidIranMobile(phone)) return sendJson({ ok: false, error: 'شماره موبایل معتبر نیست (مثال: 09xxxxxxxxx).' }, 400);
+                  const productId = String(body.productId || 'all');
+                  if (productId !== 'all' && !getTool(productId)) return sendJson({ ok: false, error: 'محصول نامعتبر است.' }, 400);
+                  const plan = productId !== 'all' ? getPlan(productId, String(body.planId || '')) : undefined;
+                  const days = Math.max(1, Math.min(3650, parseInt(String(body.days ?? plan?.durationDays ?? 30), 10) || 30));
+                  const maxDevices = Math.max(1, Math.min(20, parseInt(String(body.maxDevices ?? plan?.maxDevices ?? 1), 10) || 1));
+                  const messageQuota = Math.max(0, parseInt(String(body.messageQuota ?? plan?.messageQuota ?? 0), 10) || 0);
+                  const note = String(body.note || '').slice(0, 200);
+                  const expiresAt = new Date(Date.now() + days * 86400_000).toISOString();
+                  const existing = grants.find((g) => g.phone === phone && g.productId === productId);
+                  const code = existing && !body.newCode ? existing.code : genCode();
+                  if (existing) {
+                    existing.code = code; existing.status = 'active'; existing.maxDevices = maxDevices; existing.messageQuota = messageQuota; existing.note = note; existing.expiresAt = expiresAt; existing.createdAt = new Date().toISOString();
+                    if (body.newCode) existing.devices = [];
+                    safeWriteJson(TOOL_ACCESS_FILE, grants);
+                    return sendJson({ ok: true, id: existing.id, phone, productId, code, maxDevices, messageQuota, expiresAt, refreshed: true });
+                  }
+                  const id = `ta-${Date.now()}-${Math.floor(Math.random() * 9999)}`;
+                  grants.unshift({ id, phone, productId, code, status: 'active', maxDevices, messageQuota, devices: [], note, createdAt: new Date().toISOString(), expiresAt });
+                  safeWriteJson(TOOL_ACCESS_FILE, grants);
+                  return sendJson({ ok: true, id, phone, productId, code, maxDevices, messageQuota, expiresAt });
+                }
+                if (action === 'revoke') {
+                  const g = grants.find((x) => x.id === String(body.id || '')); if (g) g.status = 'revoked';
+                  safeWriteJson(TOOL_ACCESS_FILE, grants); return sendJson({ ok: true });
+                }
+                if (action === 'resetDevices') {
+                  const g = grants.find((x) => x.id === String(body.id || '')); if (g) g.devices = [];
+                  safeWriteJson(TOOL_ACCESS_FILE, grants); return sendJson({ ok: true });
+                }
+              }
+
+              // ---- unlock ----
+              if (action === 'unlock') {
+                const phone = normalizePhone(String(body.phone || ''));
+                const code = String(body.code || '').trim().toUpperCase();
+                const productId = String(body.productId || '');
+                const deviceId = String(body.deviceId || '').slice(0, 80);
+                if (!isValidIranMobile(phone)) return sendJson({ ok: false, error: 'شماره موبایل معتبر نیست.' }, 400);
+                if (!code) return sendJson({ ok: false, error: 'کد دسترسی را وارد کنید.' }, 400);
+                if (!deviceId) return sendJson({ ok: false, error: 'شناسه دستگاه نامعتبر است.' }, 400);
+                if (!getTool(productId)) return sendJson({ ok: false, error: 'محصول نامعتبر است.' }, 400);
+                const grant = grants.find((g) => g.phone === phone && g.code === code && g.status === 'active' && scopeCovers(g.productId, productId));
+                if (!grant) return sendJson({ ok: false, error: 'شماره یا کد دسترسی درست نیست. اگر خرید کرده‌ای، از پشتیبانی کمک بگیر.' }, 403);
+                if (grant.expiresAt && new Date(grant.expiresAt).getTime() < Date.now()) return sendJson({ ok: false, error: 'دسترسی شما منقضی شده است. برای تمدید پیام بده.' }, 403);
+                if (!grant.devices.includes(deviceId)) {
+                  if (grant.devices.length >= grant.maxDevices) return sendJson({ ok: false, error: `این دسترسی روی حداکثر تعداد مجازِ دستگاه (${grant.maxDevices}) فعال شده است. برای دستگاه جدید با پشتیبانی هماهنگ کن.` }, 403);
+                  grant.devices.push(deviceId); safeWriteJson(TOOL_ACCESS_FILE, grants);
+                }
+                const exp = grant.expiresAt ? Math.min(new Date(grant.expiresAt).getTime(), Date.now() + 30 * 86400_000) : Date.now() + 30 * 86400_000;
+                const token = await signAccessToken({ phone, scope: grant.productId, did: deviceId, gid: grant.id, exp }, DEV_TOOL_SECRET);
+                return sendJson({ ok: true, token, expiresAt: new Date(exp).toISOString(), tool: publicTool(productId) });
+              }
+
+              // ---- session ----
+              if (action === 'session') {
+                const productId = String(body.productId || '');
+                const deviceId = String(body.deviceId || '');
+                const payload = await verifyAccessToken(String(body.token || ''), DEV_TOOL_SECRET);
+                if (!payload || !scopeCovers(payload.scope, productId) || (deviceId && payload.did !== deviceId)) return sendJson({ ok: false, error: 'نشست نامعتبر است.' }, 401);
+                const grant = grants.find((g) => g.id === payload.gid);
+                if (!grant || grant.status !== 'active' || !grant.devices.includes(payload.did)) return sendJson({ ok: false, error: 'دسترسی لغو شده است.' }, 403);
+                return sendJson({ ok: true, tool: publicTool(productId) });
+              }
+
+              // ---- chat (paid via token, or free-trial via device) ----
+              if (action === 'chat') {
+                const productId = String(body.productId || '');
+                const deviceId = String(body.deviceId || '').slice(0, 80);
+                const tool = getTool(productId);
+                if (!tool) return sendJson({ ok: false, error: 'محصول نامعتبر است.' }, 400);
+
+                const messages: { role: string; content: string }[] = Array.isArray(body?.messages) ? body.messages.slice(-12) : [];
+                const question = String(messages[messages.length - 1]?.content || '').trim().slice(0, 2000);
+                if (!question) return sendJson({ ok: false, error: 'پیام خالی است.' }, 400);
+
+                const saved = safeReadJson<{ data: any } | null>(CONTENT_FILE, null);
+                const data = saved?.data || seedData;
+
+                const payload = await verifyAccessToken(String(body.token || ''), DEV_TOOL_SECRET);
+                const paid = !!(payload && scopeCovers(payload.scope, productId) && (!deviceId || payload.did === deviceId));
+
+                let trialInfo: { used: number; remaining: number; limit: number } | undefined;
+                let grant: DevGrant | undefined;
+                if (!paid) {
+                  const limit = resolveFreeTrial(data);
+                  if (limit <= 0 || !deviceId) return sendJson({ ok: false, error: 'برای استفاده از این ابزار، یکی از پلن‌ها را فعال کن.', code: 'locked' }, 401);
+                  const trials = safeReadJson<DevTrial[]>(TOOL_TRIALS_FILE, []);
+                  const t = trials.find((x) => x.deviceId === deviceId && x.productId === productId);
+                  const used = t?.count || 0;
+                  if (used >= limit) return sendJson({ ok: false, error: 'پیام‌های رایگان تمام شد. برای ادامه یکی از پلن‌ها را فعال کن.', code: 'trial_ended', trial: { used, remaining: 0, limit } }, 402);
+                  trialInfo = { used: used + 1, remaining: Math.max(0, limit - (used + 1)), limit };
+                } else {
+                  grant = grants.find((g) => g.id === payload!.gid);
+                  if (!grant || grant.status !== 'active' || !grant.devices.includes(payload!.did)) return sendJson({ ok: false, error: 'دسترسی شما فعال نیست. با پشتیبانی هماهنگ کن.', code: 'locked' }, 403);
+                  if (grant.expiresAt && new Date(grant.expiresAt).getTime() < Date.now()) return sendJson({ ok: false, error: 'دسترسی شما منقضی شده است.', code: 'expired' }, 403);
+                  if (grant.messageQuota && grant.messageQuota > 0) {
+                    const used = usageSinceDev(payload!.phone, productId, grant.createdAt);
+                    if (used >= grant.messageQuota) return sendJson({ ok: false, error: 'سهمیه‌ی پیام این پلن تمام شد. برای ادامه، پلن را ارتقا بده یا تمدید کن.', code: 'quota', quota: { limit: grant.messageQuota, used, remaining: 0 } }, 402);
+                  }
+                }
+
+                const behavior = resolveBehavior(tool, data);
+                const systemPrompt = buildToolSystemPrompt(tool, data);
+                const settings = resolveSettings(productId);
+                const history = messages.slice(0, -1)
+                  .filter((m) => m.role === 'user' || m.role === 'model')
+                  .map((m) => ({ role: (m.role === 'user' ? 'user' : 'model') as 'user' | 'model', content: String(m.content || '') }));
+                let answer = '';
+                let mode: 'ai' | 'local' = 'local';
+                const aiText = await callAiProvider({ systemPrompt, history, question, temperature: behavior.temperature, settings, preferredModel: behavior.model });
+                if (aiText) { answer = aiText; mode = 'ai'; }
+                if (!answer) answer = localToolAnswer(tool, question);
+
+                if (!paid && deviceId) {
+                  const trials = safeReadJson<DevTrial[]>(TOOL_TRIALS_FILE, []);
+                  const idx = trials.findIndex((x) => x.deviceId === deviceId && x.productId === productId);
+                  if (idx >= 0) trials[idx].count += 1; else trials.push({ deviceId, productId, count: 1 });
+                  safeWriteJson(TOOL_TRIALS_FILE, trials);
+                }
+                const msgs = safeReadJson<any[]>(TOOL_MSGS_FILE, []);
+                msgs.unshift({ id: `tm-${Date.now()}`, phone: paid ? payload!.phone : `trial:${deviceId}`.slice(0, 60), productId, question, answer, createdAt: new Date().toISOString() });
+                safeWriteJson(TOOL_MSGS_FILE, msgs.slice(0, 500));
+
+                let quotaInfo: { limit: number; used: number; remaining: number } | undefined;
+                if (paid && grant && grant.messageQuota && grant.messageQuota > 0) {
+                  const used = usageSinceDev(payload!.phone, productId, grant.createdAt);
+                  quotaInfo = { limit: grant.messageQuota, used, remaining: Math.max(0, grant.messageQuota - used) };
+                }
+                return sendJson({ ok: true, answer, mode, trial: trialInfo, quota: quotaInfo });
+              }
+
+              return sendJson({ ok: false, error: 'اکشن نامعتبر است.' }, 400);
             }
           }
 
