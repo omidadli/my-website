@@ -17,6 +17,8 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      HAS_SITE_URL: ${{ secrets.SITE_URL != '' }}
     # Runs after a deploy so the live API is up to receive the content.
     steps:
       - name: Checkout
@@ -29,7 +31,7 @@ jobs:
 
       # Skipped until you add the SITE_URL secret, so it never hard-fails before setup.
       - name: Push content to the live site
-        if: ${{ secrets.SITE_URL != '' }}
+        if: ${{ env.HAS_SITE_URL == 'true' }}
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
