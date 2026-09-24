@@ -44,8 +44,18 @@ jobs:
       # to Git"), this workflow won't clash or fail; it just no-ops.
       - name: Deploy to Cloudflare Pages
         if: ${{ env.HAS_CF_TOKEN == 'true' }}
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=my-website --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +e
+          # Create the Pages project on first run (ignored if it already exists).
+          npx --yes wrangler@4 pages project create my-website --production-branch=main > create.log 2>&1
+          npx --yes wrangler@4 pages deploy dist --project-name=my-website --branch=main > deploy.log 2>&1
+          code=$?
+          cat create.log deploy.log
+          if [ $code -ne 0 ]; then
+            echo "::error title=create::$(tail -n 8 create.log | tr '\n' ' ')"
+            echo "::error title=deploy::$(tail -n 15 deploy.log | tr '\n' ' ')"
+            exit $code
+          fi
