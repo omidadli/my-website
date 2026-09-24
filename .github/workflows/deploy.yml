@@ -36,7 +36,12 @@ jobs:
       # Deploys ./dist to the Cloudflare Pages project named in wrangler.toml.
       # D1 schema/columns are auto-created at runtime by the API (ensureTables),
       # so no separate migration step is required here.
+      #
+      # This step is SKIPPED until you add the CLOUDFLARE_API_TOKEN secret — so if
+      # you instead connect the repo via the Cloudflare Pages dashboard ("Connect
+      # to Git"), this workflow won't clash or fail; it just no-ops.
       - name: Deploy to Cloudflare Pages
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -1,4 +1,4 @@
-import { Env, json } from './_shared';
+import { Env, json } from '../_shared';
 
 /**
  * GET /api/media/file?key=… (یا /api/media/file/…)
