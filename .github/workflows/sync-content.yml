@@ -1,0 +1,35 @@
+name: Sync content to live site
+
+# When content/site-content.json changes on main, push it into the live site's
+# database via the admin API. This makes the Git file the source of truth for
+# site content: edit it in a commit/PR and it goes live automatically.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'content/site-content.json'
+  workflow_dispatch: {}
+
+concurrency:
+  group: sync-content
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Runs after a deploy so the live API is up to receive the content.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Push content to the live site
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: node scripts/sync-content.mjs import

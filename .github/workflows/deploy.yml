@@ -1,0 +1,44 @@
+name: Deploy to Cloudflare Pages
+
+# Every push to main rebuilds the site and deploys it to Cloudflare Pages,
+# so anything merged on GitHub automatically lands on the live site.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Deploys ./dist to the Cloudflare Pages project named in wrangler.toml.
+      # D1 schema/columns are auto-created at runtime by the API (ensureTables),
+      # so no separate migration step is required here.
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=my-website --branch=main
