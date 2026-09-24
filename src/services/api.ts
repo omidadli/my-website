@@ -285,6 +285,136 @@ export const api = {
     }
   },
 
+  // ---------------------------------------------------------------------------
+  // Paid AI tools (محصولات هوشمند)
+  // ---------------------------------------------------------------------------
+
+  /** Public: unlock a tool with phone + access code, bound to this device. */
+  async unlockTool(payload: { phone: string; code: string; productId: string; deviceId: string }): Promise<{ ok: boolean; token?: string; expiresAt?: string; tool?: any; error?: string }> {
+    try {
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unlock', ...payload }) });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok ? { ok: true, token: j.token, expiresAt: j.expiresAt, tool: j.tool } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+    } catch {
+      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Public: re-validate a stored session token. */
+  async toolSession(payload: { token: string; productId: string; deviceId: string }): Promise<{ ok: boolean; tool?: any; error?: string }> {
+    try {
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'session', ...payload }) });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok ? { ok: true, tool: j.tool } : { ok: false, error: j?.error };
+    } catch {
+      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Public: send a message to a tool. With a token → paid; without → free trial (device-based). */
+  async toolChat(payload: { token?: string; productId: string; deviceId: string; messages: { role: 'user' | 'model'; content: string }[] }): Promise<{ ok: boolean; answer?: string; mode?: 'ai' | 'local'; error?: string; code?: string; trial?: { used: number; remaining: number; limit: number }; quota?: { limit: number; used: number; remaining: number } }> {
+    try {
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'chat', ...payload }) });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok
+        ? { ok: true, answer: j.answer, mode: j.mode, trial: j.trial, quota: j.quota }
+        : { ok: false, error: j?.error || `خطای سرور (${r.status})`, code: j?.code, trial: j?.trial, quota: j?.quota };
+    } catch {
+      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Admin: list all tool-access grants. */
+  async listToolAccess(): Promise<Array<{ id: string; phone: string; productId: string; code: string; status: string; maxDevices: number; messageQuota?: number; devicesUsed: number; note: string; createdAt: string; expiresAt: string }>> {
+    try {
+      const r = await fetch('/api/tools', { headers: headers() });
+      if (!r.ok) return [];
+      const j = await r.json();
+      return j?.ok ? j.items : [];
+    } catch {
+      return [];
+    }
+  },
+
+  /** Admin: per-tool AI connection settings (API key is MASKED, never raw). */
+  async listToolSettings(): Promise<{ items: Array<{ productId: string; name: string; provider: string; baseUrl: string; model: string; hasKey: boolean; keyMask: string; usingEnvFallback: boolean }>; envKeyPresent: boolean }> {
+    try {
+      const r = await fetch('/api/tools?view=settings', { headers: headers() });
+      if (!r.ok) return { items: [], envKeyPresent: false };
+      const j = await r.json();
+      return j?.ok ? { items: j.items, envKeyPresent: j.envKeyPresent } : { items: [], envKeyPresent: false };
+    } catch {
+      return { items: [], envKeyPresent: false };
+    }
+  },
+
+  /** Admin: set the AI connection (provider/model/key) for one tool. */
+  async setToolKey(payload: { productId: string; provider: string; baseUrl?: string; model?: string; apiKey?: string }): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers() }, body: JSON.stringify({ action: 'setKey', ...payload }) });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok ? { ok: true } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+    } catch {
+      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Admin: clear the AI connection (falls back to the shared GEMINI_API_KEY). */
+  async clearToolKey(productId: string): Promise<boolean> {
+    try {
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers() }, body: JSON.stringify({ action: 'clearKey', productId }) });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /** Admin: recent AI-tool usage log (monitoring). */
+  async listToolMessages(): Promise<Array<{ id: string; phone: string; product_id: string; question: string; answer: string; created_at: string }>> {
+    try {
+      const r = await fetch('/api/tools?view=messages', { headers: headers() });
+      if (!r.ok) return [];
+      const j = await r.json();
+      return j?.ok ? j.items : [];
+    } catch {
+      return [];
+    }
+  },
+
+  /** Admin: grant (or refresh) access for a phone number. */
+  async grantToolAccess(payload: { phone: string; productId: string; days?: number; maxDevices?: number; messageQuota?: number; planId?: string; note?: string; newCode?: boolean }): Promise<{ ok: boolean; code?: string; expiresAt?: string; error?: string }> {
+    try {
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers() }, body: JSON.stringify({ action: 'grant', ...payload }) });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok ? { ok: true, code: j.code, expiresAt: j.expiresAt } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+    } catch {
+      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Admin: revoke a grant. */
+  async revokeToolAccess(id: string): Promise<boolean> {
+    try {
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers() }, body: JSON.stringify({ action: 'revoke', id }) });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /** Admin: reset the bound devices of a grant. */
+  async resetToolDevices(id: string): Promise<boolean> {
+    try {
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers() }, body: JSON.stringify({ action: 'resetDevices', id }) });
+      const j = await r.json().catch(() => ({}));
+      return r.ok && j?.ok;
+    } catch {
+      return false;
+    }
+  },
+
   /** English slug for a Persian title — Gemini translation on the server, transliteration fallback. */
   async makeSlug(title: string): Promise<string | null> {
     try {
