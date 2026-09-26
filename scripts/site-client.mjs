@@ -141,18 +141,39 @@ export class SiteClient {
  * Handles hyphenated keys (e.g. AI_TOOLS_CONFIG.tools.business-therapist.enabled).
  * Numeric segments create/index arrays.
  */
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Set a value at a dot-path, creating intermediate objects/arrays as needed.
+ * Throws (instead of silently corrupting the content) on:
+ *  - an empty path or a prototype-polluting segment (`__proto__`, …);
+ *  - a non-numeric key on an array (e.g. `PRODUCTS.title` — use `PRODUCTS.0.title`);
+ *  - an array index past the end (`PRODUCTS.7` when only 3 items exist — append with index 3).
+ */
 export function setByPath(root, path, value) {
   const parts = String(path).split('.').filter(Boolean);
+  if (parts.length === 0) throw new Error('Path is empty.');
+  for (const key of parts) {
+    if (FORBIDDEN_KEYS.has(key)) throw new Error(`Invalid path segment "${key}".`);
+  }
+  const checkArrayKey = (node, key, prefix) => {
+    if (!Array.isArray(node)) return;
+    if (!/^\d+$/.test(key)) throw new Error(`"${prefix}" is an array — use a numeric index (e.g. "${prefix}.0"), not "${key}".`);
+    if (Number(key) > node.length) throw new Error(`Index ${key} is past the end of "${prefix}" (${node.length} items) — use ${node.length} to append.`);
+  };
   let node = root;
   for (let i = 0; i < parts.length - 1; i++) {
     const key = parts[i];
+    checkArrayKey(node, key, parts.slice(0, i).join('.'));
     const nextIsIndex = /^\d+$/.test(parts[i + 1]);
     if (node[key] === undefined || node[key] === null || typeof node[key] !== 'object') {
       node[key] = nextIsIndex ? [] : {};
     }
     node = node[key];
   }
-  node[parts[parts.length - 1]] = value;
+  const last = parts[parts.length - 1];
+  checkArrayKey(node, last, parts.slice(0, -1).join('.'));
+  node[last] = value;
   return root;
 }
 

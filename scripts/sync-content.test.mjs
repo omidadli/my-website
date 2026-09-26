@@ -54,3 +54,21 @@ test('section added in Git (absent from base and live) is taken', () => {
 });
 
 console.log(`\nsync-content merge: ${n} tests passed`);
+
+// ---- setByPath hardening (used by the MCP set_field tool) ----
+{
+  const { setByPath, getByPath } = await import('./site-client.mjs');
+  const root = { PRODUCTS: [{ title: 'a' }], PERSONAL_INFO: { name: 'x' } };
+  setByPath(root, 'PERSONAL_INFO.tagline', 'new');
+  assert.equal(getByPath(root, 'PERSONAL_INFO.tagline'), 'new', 'setByPath sets a nested field');
+  setByPath(root, 'PRODUCTS.1.title', 'b');
+  assert.equal(root.PRODUCTS.length, 2, 'setByPath appends at index = length');
+  setByPath(root, 'AI_TOOLS_CONFIG.tools.growth-path.enabled', false);
+  assert.equal(root.AI_TOOLS_CONFIG.tools['growth-path'].enabled, false, 'setByPath creates intermediate objects');
+  assert.throws(() => setByPath(root, 'PRODUCTS.title', 'x'), /numeric index/, 'non-numeric key on an array is rejected');
+  assert.throws(() => setByPath(root, 'PRODUCTS.9.title', 'x'), /past the end/, 'index past the end is rejected');
+  assert.throws(() => setByPath(root, '__proto__.polluted', 1), /Invalid path segment/, 'prototype pollution is rejected');
+  assert.throws(() => setByPath(root, '', 1), /empty/, 'empty path is rejected');
+  assert.equal({}.polluted, undefined, 'Object.prototype untouched');
+  console.log('✓ setByPath hardening');
+}
