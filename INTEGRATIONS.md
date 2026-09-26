@@ -70,13 +70,20 @@ the route model lives in `lib/routes.ts` and is shared by the SPA router
 GET /<route>        →  index.html with per-route <title>/description/OG/canonical/robots
                        injected at the edge (functions/_middleware.ts) from the CMS content —
                        link previews (WhatsApp/Telegram/LinkedIn) and crawlers see the right
-                       page without running JS; unknown routes answer 404.
+                       page without running JS; unknown routes (and unknown post slugs)
+                       answer 404 + noindex with the title "صفحه پیدا نشد", and the SPA
+                       renders a matching 404 page (src/pages/NotFoundPage.tsx).
 GET /robots.txt     →  GLOBAL_SEO.robotsTxt from the CMS (or a default) + Sitemap line
 GET /sitemap.xml    →  home, built-in pages, custom pages, published (non-noindex) posts
 ```
 
 Title/description precedence (global → page → post) is implemented once in
 `lib/seoDefaults.ts` and used by both the browser (`SEOHead`) and the edge.
+
+Size limit: the whole CMS state is one D1 row and D1 caps a row at 2 MB, so
+`PUT /api/content` rejects payloads above ~1.9 MB (UTF-8 bytes) with `413` and a
+clear message — keep images in the media library (`/api/media`) instead of
+inlining them as base64.
 
 ---
 

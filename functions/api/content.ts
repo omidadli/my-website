@@ -1,4 +1,4 @@
-import { Env, requireAuth, json, unauthorized, MAX_CONTENT_BYTES, ensureCoreTables, ensureCoreTablesSafe } from './_shared';
+import { Env, requireAuth, json, unauthorized, MAX_CONTENT_BYTES, CONTENT_TOO_LARGE_MESSAGE, ensureCoreTables, ensureCoreTablesSafe } from './_shared';
 
 /** Cloud comments (D1 `comments` table) are the source of truth for visitor submissions. */
 const fetchCloudComments = async (env: Env, forAdmin: boolean) => {
@@ -69,8 +69,9 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   if (!user) return unauthorized();
 
   const raw = await request.text();
-  if (raw.length > MAX_CONTENT_BYTES) {
-    return json({ ok: false, error: 'حجم محتوا بیش از حد مجاز (۵ مگابایت) است.' }, { status: 413 });
+  // Persian text is 2 bytes per character in UTF-8 — measure bytes, not string length.
+  if (raw.length > MAX_CONTENT_BYTES || new TextEncoder().encode(raw).byteLength > MAX_CONTENT_BYTES) {
+    return json({ ok: false, error: CONTENT_TOO_LARGE_MESSAGE }, { status: 413 });
   }
   let payload: any;
   try {
@@ -102,10 +103,14 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const now = new Date().toISOString();
+  const serialized = JSON.stringify(data);
+  if (new TextEncoder().encode(serialized).byteLength > MAX_CONTENT_BYTES) {
+    return json({ ok: false, error: CONTENT_TOO_LARGE_MESSAGE }, { status: 413 });
+  }
   await env.DB.prepare(
     `INSERT INTO content (id, data, updated_at) VALUES (1, ?1, ?2)
      ON CONFLICT(id) DO UPDATE SET data = ?1, updated_at = ?2`
-  ).bind(JSON.stringify(data), now).run();
+  ).bind(serialized, now).run();
 
   return json({ ok: true, updatedAt: now });
 };

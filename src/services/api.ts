@@ -12,6 +12,8 @@ import { compressImage } from '../utils/image';
 const TOKEN_KEY = 'nd_admin_token';
 
 let cloudAvailable: boolean | null = null;
+/** Body of the probe response, handed to the first getContent() so boot needs one round-trip, not two. */
+let primedContent: { data: any; updatedAt: string | null } | null | undefined;
 
 export interface CloudMediaItem {
   id: string;
@@ -58,6 +60,10 @@ export const probe = async (): Promise<boolean> => {
     // Any real API response (200/401/500) means functions exist; a Vite/SPA 404 HTML page means they don't.
     const ct = r.headers.get('Content-Type') || '';
     cloudAvailable = ct.includes('application/json');
+    if (cloudAvailable && r.ok) {
+      const j = await r.json().catch(() => null);
+      primedContent = j?.ok ? { data: j.data, updatedAt: j.updatedAt ?? null } : null;
+    }
   } catch {
     cloudAvailable = false;
   }
@@ -70,6 +76,11 @@ export const api = {
   setToken,
 
   async getContent(): Promise<{ data: any; updatedAt: string | null } | null> {
+    if (primedContent !== undefined) {
+      const primed = primedContent;
+      primedContent = undefined;
+      return primed;
+    }
     try {
       const r = await fetch('/api/content', { cache: 'no-store' });
       if (!r.ok) return null;

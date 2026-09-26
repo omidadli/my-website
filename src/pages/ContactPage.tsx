@@ -3,6 +3,7 @@ import { Theme, Page } from '../types';
 import { useContent } from '../context/ContentContext';
 import { usePreservedState } from '../utils/statePreserver';
 import { api } from '../services/api';
+import { whatsappFallbackUrl } from '../utils/leadFallback';
 import { EditableText } from '../components/cms/EditableText';
 import { BookingCalendar } from '../components/BookingCalendar';
 import { PageHero, inputCls } from '../components/nd/Kit';
@@ -21,10 +22,12 @@ export const ContactPage: React.FC<ContactPageProps> = ({ theme, onNavigate }) =
 
   const [activeTab, setActiveTab] = usePreservedState<'form' | 'calendar'>('contact_active_tab', 'form');
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [formData, setFormData] = usePreservedState('contact_form_data', {
     name: '',
     email: '', // email OR phone/telegram — the form field accepts both
-    serviceNeeded: 'مدیریت کمپین و تبلیغات (Paid Ads)',
+    serviceNeeded: 'تازه می‌خوام آنلاین شروع کنم',
     details: '',
   });
 
@@ -46,22 +49,38 @@ export const ContactPage: React.FC<ContactPageProps> = ({ theme, onNavigate }) =
     return () => window.removeEventListener('nd:prefill-contact', onPrefill);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const whatsappFallback = whatsappFallbackUrl(personalInfo, [
+    ['نام', formData.name],
+    ['تماس', formData.email],
+    ['مرحله', formData.serviceNeeded],
+    ['توضیح', formData.details],
+  ]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (sending) return;
     const value = formData.email.trim();
     const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-    // Persist the lead server-side (D1 in prod / .dev-leads.json in dev) so
-    // the admin can follow up — the form data must never just vanish.
-    api
+    // Persist the lead server-side (D1 in prod / .dev-leads.json in dev) so the
+    // admin can follow up — and only confirm to the visitor once it is really
+    // stored; otherwise offer the WhatsApp fallback so the lead never vanishes.
+    setSending(true);
+    setSendError(null);
+    const res = await api
       .postLead({
         source: 'contact',
         name: formData.name.trim(),
         email: looksLikeEmail ? value : '',
         contact: looksLikeEmail ? '' : value,
         service: formData.serviceNeeded,
-        details: formData.details.trim(),
+        details: formData.details.trim() || `درخواست از فرم تماس — ${formData.serviceNeeded}`,
       })
-      .catch(() => {});
+      .catch(() => ({ ok: false as const, error: 'اتصال به سرور برقرار نشد.' }));
+    setSending(false);
+    if (!res.ok) {
+      setSendError(res.error || 'ارسال پیام ناموفق بود.');
+      return;
+    }
     setSubmitted(true);
     window.dispatchEvent(new CustomEvent('nd:form-success'));
   };
@@ -222,8 +241,17 @@ export const ContactPage: React.FC<ContactPageProps> = ({ theme, onNavigate }) =
                       className={inputCls(isDark)}
                     />
                   </div>
-                  <button type="submit" className={`nd-btn w-full py-4 text-xs ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'}`}>
-                    <span>ارسال پیام و شروع گفتگو</span>
+                  {sendError && (
+                    <div role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-500 space-y-2">
+                      <p>{sendError} پیامت ذخیره نشد؛ می‌تونی همین متن رو مستقیم در واتساپ بفرستی:</p>
+                      <a href={whatsappFallback} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 underline underline-offset-2">
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>ارسال از طریق واتساپ</span>
+                      </a>
+                    </div>
+                  )}
+                  <button type="submit" disabled={sending} aria-busy={sending} className={`nd-btn w-full py-4 text-xs disabled:opacity-60 disabled:cursor-wait ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'}`}>
+                    <span>{sending ? 'در حال ارسال…' : 'ارسال پیام و شروع گفتگو'}</span>
                     <ArrowUpLeft className="w-4 h-4" />
                   </button>
                 </form>

@@ -69,10 +69,12 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
   if (!post) {
     return (
       <div className="text-center py-24 space-y-4">
-        <h2 className={`nd-h2 text-xl ${isDark ? 'text-white' : ''}`}>مقاله‌ای یافت نشد</h2>
-        <button onClick={() => onNavigate('blog')} className="nd-btn nd-btn-ghost px-6 py-3 text-xs">
+        <span className="inline-block px-4 py-1.5 rounded-full text-[11px] font-black tracking-widest bg-[color:var(--nd-accent-soft)] text-[color:var(--nd-accent)]">۴۰۴</span>
+        <h1 className={`nd-h2 text-xl ${isDark ? 'text-white' : ''}`}>مقاله‌ای با این آدرس پیدا نشد</h1>
+        <p className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-sm max-w-md mx-auto`}>شاید حذف شده یا آدرسش عوض شده باشد؛ فهرست مقالات را ببین.</p>
+        <a {...linkProps('/blog', () => onNavigate('blog'))} className="nd-btn nd-btn-ghost px-6 py-3 text-xs inline-flex">
           <span>بازگشت به مقالات</span>
-        </button>
+        </a>
       </div>
     );
   }

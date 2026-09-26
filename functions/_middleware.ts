@@ -1,7 +1,7 @@
 import type { Env } from './api/_shared';
 import { loadPublicContent, resolveBaseUrl, type PublicSiteContent } from './_seo';
 import { parsePath, pathForPage, postPath } from '../lib/routes';
-import { resolveSeo, type SeoPostLike } from '../lib/seoDefaults';
+import { resolveSeo, buildDocumentTitle, NOT_FOUND_TITLE, type SeoPostLike } from '../lib/seoDefaults';
 import { BLOG_POSTS as DEFAULT_BLOG_POSTS } from '../src/data/content';
 
 /**
@@ -51,7 +51,8 @@ const headFor = (pathname: string, content: PublicSiteContent | null, baseUrl: s
 
   if (!route) {
     const seo = resolveSeo({ page: 'home', globalSeo });
-    return { ...seo, canonical: `${baseUrl}/`, robots: 'noindex, nofollow', status: 404 };
+    const title = buildDocumentTitle(NOT_FOUND_TITLE, globalSeo || {});
+    return { ...seo, title, ogTitle: title, canonical: `${baseUrl}/`, robots: 'noindex, nofollow', status: 404 };
   }
 
   if (route.page === 'blog' && route.postId) {
@@ -59,7 +60,8 @@ const headFor = (pathname: string, content: PublicSiteContent | null, baseUrl: s
     const post = posts.find((p) => p && (p.id === route.postId || (!!p.slug && p.slug === route.postId))) || null;
     if (!post) {
       const seo = resolveSeo({ page: 'blog', globalSeo, pageSeo: pageSeo.blog });
-      return { ...seo, canonical: `${baseUrl}/blog`, robots: 'noindex, nofollow', status: 404 };
+      const title = buildDocumentTitle(NOT_FOUND_TITLE, globalSeo || {});
+      return { ...seo, title, ogTitle: title, canonical: `${baseUrl}/blog`, robots: 'noindex, nofollow', status: 404 };
     }
     const seo = resolveSeo({ page: 'blog', post, globalSeo });
     return {

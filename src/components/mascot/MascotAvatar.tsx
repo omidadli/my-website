@@ -7,6 +7,15 @@ import { VIDEO_SCENES, MascotVisualStep, videoSrc } from './mascotVideos';
 import { useMascotLookAt } from './useMascotLookAt';
 import sprites from './sprites.json';
 
+/** `play()` returns a Promise in modern browsers but `undefined` in old WebViews/jsdom — never let that throw. */
+const safePlay = (el: HTMLVideoElement) => {
+  try {
+    const p = el.play();
+    if (p && typeof (p as Promise<void>).catch === 'function') (p as Promise<void>).catch(() => undefined);
+  } catch {
+    /* autoplay blocked or element detached */
+  }
+};
 export { useMascotLookAt } from './useMascotLookAt';
 
 /**
@@ -325,7 +334,7 @@ export function MascotFigure({
       } catch {
         /* not seekable yet */
       }
-      el.play().catch(() => undefined); // iOS Safari: muted+playsInline autoplay
+      safePlay(el); // iOS Safari: muted+playsInline autoplay
     }
     setBackIn(true);
     // hand the DOM node over: back becomes front (same key → no remount,
@@ -368,7 +377,7 @@ export function MascotFigure({
       if (document.visibilityState !== 'visible') return;
       const f = frontRef.current;
       const el = videoEls.current.get(f.key);
-      if (el && !el.ended && el.paused) el.play().catch(() => undefined);
+      if (el && !el.ended && el.paused) safePlay(el);
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
@@ -383,7 +392,7 @@ export function MascotFigure({
         if (hidden) {
           el.pause();
         } else if (!el.ended && el.paused && el.currentTime < Math.max(0, (el.duration || 1) - 0.3)) {
-          el.play().catch(() => undefined);
+          safePlay(el);
         }
       });
     };

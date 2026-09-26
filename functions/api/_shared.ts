@@ -207,6 +207,11 @@ export const ensureCoreTablesSafe = async (env: Env): Promise<void> => {
   }
 };
 
-export const MAX_CONTENT_BYTES = 5 * 1024 * 1024; // 5MB for content JSON
+// The whole CMS state is one D1 row and D1 caps a row/string at 2,000,000 bytes
+// (https://developers.cloudflare.com/d1/platform/limits/). Reject earlier with a
+// clear message instead of letting the INSERT fail with an opaque 500.
+export const MAX_CONTENT_BYTES = 1_900_000;
+export const CONTENT_TOO_LARGE_MESSAGE =
+  'حجم محتوا بیش از حد مجاز (حدود ۱.۹ مگابایت) است. تصاویر را به‌جای درج مستقیم (base64) از «کتابخانهٔ رسانه» آپلود کنید و متن‌های خیلی بلند را کوتاه کنید.';
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB per media file
 export const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'image/avif', 'application/pdf'];

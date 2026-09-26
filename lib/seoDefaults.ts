@@ -55,7 +55,7 @@ export const PAGE_DEFAULT_TITLES: Record<string, string> = {
   home: 'صفحه اصلی',
   services: 'خدمات تخصصی و مشاوره',
   portfolio: 'نمونه‌کارها و کیس‌استادی‌ها',
-  about: 'درباره من - امید عدلی',
+  about: 'درباره من',
   projects: 'پروژه‌ها و وضعیت پذیرش',
   blog: 'مقالات و آموزش‌ها',
   products: 'محصولات و دوره‌های آموزشی',
@@ -64,6 +64,9 @@ export const PAGE_DEFAULT_TITLES: Record<string, string> = {
 };
 
 export const pageDefaultTitle = (page: string): string => PAGE_DEFAULT_TITLES[page] || page;
+
+/** Title used by the SPA and the edge for URLs that match no route. */
+export const NOT_FOUND_TITLE = 'صفحه پیدا نشد';
 
 /** Apply the CMS title template ("%s | برند"); the home page uses the site title itself. */
 export const buildDocumentTitle = (baseTitle: string, globalSeo: SeoGlobalLike, opts: { isHome?: boolean; explicit?: boolean } = {}): string => {
