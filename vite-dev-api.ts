@@ -17,6 +17,7 @@ import {
   callAiProvider,
   localToolAnswer,
   normalizePhone,
+  normalizeCode,
   isValidIranMobile,
   genCode,
   signAccessToken,
@@ -453,7 +454,7 @@ export function cmsDevApiPlugin(): Plugin {
               // ---- unlock ----
               if (action === 'unlock') {
                 const phone = normalizePhone(String(body.phone || ''));
-                const code = String(body.code || '').trim().toUpperCase();
+                const code = normalizeCode(String(body.code || ''));
                 const productId = String(body.productId || '');
                 const deviceId = String(body.deviceId || '').slice(0, 80);
                 if (!isValidIranMobile(phone)) return sendJson({ ok: false, error: 'شماره موبایل معتبر نیست.' }, 400);

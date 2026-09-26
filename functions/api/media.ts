@@ -1,4 +1,4 @@
-import { Env, requireAuth, json, unauthorized, MAX_UPLOAD_BYTES, ALLOWED_MEDIA_TYPES } from './_shared';
+import { Env, requireAuth, json, unauthorized, MAX_UPLOAD_BYTES, ALLOWED_MEDIA_TYPES, ensureCoreTablesSafe } from './_shared';
 
 const sanitizeName = (name: string): string =>
   (name || 'file')
@@ -15,6 +15,7 @@ const sanitizeName = (name: string): string =>
  * DELETE /api/media?key=…  → admin delete (removes from R2 + D1).
  */
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+  await ensureCoreTablesSafe(env);
   try {
     const rows = await env.DB.prepare(
       `SELECT key, url, title, alt, size_kb, content_type, created_at FROM media ORDER BY created_at DESC LIMIT 500`
@@ -40,6 +41,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const user = await requireAuth(request, env);
   if (!user) return unauthorized();
+  await ensureCoreTablesSafe(env);
 
   let form: FormData;
   try {

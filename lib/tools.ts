@@ -388,11 +388,30 @@ export const normalizePhone = (raw: string): string => {
 
 export const isValidIranMobile = (phone: string): boolean => /^09\d{9}$/.test(normalizePhone(phone));
 
-/** Generate a human-friendly access code, e.g. "M4K-7Q2X". */
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars (0/O, 1/I)
+
+/** Generate a human-friendly access code, e.g. "M4K-7Q2X" (cryptographically random). */
 export const genCode = (): string => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
-  const pick = (n: number) => Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return `${pick(3)}-${pick(4)}`;
+  const bytes = new Uint8Array(7);
+  (globalThis as any).crypto.getRandomValues(bytes);
+  const s = Array.from(bytes, (b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
+  return `${s.slice(0, 3)}-${s.slice(3)}`;
+};
+
+/**
+ * Normalise a code typed by a buyer: Persian/Arabic digits → Latin, lowercase →
+ * uppercase, spaces / missing or misplaced dash tolerated, 0→O and 1→I mapped
+ * back to the letters the alphabet actually uses. "m4k 7q2x" → "M4K-7Q2X".
+ */
+export const normalizeCode = (raw: string): string => {
+  const digits: Record<string, string> = {
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+  };
+  let s = (raw || '').replace(/[۰-۹٠-٩]/g, (d) => digits[d] || d).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  s = s.replace(/0/g, 'O').replace(/1/g, 'I');
+  if (!s) return '';
+  return s.length > 3 ? `${s.slice(0, 3)}-${s.slice(3, 7)}` : s;
 };
 
 // --- HMAC token helpers (Web Crypto — works in Cloudflare Workers and Node 18+) ---

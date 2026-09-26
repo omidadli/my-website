@@ -1,4 +1,4 @@
-import { Env, requireAuth, json, getClientIp } from './_shared';
+import { Env, requireAuth, json, getClientIp, ensureCoreTablesSafe } from './_shared';
 import {
   TOOLS,
   getTool,
@@ -9,6 +9,7 @@ import {
   normalizePhone,
   isValidIranMobile,
   genCode,
+  normalizeCode,
   signAccessToken,
   verifyAccessToken,
   scopeCovers,
@@ -62,62 +63,79 @@ const usageSince = async (env: Env, phone: string, productId: string, sinceIso: 
   }
 };
 
-const ensureTables = async (env: Env) => {
-  try {
-    await env.DB.prepare(
-      `CREATE TABLE IF NOT EXISTS tool_access (
-        id TEXT PRIMARY KEY,
-        phone TEXT NOT NULL,
-        product_id TEXT NOT NULL DEFAULT 'all',
-        code TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'active',
-        max_devices INTEGER NOT NULL DEFAULT 1,
-        message_quota INTEGER NOT NULL DEFAULT 0,
-        devices TEXT NOT NULL DEFAULT '[]',
-        note TEXT DEFAULT '',
-        created_at TEXT NOT NULL,
-        expires_at TEXT DEFAULT ''
-      )`
-    ).run();
-    await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_tool_access_phone ON tool_access (phone, product_id)`).run();
-    // Add message_quota to pre-existing tables (no-op if it already exists).
-    try { await env.DB.prepare(`ALTER TABLE tool_access ADD COLUMN message_quota INTEGER NOT NULL DEFAULT 0`).run(); } catch { /* exists */ }
-    // Device-based free-trial counters (gamification).
-    await env.DB.prepare(
-      `CREATE TABLE IF NOT EXISTS tool_trials (
-        device_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        count INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY (device_id, product_id)
-      )`
-    ).run();
-    await env.DB.prepare(
-      `CREATE TABLE IF NOT EXISTS tool_messages (
-        id TEXT PRIMARY KEY,
-        phone TEXT DEFAULT '',
-        product_id TEXT NOT NULL,
-        question TEXT NOT NULL,
-        answer TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )`
-    ).run();
-    await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_tool_messages_phone_time ON tool_messages (phone, created_at)`).run();
-    // Per-tool AI connection settings. API KEYS are stored ONLY here (admin-only,
-    // never returned to the public) — never in the public content blob.
-    await env.DB.prepare(
-      `CREATE TABLE IF NOT EXISTS tool_settings (
-        product_id TEXT PRIMARY KEY,
-        provider TEXT NOT NULL DEFAULT 'gemini',
-        base_url TEXT DEFAULT '',
-        model TEXT DEFAULT '',
-        api_key TEXT DEFAULT '',
-        updated_at TEXT NOT NULL
-      )`
-    ).run();
-  } catch {
-    /* non-fatal */
+const TOOL_TABLE_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS tool_access (
+    id TEXT PRIMARY KEY,
+    phone TEXT NOT NULL,
+    product_id TEXT NOT NULL DEFAULT 'all',
+    code TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    max_devices INTEGER NOT NULL DEFAULT 1,
+    message_quota INTEGER NOT NULL DEFAULT 0,
+    devices TEXT NOT NULL DEFAULT '[]',
+    note TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    expires_at TEXT DEFAULT ''
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tool_access_phone ON tool_access (phone, product_id)`,
+  // Device-based free-trial counters (gamification).
+  `CREATE TABLE IF NOT EXISTS tool_trials (
+    device_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, product_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS tool_messages (
+    id TEXT PRIMARY KEY,
+    phone TEXT DEFAULT '',
+    product_id TEXT NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    ip TEXT DEFAULT ''
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tool_messages_phone_time ON tool_messages (phone, created_at)`,
+  // Per-tool AI connection settings. API KEYS are stored ONLY here (admin-only,
+  // never returned to the public) — never in the public content blob.
+  `CREATE TABLE IF NOT EXISTS tool_settings (
+    product_id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL DEFAULT 'gemini',
+    base_url TEXT DEFAULT '',
+    model TEXT DEFAULT '',
+    api_key TEXT DEFAULT '',
+    updated_at TEXT NOT NULL
+  )`,
+];
+
+// Columns added after the tables first shipped. ALTER fails when the column already
+// exists, so each runs on its own (outside the batch) and the error is ignored.
+const TOOL_TABLE_MIGRATIONS = [
+  `ALTER TABLE tool_access ADD COLUMN message_quota INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE tool_messages ADD COLUMN ip TEXT DEFAULT ''`,
+  `CREATE INDEX IF NOT EXISTS idx_tool_messages_ip_time ON tool_messages (ip, created_at)`,
+];
+
+let toolTablesReady: Promise<void> | null = null;
+
+/**
+ * Creates/migrates the paid-tools tables. Memoised per isolate so the DDL runs once,
+ * not on every chat message; a failure resets the memo so the next request retries.
+ * Also bootstraps the core tables (login_attempts is shared with the unlock guard).
+ */
+const ensureTables = (env: Env): Promise<void> => {
+  if (!toolTablesReady) {
+    toolTablesReady = (async () => {
+      await ensureCoreTablesSafe(env);
+      await env.DB.batch(TOOL_TABLE_STATEMENTS.map((sql) => env.DB.prepare(sql)));
+      for (const sql of TOOL_TABLE_MIGRATIONS) {
+        try { await env.DB.prepare(sql).run(); } catch { /* column/index already exists */ }
+      }
+    })().catch(() => {
+      toolTablesReady = null; // non-fatal: the caller's own error handling applies
+    });
   }
+  return toolTablesReady;
 };
 
 interface SettingsRow { product_id: string; provider: string; base_url: string; model: string; api_key: string; updated_at: string }
@@ -320,7 +338,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (action === 'unlock') {
     if (!secret) return json({ ok: false, error: 'سرویس دسترسی هنوز پیکربندی نشده است.' }, { status: 503 });
     const phone = normalizePhone(String(body.phone || ''));
-    const code = String(body.code || '').trim().toUpperCase();
+    const code = normalizeCode(String(body.code || ''));
     const productId = String(body.productId || '');
     const deviceId = String(body.deviceId || '').slice(0, 80);
     if (!isValidIranMobile(phone)) return json({ ok: false, error: 'شماره موبایل معتبر نیست.' }, { status: 400 });
@@ -328,10 +346,46 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (!deviceId) return json({ ok: false, error: 'شناسه دستگاه نامعتبر است.' }, { status: 400 });
     if (!getTool(productId)) return json({ ok: false, error: 'محصول نامعتبر است.' }, { status: 400 });
 
+    // Brute-force guard: access codes are short, so cap failed unlocks.
+    // Two counters (re-using the login_attempts table with namespaced keys):
+    //  - per IP+phone (tight): stops guessing the code of one customer;
+    //  - per IP (loose): stops spraying many phone/code pairs from one address, while
+    //    staying tolerant of carrier-grade NAT where many real users share one IP.
+    const ip = getClientIp(request);
+    const UNLOCK_WINDOW_MIN = 15;
+    const guards: Array<{ key: string; max: number }> = [
+      { key: `unlock:${ip}:${phone}`, max: 10 },
+      { key: `unlock:${ip}`, max: 60 },
+    ];
+    try {
+      const since = new Date(Date.now() - UNLOCK_WINDOW_MIN * 60_000).toISOString();
+      const rows = await env.DB.prepare(`SELECT ip AS key, COUNT(*) AS c FROM login_attempts WHERE ip IN (?1, ?2) AND success = 0 AND attempted_at > ?3 GROUP BY ip`)
+        .bind(guards[0].key, guards[1].key, since).all<{ key: string; c: number }>();
+      const counts = new Map((rows.results || []).map((r) => [r.key, Number(r.c) || 0]));
+      if (guards.some((g) => (counts.get(g.key) || 0) >= g.max)) {
+        return json({ ok: false, error: `تلاش‌های ناموفق زیاد بود. ${UNLOCK_WINDOW_MIN} دقیقه دیگر دوباره امتحان کن.` }, { status: 429 });
+      }
+    } catch { /* table missing — fail open */ }
+    const recordUnlock = async (success: boolean) => {
+      try {
+        if (success) {
+          // A correct code clears the per-phone failure history (typos before success are forgiven).
+          await env.DB.prepare(`DELETE FROM login_attempts WHERE ip = ?1`).bind(guards[0].key).run();
+        } else {
+          const at = nowIso();
+          await env.DB.batch(guards.map((g) => env.DB.prepare(`INSERT INTO login_attempts (ip, attempted_at, success) VALUES (?1, ?2, 0)`).bind(g.key, at)));
+        }
+      } catch { /* non-fatal */ }
+    };
+
     // Match a grant covering this product for this phone+code.
     const rows = await env.DB.prepare(`SELECT * FROM tool_access WHERE phone = ?1 AND code = ?2 AND status = 'active'`).bind(phone, code).all<GrantRow>();
     const grant = (rows.results || []).find((r) => scopeCovers(r.product_id, productId));
-    if (!grant) return json({ ok: false, error: 'شماره یا کد دسترسی درست نیست. اگر خرید کرده‌ای، از پشتیبانی کمک بگیر.' }, { status: 403 });
+    if (!grant) {
+      await recordUnlock(false);
+      return json({ ok: false, error: 'شماره یا کد دسترسی درست نیست. اگر خرید کرده‌ای، از پشتیبانی کمک بگیر.' }, { status: 403 });
+    }
+    await recordUnlock(true);
     if (grant.expires_at && new Date(grant.expires_at).getTime() < Date.now()) {
       return json({ ok: false, error: 'دسترسی شما منقضی شده است. برای تمدید پیام بده.' }, { status: 403 });
     }
@@ -385,12 +439,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const paid = !!(payload && scopeCovers(payload.scope, productId) && (!deviceId || payload.did === deviceId));
 
     // ---- Trial gate (no valid paid token) ----
+    const ip = getClientIp(request);
     let trialInfo: { used: number; remaining: number; limit: number } | undefined;
     if (!paid) {
       const limit = resolveFreeTrial(data);
       if (limit <= 0 || !deviceId) {
         return json({ ok: false, error: 'برای استفاده از این ابزار، یکی از پلن‌ها را فعال کن.', code: 'locked' }, { status: 401 });
       }
+      // Device ids are client-generated, so also cap free messages per IP per hour —
+      // otherwise rotating the device id would mean unlimited free AI calls (real cost).
+      try {
+        const since = new Date(Date.now() - 3600_000).toISOString();
+        const row = await env.DB.prepare(`SELECT COUNT(*) AS c FROM tool_messages WHERE ip = ?1 AND phone LIKE 'trial:%' AND created_at > ?2`).bind(ip, since).first<{ c: number }>();
+        if ((row?.c || 0) >= 30) {
+          return json({ ok: false, error: 'سقف پیام‌های رایگان این ساعت پر شد. برای ادامه‌ی بدون محدودیت، یکی از پلن‌ها را فعال کن.', code: 'trial_ended', trial: { used: limit, remaining: 0, limit } }, { status: 429 });
+        }
+      } catch { /* column missing — continue */ }
       let used = 0;
       try {
         const row = await env.DB.prepare(`SELECT count FROM tool_trials WHERE device_id = ?1 AND product_id = ?2`).bind(deviceId, productId).first<{ count: number }>();
@@ -448,8 +512,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
     try {
       const id = `tm-${Date.now()}-${Math.floor(Math.random() * 9999)}`;
-      await env.DB.prepare(`INSERT INTO tool_messages (id, phone, product_id, question, answer, created_at) VALUES (?1,?2,?3,?4,?5,?6)`)
-        .bind(id, paid ? payload!.phone : `trial:${deviceId}`.slice(0, 60), productId, question.slice(0, 2000), answer.slice(0, 6000), nowIso()).run();
+      const who = paid ? payload!.phone : `trial:${deviceId}`.slice(0, 60);
+      try {
+        await env.DB.prepare(`INSERT INTO tool_messages (id, phone, product_id, question, answer, created_at, ip) VALUES (?1,?2,?3,?4,?5,?6,?7)`)
+          .bind(id, who, productId, question.slice(0, 2000), answer.slice(0, 6000), nowIso(), ip).run();
+      } catch {
+        // pre-migration table without the ip column
+        await env.DB.prepare(`INSERT INTO tool_messages (id, phone, product_id, question, answer, created_at) VALUES (?1,?2,?3,?4,?5,?6)`)
+          .bind(id, who, productId, question.slice(0, 2000), answer.slice(0, 6000), nowIso()).run();
+      }
     } catch { /* non-fatal */ }
 
     // Quota info for the paid UI progress meter.
