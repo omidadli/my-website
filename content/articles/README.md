@@ -32,6 +32,30 @@
 4. **Schema.** پیشنهاد هر مقاله در بخش `Schema Recommendation` آمده؛ فقط وقتی پیاده شود که
    با محتوای واقعیِ صفحه مطابقت داشته باشد.
 
+## نقشهٔ انتشار Batch 1 (دسته‌بندی‌ها از taxonomy مشترکند)
+
+دسته‌بندی‌ها آزاد نیستند: مقدارِ `category` باید دقیقاً یکی از کلیدهای
+`src/data/blogTaxonomy.ts` باشد (مقدارِ فارسی خودکار پر می‌شود). لینک‌های داخلیِ
+`⟨منتظر انتشار⟩` هم‌زمان با انتشارِ همان مقاله فعال می‌شوند.
+
+| # | فایل | Slug | category | categoryFa | CTA |
+|---|---|---|---|---|---|
+| ۱ | `01-ai-marketing.md` | `ai-marketing` | `ai-marketing` | هوش مصنوعی در مارکتینگ | AI Readiness Audit |
+| ۲ | `02-ai-marketing-tasks.md` | `ai-marketing-tasks` | `ai-marketing` | هوش مصنوعی در مارکتینگ | AI Readiness Audit |
+| ۳ | `03-ai-agent-vs-chatbot.md` | `ai-agent-vs-chatbot` | `ai-agents` | ایجنت‌های هوش مصنوعی | Automation Assessment |
+| ۴ | `04-will-ai-replace-marketers.md` | `will-ai-replace-marketers` | `ai-marketing` | هوش مصنوعی در مارکتینگ | Growth Strategy Session |
+| ۵ | `05-ai-agent-guide.md` | `ai-agent-guide-business` | `ai-agents` | ایجنت‌های هوش مصنوعی | Automation Assessment |
+| ۶ | `06-ai-agent-business-processes.md` | `ai-agent-business-processes` | `ai-automation` | اتوماسیون با هوش مصنوعی | Automation Assessment |
+| ۷ | `07-ai-agent-vs-automation.md` | `ai-agent-vs-automation` | `ai-automation` | اتوماسیون با هوش مصنوعی | Automation Assessment |
+| ۸ | `08-ai-workflow-design.md` | `ai-workflow-design` | `ai-automation` | اتوماسیون با هوش مصنوعی | Automation Assessment |
+| ۹ | `09-aeo-guide.md` | `aeo-guide` | `aeo` | بهینه‌سازی برای موتورهای پاسخ (AEO) | AI Search Audit |
+| ۱۰ | `10-geo-vs-seo.md` | `geo-vs-seo` | `geo` | بهینه‌سازی برای موتورهای مولد (GEO) | AI Search Audit |
+| ۱۱ | `11-brand-visibility-ai-search.md` | `brand-visibility-ai-search` | `ai-search` | جست‌وجوی هوش مصنوعی | AI Search Audit |
+| ۱۲ | `12-ai-search-rank-one.md` | `ai-search-rank-one` | `ai-search` | جست‌وجوی هوش مصنوعی | AI Search Audit |
+| ۱۳ | `13-why-ai-content-fails.md` | `why-ai-content-fails` | `ai-content` | محتوای هوش مصنوعی | Growth Strategy Session |
+| ۱۴ | `14-ai-human-content-formula.md` | `ai-human-content-formula` | `ai-content` | محتوای هوش مصنوعی | Growth Strategy Session |
+| ۱۵ | `15-ai-content-strategy.md` | `ai-content-strategy` | `content-strategy` | استراتژی محتوا | Growth Strategy Session |
+
 ## نقشهٔ کلی
 
 مستندِ مرجع: [`docs/CONTENT-SYSTEM-MAP.md`](../../docs/CONTENT-SYSTEM-MAP.md)

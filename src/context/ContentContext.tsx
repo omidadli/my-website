@@ -14,7 +14,7 @@ import {
   ThemeConfig,
   BlogComment
 } from '../types';
-import { defaultGlobalSeo as sharedGlobalSeoDefaults } from '../../lib/seoDefaults';
+import { CANONICAL_SITE_URL, defaultGlobalSeo as sharedGlobalSeoDefaults } from '../../lib/seoDefaults';
 
 const LOCAL_STORAGE_KEY = 'OMID_ADLI_SITE_CONTENT_V3';
 const LOCAL_STORAGE_PIN_KEY = 'OMID_ADLI_ADMIN_PIN_CODE';
@@ -880,7 +880,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const generateSitemapXml = () => {
-    const baseUrl = (data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli01.site').replace(/\/$/, '');
+    const baseUrl = (data.GLOBAL_SEO.canonicalBaseUrl || CANONICAL_SITE_URL).replace(/\/$/, '');
     // Real paths (path-based router + Cloudflare Pages SPA fallback).
     const pageUrl = (path: string) => `${baseUrl}/${path}`;
     const pages = [
@@ -898,10 +898,11 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       pages.push({ url: pageUrl(cp.slug), priority: '0.8' });
     });
 
+    // Keep in sync with buildSitemapXml() in functions/_seo.ts: the admin preview
+    // must list exactly the URLs the live /sitemap.xml serves.
     (data.BLOG_POSTS || []).forEach((post: any) => {
-      if (post?.status !== 'draft') {
-        pages.push({ url: pageUrl(`blog/${post.slug || post.id}`), priority: '0.7' });
-      }
+      if (post?.status === 'draft' || post?.seo?.noIndex) return;
+      pages.push({ url: pageUrl(`blog/${post.slug || post.id}`), priority: '0.7' });
     });
 
     const urlsXml = pages

@@ -3,6 +3,7 @@ import { useContent } from '../../context/ContentContext';
 import { AInput, ATextarea, ASelect, AToggle, ALabel } from './ui';
 import { MediaField } from './MediaField';
 import { SeoBox, SeoKey, SeoValues } from './SeoBox';
+import { BLOG_CATEGORIES, BLOG_CATEGORY_GROUPS, findCategory } from '../../data/blogTaxonomy';
 import { Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -15,6 +16,8 @@ export type FieldDef =
   | { key: string; label: string; type: 'number'; min?: number; max?: number; hint?: string; half?: boolean }
   | { key: string; label: string; type: 'toggle'; hint?: string }
   | { key: string; label: string; type: 'select'; options: (string | { value: string; label: string })[]; half?: boolean }
+  /** Taxonomy-backed blog category: writes `category` (English) and `categoryFa` (Persian) together. */
+  | { key: string; label: string; type: 'category'; hint?: string }
   | { key: string; label: string; type: 'image' }
   | { key: string; label: string; type: 'tags'; placeholder?: string; hint?: string }
   | { key: string; label: string; type: 'group'; fields: FieldDef[]; hint?: string }
@@ -112,6 +115,36 @@ export const FieldsForm: React.FC<FieldsFormProps> = ({ basePath, item, fields }
             </ASelect>
           </div>
         );
+      case 'category': {
+        // One choice keeps `category` and `categoryFa` in sync — the pair the blog
+        // filter chips are built from. A value outside the taxonomy (legacy post)
+        // is preserved as an extra option so saving never silently rewrites it.
+        const active = findCategory(value) ?? BLOG_CATEGORIES.find((c) => c.fa === item.categoryFa);
+        const legacy = !active && (value || item.categoryFa)
+          ? { value: String(value || ''), fa: String(item.categoryFa || value || '') }
+          : null;
+        const apply = (categoryValue: string) => {
+          const c = BLOG_CATEGORIES.find((x) => x.value === categoryValue);
+          set('category', c ? c.value : categoryValue);
+          set('categoryFa', c ? c.fa : (legacy?.fa ?? ''));
+        };
+        return (
+          <div key={f.key} className="sm:col-span-2">
+            <ALabel hint={f.hint || 'انتخاب از taxonomy سایت — فیلترهای وبلاگ از همین مقدار ساخته می‌شوند'}>{f.label}</ALabel>
+            <ASelect value={active?.value ?? legacy?.value ?? ''} onChange={(e) => apply(e.target.value)}>
+              <option value="">— بدون دسته‌بندی —</option>
+              {legacy && <option value={legacy.value}>{`${legacy.fa} (مقدار قدیمی)`}</option>}
+              {BLOG_CATEGORY_GROUPS.map((group) => (
+                <optgroup key={group} label={group}>
+                  {BLOG_CATEGORIES.filter((c) => c.group === group).map((c) => (
+                    <option key={c.value} value={c.value}>{c.fa}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </ASelect>
+          </div>
+        );
+      }
       case 'image':
         return (
           <div key={f.key} className="sm:col-span-2">
