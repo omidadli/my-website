@@ -1,5 +1,5 @@
-import type { Env } from './api/_shared';
-import type { SeoGlobalLike, SeoPageLike, SeoPostLike } from '../lib/seoDefaults';
+import { CANONICAL_SITE_URL, type SeoGlobalLike, type SeoPageLike, type SeoPostLike } from '../lib/seoDefaults';
+import { BLOG_POSTS as DEFAULT_BLOG_POSTS } from '../src/data/content';
 
 /**
  * Shared helpers for the crawler endpoints (`/robots.txt`, `/sitemap.xml`).
@@ -12,7 +12,7 @@ import type { SeoGlobalLike, SeoPageLike, SeoPostLike } from '../lib/seoDefaults
  * previews is what crawlers get.
  */
 
-export const DEFAULT_SITE_URL = 'https://omidadli01.site';
+export const DEFAULT_SITE_URL = CANONICAL_SITE_URL;
 
 /** Routes of the built-in pages (`/services`, …). */
 export const STATIC_ROUTES = ['services', 'portfolio', 'about', 'projects', 'blog', 'products', 'contact'];
@@ -24,8 +24,22 @@ export interface PublicSiteContent {
   PAGE_SEO?: Record<string, SeoPageLike | undefined> | null;
 }
 
+/**
+ * The slice of the Workers environment this module needs.
+ *
+ * Declared structurally instead of importing `Env` from `./api/_shared` so the
+ * sitemap/robots logic stays free of `@cloudflare/workers-types` globals — which
+ * lets `scripts/sitemap.test.ts` exercise the real function from plain Node
+ * without pulling Workers types into the root type-check.
+ */
+export interface SeoEnv {
+  DB: {
+    prepare: (query: string) => { first: <T>() => Promise<T | null> };
+  };
+}
+
 /** Loads the published content blob; `null` when nothing was saved yet (site runs on its defaults). */
-export const loadPublicContent = async (env: Env): Promise<{ data: PublicSiteContent | null; updatedAt: string | null }> => {
+export const loadPublicContent = async (env: SeoEnv): Promise<{ data: PublicSiteContent | null; updatedAt: string | null }> => {
   try {
     const row = await env.DB.prepare(`SELECT data, updated_at FROM content WHERE id = 1`).first<{ data: string; updated_at: string }>();
     if (!row?.data) return { data: null, updatedAt: null };
@@ -68,7 +82,20 @@ export const buildSitemapXml = (baseUrl: string, content: PublicSiteContent | nu
   for (const cp of (Array.isArray(content?.CUSTOM_PAGES) ? content.CUSTOM_PAGES : [])) {
     if (isValidSlug(cp?.slug)) entries.push({ loc: url(cp.slug), priority: '0.8' });
   }
-  for (const post of (Array.isArray(content?.BLOG_POSTS) ? content.BLOG_POSTS : [])) {
+  // Same source of truth as the edge middleware (`_middleware.ts`): when D1 has
+  // no content row yet — or its payload carries no posts — the site itself runs
+  // on the built-in defaults, so the sitemap has to list those posts too. Without
+  // this fallback a fresh database produced a sitemap with only the 8 static
+  // pages while every /blog/<id> URL was live and indexable.
+  // Deliberately the same condition the middleware uses: an *empty* array means
+  // the CMS really has no posts (and /blog/<id> answers 404), so the sitemap must
+  // not advertise URLs that do not exist. Only a missing/null list means "no
+  // content row yet" → the bundled defaults are what the site serves.
+  const posts: SeoPostLike[] = Array.isArray(content?.BLOG_POSTS)
+    ? (content!.BLOG_POSTS as SeoPostLike[])
+    : (DEFAULT_BLOG_POSTS as unknown as SeoPostLike[]);
+
+  for (const post of posts) {
     if (!post || post.status === 'draft' || post.seo?.noIndex) continue;
     const slug = isValidSlug(post.slug) ? post.slug : isValidSlug(post.id) ? post.id : null;
     if (slug) entries.push({ loc: url(`blog/${slug}`), priority: '0.7' });

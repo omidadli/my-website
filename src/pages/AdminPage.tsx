@@ -54,8 +54,7 @@ const POST_FIELDS: FieldDef[] = [
     { key: 'title', label: 'عنوان در فهرست' },
   ] },
   { key: 'coverImage', label: 'تصویر شاخص', type: 'image' },
-  { key: 'categoryFa', label: 'دسته‌بندی (فارسی)', placeholder: 'مثلاً: رشد' },
-  { key: 'category', label: 'دسته‌بندی (انگلیسی)', dir: 'ltr', placeholder: 'growth' },
+  { key: 'category', label: 'دسته‌بندی مقاله', type: 'category' },
   { key: 'pathCategory', label: 'مسیر مخاطب', type: 'select', options: [
     { value: '', label: '— بدون مسیر —' },
     { value: 'start', label: 'شروع (start)' },

@@ -7,6 +7,7 @@ import { Search, Sparkles, Flame, ChevronLeft, Mail, CheckCircle2 } from 'lucide
 import { motion } from 'motion/react';
 import { usePreservedState } from '../utils/statePreserver';
 import { linkProps, postPath } from '../utils/router';
+import { categoryOrder, normalizeCategory } from '../data/blogTaxonomy';
 import { safeRecordArray } from '../utils/contentDefaults';
 import { imageFallback } from '../utils/imageFallback';
 
@@ -33,12 +34,22 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
   const [newsletterEmail, setNewsletterEmail] = usePreservedState<string>('blog_newsletter_email', '');
   const [subscribed, setSubscribed] = useState(false);
 
-  const categories = useMemo(() => ['all', ...new Set(posts.map((p) => p.categoryFa))], [posts]);
+  // Categories come from the shared taxonomy so chips keep a stable order and
+  // legacy free-text values still group with their modern equivalent.
+  const categoryOf = (p: BlogPost): string => normalizeCategory(p).categoryFa;
+  const categories = useMemo(() => {
+    const seen = new Set<string>();
+    posts.forEach((p) => {
+      const c = categoryOf(p);
+      if (c) seen.add(c);
+    });
+    return ['all', ...[...seen].sort((a, b) => categoryOrder(a) - categoryOrder(b))];
+  }, [posts]);
   const filtered = useMemo(
     () =>
       posts.filter(
         (p) =>
-          (category === 'all' || p.categoryFa === category) &&
+          (category === 'all' || categoryOf(p) === category) &&
           (!query.trim() || p.title.includes(query.trim()) || p.excerpt.includes(query.trim())),
       ),
     [posts, category, query],

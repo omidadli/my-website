@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { slugify } from '../../utils/slug';
 import { AInput, ASelect, ATextarea, ALabel, ACollapse, AToggle } from './ui';
 import { MediaField } from './MediaField';
+import { CANONICAL_SITE_URL } from '../../../lib/seoDefaults';
 import { Wand2, Globe, EyeOff } from 'lucide-react';
 
 export interface SeoValues {
@@ -45,7 +46,7 @@ export const SeoBox: React.FC<SeoBoxProps> = ({ values, onChange, titleForSlug, 
     setSlugBusy(false);
   };
 
-  const siteUrl = 'omidadli01.site';
+  const siteUrl = new URL(CANONICAL_SITE_URL).host;
   const permalink = `${siteUrl}/${urlPrefix ? urlPrefix + '/' : ''}${values.slug || '…'}`;
 
   return (
@@ -104,7 +105,7 @@ export const SeoBox: React.FC<SeoBoxProps> = ({ values, onChange, titleForSlug, 
 
         <div>
           <ALabel hint="آدرس کامل صفحه — معمولاً خالی بگذارید">لینک Canonical</ALabel>
-          <AInput dir="ltr" className="text-left font-mono" value={values.canonicalUrl || ''} onChange={(e) => onChange('canonicalUrl', e.target.value)} placeholder="https://omidadli01.site/…" />
+          <AInput dir="ltr" className="text-left font-mono" value={values.canonicalUrl || ''} onChange={(e) => onChange('canonicalUrl', e.target.value)} placeholder={`${CANONICAL_SITE_URL}/…`} />
         </div>
 
         <div className="flex items-center justify-between rounded-xl border border-[color:var(--nd-line)] bg-[color:var(--nd-bg-soft)] p-3.5">

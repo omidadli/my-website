@@ -38,6 +38,16 @@ export interface SeoPostLike {
   seo?: SeoPageLike;
 }
 
+/**
+ * The one and only canonical origin of the site.
+ *
+ * It used to be spelled out literally in the edge helpers, the SPA context, the
+ * SEO box and this file — which is how the docs drifted to `omidadli.site` while
+ * every canonical/og/sitemap URL said `omidadli01.site`. Change it here and every
+ * consumer follows.
+ */
+export const CANONICAL_SITE_URL = 'https://omidadli01.site';
+
 /** Resolve a public post by ID or slug; drafts are never routable by public crawlers. */
 export const findPublishedPost = <T extends SeoPostLike>(posts: readonly T[], idOrSlug: string): T | null =>
   posts.find((post) => post && post.status !== 'draft' && (post.id === idOrSlug || post.slug === idOrSlug)) || null;
@@ -50,9 +60,9 @@ export const defaultGlobalSeo = {
   // Only files that really exist in /public — /favicon.ico never shipped, so browsers got the SPA's HTML.
   faviconUrl: '/logo.svg',
   // Own photo instead of a stock portrait of a stranger in link previews (WhatsApp/Telegram/LinkedIn).
-  ogImage: 'https://omidadli01.site/profile-photo-web.jpg',
-  canonicalBaseUrl: 'https://omidadli01.site',
-  robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://omidadli01.site/sitemap.xml',
+  ogImage: `${CANONICAL_SITE_URL}/profile-photo-web.jpg`,
+  canonicalBaseUrl: CANONICAL_SITE_URL,
+  robotsTxt: `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${CANONICAL_SITE_URL}/sitemap.xml`,
 };
 
 export const PAGE_DEFAULT_TITLES: Record<string, string> = {

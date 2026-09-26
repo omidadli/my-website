@@ -10,6 +10,8 @@ Live: https://omidadli01.site
 | [CMS-DEPLOY.md](./CMS-DEPLOY.md) | The CMS API, media storage, local development — Persian |
 | [INTEGRATIONS.md](./INTEGRATIONS.md) | HTTP API, GitHub → site workflows, content-as-code round-trip |
 | [mcp/README.md](./mcp/README.md) | Connect the site to Claude (MCP server) |
+| [docs/CONTENT-SYSTEM-MAP.md](./docs/CONTENT-SYSTEM-MAP.md) | نقشهٔ سیستم محتوایی: URLهای واقعی، خوشه‌های موضوعی، لینک داخلی |
+| [content/articles/README.md](./content/articles/README.md) | خروجیِ تولید محتوای ۱۲ هفته‌ای (Batchها و وضعیت انتشار) |
 
 ```bash
 npm ci && npm run dev        # local dev on :3000 (API emulated by vite-dev-api.ts)
