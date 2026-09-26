@@ -62,7 +62,12 @@ T0BHe7_AjrsbNcYRmgjcoRnXH7mGtD6N6Yf9g96TNB0
 
 ## قدم ۶ — انتشار
 بعد از قدم‌های بالا، در داشبورد Pages دکمه‌ی **Retry deployment** را بزن (یا یک
-کامیت جدید روی `main` بزن). سایت روی آدرسِ `https://my-website.pages.dev` بالا می‌آید.
+کامیت جدید روی `main` بزن). سایت روی دامنه‌ی خودت `https://omidadli01.site` بالا می‌آید.
+
+> ⚠️ آدرس `my-website.pages.dev` مال این سایت **نیست** (این ساب‌دامین قبلاً توسط شخص
+> دیگری گرفته شده و Cloudflare به پروژه‌ی تو یک پسوند تصادفی داده). آدرس دقیق
+> `*.pages.dev` پروژه‌ات را از داشبورد Pages ببین؛ برای `SITE_URL` همیشه از
+> `https://omidadli01.site` استفاده کن.
 
 ## قدم ۷ — تست نهایی
 - به `https<آدرس سایت>/admin` برو و با `ADMIN_USERNAME` / `ADMIN_PASSWORD` وارد شو.

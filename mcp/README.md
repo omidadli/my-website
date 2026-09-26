@@ -40,9 +40,14 @@ Cloudflare secrets):
 
 | Variable | Example |
 |----------|---------|
-| `SITE_URL` | `https://my-website.pages.dev` |
+| `SITE_URL` | `https://omidadli01.site` (the live custom domain — **not** `my-website.pages.dev`, which belongs to someone else) |
 | `ADMIN_USERNAME` | your admin username |
 | `ADMIN_PASSWORD` | your admin password |
+
+> **First run on a fresh site:** if the live database has never been saved
+> (`GET /api/content` returns `data: null`), `ping` reports `contentEmpty: true`.
+> The first write tool you use (e.g. `set_field`) automatically seeds the live
+> database from `content/site-content.json` and then applies your change.
 
 Quick local check (with the dev server running on :3000):
 
@@ -66,7 +71,7 @@ Add an entry under `mcpServers` (use the absolute path to `server.mjs`):
       "command": "node",
       "args": ["/ABSOLUTE/PATH/TO/my-website01/mcp/server.mjs"],
       "env": {
-        "SITE_URL": "https://my-website.pages.dev",
+        "SITE_URL": "https://omidadli01.site",
         "ADMIN_USERNAME": "your-admin-username",
         "ADMIN_PASSWORD": "your-admin-password"
       }
@@ -82,7 +87,7 @@ Start with _"use omidadli-site ping"_ to confirm it's connected.
 
 ```bash
 claude mcp add omidadli-site \
-  --env SITE_URL=https://my-website.pages.dev \
+  --env SITE_URL=https://omidadli01.site \
   --env ADMIN_USERNAME=your-admin-username \
   --env ADMIN_PASSWORD=your-admin-password \
   -- node /ABSOLUTE/PATH/TO/my-website01/mcp/server.mjs
