@@ -146,7 +146,7 @@ check('article index: 2 published docs (draft excluded)', docs.length === 2, `go
 
 const hits = retrieveSources(siteData, 'چطور GA4 رو برای فروشگاه راه بیندازیم؟');
 check('RAG finds the GA4 article first', hits.length > 0 && hits[0].title.includes('GA4'), hits[0]?.title || 'no hits');
-check('RAG source url is the SPA hash route', hits[0]?.url === '#/blog/ga4-setup-guide', hits[0]?.url || '');
+check('RAG source url is the SPA path route', hits[0]?.url === '/blog/ga4-setup-guide', hits[0]?.url || '');
 check('RAG never returns draft posts', hits.every((h) => !h.title.includes('پنهان')));
 check('RAG source text carries the full body (sections merged)', (hits[0]?.text || '').includes('رویداد') && (hits[0]?.text || '').includes('conversion'));
 
@@ -155,7 +155,7 @@ check('RAG stays silent on unrelated questions', noHits.length === 0, `got ${noH
 
 const sourcesBlock = buildSourcesBlock(hits);
 const soulPrompt = buildSoulPrompt({ persona: '', name: '', page: 'blog', daypart: 'عصر', bodyState: '', digest: buildDigest(siteData), sources: sourcesBlock || undefined });
-check('soul prompt injects the sources block', soulPrompt.includes('منابع مرتبط با سوال کاربر') && soulPrompt.includes('#/blog/ga4-setup-guide'));
+check('soul prompt injects the sources block', soulPrompt.includes('منابع مرتبط با سوال کاربر') && soulPrompt.includes('/blog/ga4-setup-guide'));
 check('soul prompt carries the citation rules', soulPrompt.includes(SOURCES_RULES));
 check('soul prompt still has the act contract', soulPrompt.includes('[[act:') && soulPrompt.includes('واژگان بدن'));
 
@@ -168,7 +168,7 @@ check('cited answer: body acted by the AI directive (talk)', parsed.applied && m
 // local (no-key) mode also cites the article
 const localQ = 'راهنمای GA4 تحلیل چطوریه؟';
 const local = localAnswer(localQ, buildDigest(siteData), 'CTA', retrieveSources(siteData, localQ));
-check('local mode cites the article link', local.includes('منبع: [') && local.includes('#/blog/ga4-setup-guide'));
+check('local mode cites the article link', local.includes('منبع: [') && local.includes('/blog/ga4-setup-guide'));
 
 // let timers run: the last scene is a loop ('talk', ttl = 8s hold) → auto-idle
 setTimeout(() => {

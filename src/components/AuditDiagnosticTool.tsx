@@ -2,6 +2,7 @@ import React from 'react';
 import { Theme } from '../types';
 import { Search, Sparkles, CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, Gauge } from 'lucide-react';
 import { usePreservedState } from '../utils/statePreserver';
+import { linkProps, navigate } from '../utils/router';
 
 interface AuditDiagnosticToolProps {
   theme: Theme;
@@ -145,7 +146,7 @@ export const AuditDiagnosticTool: React.FC<AuditDiagnosticToolProps> = ({ theme 
               مایلید این باگ‌های ترکینگ را ظرف ۴۸ ساعت اصلاح کنیم و ۳۵٪ داده‌های از دست رفته را بازیابی کنیم؟
             </p>
             <a
-              href="#contact"
+              {...linkProps('/contact', () => navigate('/contact'))}
               className="inline-block px-5 py-2 rounded-full bg-white text-[#1a1240] text-xs font-black shadow-md hover:bg-slate-100"
             >
               دریافت برنامه عملیاتی اصلاح ترکینگ

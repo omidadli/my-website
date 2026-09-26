@@ -4,6 +4,7 @@ import { useContent } from '../context/ContentContext';
 import { inputCls } from '../components/nd/Kit';
 import { ChevronLeft, ArrowRight, Sparkles, MessageSquare, CheckCircle2, ShieldCheck, Link2, Clock, Eye, CalendarDays } from 'lucide-react';
 import { motion } from 'motion/react';
+import { linkProps, postPath } from '../utils/router';
 
 interface BlogPostDetailPageProps {
   theme: Theme;
@@ -288,13 +289,13 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {relatedPosts.map((rel) => (
-              <motion.button
+              <motion.a
                 key={rel.id}
                 initial={{ opacity: 0, y: 18 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-40px' }}
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                onClick={() => onSelectPost(rel.id)}
+                {...linkProps(postPath(rel), () => onSelectPost(rel.id))}
                 className="nd-card nd-card-hover overflow-hidden text-right flex flex-col group cursor-pointer"
               >
                 <div className={`aspect-[16/10] overflow-hidden border-b ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
@@ -309,7 +310,7 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
                     <span>{rel.readTime}</span>
                   </span>
                 </div>
-              </motion.button>
+              </motion.a>
             ))}
           </div>
         </section>

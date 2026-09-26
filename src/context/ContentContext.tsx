@@ -14,23 +14,13 @@ import {
   ThemeConfig,
   BlogComment
 } from '../types';
+import { defaultGlobalSeo as sharedGlobalSeoDefaults } from '../../lib/seoDefaults';
 
 const LOCAL_STORAGE_KEY = 'OMID_ADLI_SITE_CONTENT_V3';
 const LOCAL_STORAGE_PIN_KEY = 'OMID_ADLI_ADMIN_PIN_CODE';
 const DEFAULT_PIN = '1234';
 
-export const defaultGlobalSeo: GlobalSeoConfig = {
-  siteTitle: 'امید عدلی | مشاور و مجری پرفورمنس مارکتینگ و CRO',
-  titleTemplate: '%s | امید عدلی',
-  defaultMetaDesc: 'خدمات تخصصی پرفورمنس مارکتینگ، بهینه‌سازی نرخ تبدیل (CRO)، کمپین‌های گوگل ادز و آنالیز پیشرفته رفتار کاربر.',
-  defaultKeywords: 'پرفورمنس مارکتینگ, CRO, دیجیتال مارکتینگ, گوگل ادز, امید عدلی, بهینه‌سازی نرخ تبدیل',
-  // Only files that really exist in /public — /favicon.ico never shipped, so browsers got the SPA's HTML.
-  faviconUrl: '/logo.svg',
-  // Own photo instead of a stock portrait of a stranger in link previews (WhatsApp/Telegram/LinkedIn).
-  ogImage: 'https://omidadli01.site/profile-photo-web.jpg',
-  canonicalBaseUrl: 'https://omidadli01.site',
-  robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://omidadli01.site/sitemap.xml',
-};
+export const defaultGlobalSeo: GlobalSeoConfig = { ...sharedGlobalSeoDefaults };
 
 export const defaultNavigationMenu: NavigationMenuItem[] = [
   { id: 'nav-1', label: 'صفحه اصلی', pageSlug: 'home', order: 1, isHidden: false },
@@ -868,9 +858,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const generateSitemapXml = () => {
     const baseUrl = (data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli01.site').replace(/\/$/, '');
-    // The site is hash-routed (no server paths), so sitemap URLs must carry
-    // the route in the hash or they all resolve to the home page.
-    const pageUrl = (hashPath: string) => `${baseUrl}/#${hashPath}`;
+    // Real paths (path-based router + Cloudflare Pages SPA fallback).
+    const pageUrl = (path: string) => `${baseUrl}/${path}`;
     const pages = [
       { url: `${baseUrl}/`, priority: '1.0' },
       { url: pageUrl('services'), priority: '0.8' },

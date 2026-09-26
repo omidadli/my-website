@@ -59,15 +59,24 @@ Abuse limits (public actions): `unlock` — 10 failed codes / 15 min per IP+phon
 default 3) **and** 30 msgs / hour per IP (429, `code: "trial_ended"`). Access codes are
 accepted with Persian digits, lowercase, spaces or a missing dash (`m4k 7q2x` → `M4K-7Q2X`).
 
-### Crawlers
+### URLs & crawlers
+
+The site uses real paths (`/services`, `/blog/<slug>`, `/<custom-page-slug>`, `/admin`);
+the route model lives in `lib/routes.ts` and is shared by the SPA router
+(`src/utils/router.ts`), the sitemap and the edge middleware. Old hash links
+(`/#/blog/<slug>`) are upgraded client-side, so nothing shared before breaks.
 
 ```
+GET /<route>        →  index.html with per-route <title>/description/OG/canonical/robots
+                       injected at the edge (functions/_middleware.ts) from the CMS content —
+                       link previews (WhatsApp/Telegram/LinkedIn) and crawlers see the right
+                       page without running JS; unknown routes answer 404.
 GET /robots.txt     →  GLOBAL_SEO.robotsTxt from the CMS (or a default) + Sitemap line
 GET /sitemap.xml    →  home, built-in pages, custom pages, published (non-noindex) posts
 ```
 
-Both are Pages Functions (`functions/robots.txt.ts`, `functions/sitemap.xml.ts`) fed by the
-same content blob as the site, cached for 1 hour.
+Title/description precedence (global → page → post) is implemented once in
+`lib/seoDefaults.ts` and used by both the browser (`SEOHead`) and the edge.
 
 ---
 

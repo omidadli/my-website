@@ -102,7 +102,7 @@ export const buildDigest = (data: any, maxChars = 9000): string => {
 
 export interface SourceHit {
   title: string;
-  /** hash-route of the article inside the SPA, e.g. `#/blog/my-slug` */
+  /** route of the article inside the SPA, e.g. `/blog/my-slug` */
   url: string;
   /** the article text injected into the prompt (title + meta + body) */
   text: string;
@@ -148,8 +148,8 @@ export const articleDocs = (data: any): ArticleDoc[] => {
     out.push({
       id,
       title: String(p.title || ''),
-      // the SPA route: hashchange listener → BlogPostDetailPage (accepts id or slug)
-      url: `#/blog/${p.slug || id}`,
+      // the SPA route (path-based router → BlogPostDetailPage, accepts id or slug)
+      url: `/blog/${p.slug || id}`,
       metaText: [p.categoryFa, p.category, ...(Array.isArray(p.tags) ? p.tags : []), p.excerpt].filter(Boolean).join(' '),
       bodyText,
     });
@@ -209,7 +209,7 @@ export const SOURCES_RULES = `منابع مرتبط (بخش قبل) محتوای
 - اگر جواب سوال کاربر در یکی از منابع هست، دقیقاً از آن محتوا پاسخ بده؛ چیزی که در منبع نیست، اختراع نکن.
 - در «انتهای» پاسخ (بعد از متن جواب و قبل از سطر act)، ۱ تا ۲ منبعی که واقعاً از آن‌ها استفاده کردی را فقط در یک سطر جداگانه، دقیقاً به این شکل بنویس:
 منبع: [عنوانِ دقیق مقاله](آدرسِ دقیق)
-- آدرس و عنوان را کمال‌الحرف همان‌طور که در بخش منابع داده شد کپی کن (با #/blog/...). اگر دو منبع باشد: منبع: [عنوان اول](آدرس اول) | [عنوان دوم](آدرس دوم)
+- آدرس و عنوان را کمال‌الحرف همان‌طور که در بخش منابع داده شد کپی کن (با /blog/...). اگر دو منبع باشد: منبع: [عنوان اول](آدرس اول) | [عنوان دوم](آدرس دوم)
 - اگر هیچ منبعی به سوال کاربر ربط نداشت، اصلاً سطر منبع ننویس.
 - سطر منبع را با ایموجی یا تیترو اضافه نکن؛ فقط خودِ لینک.`;
 

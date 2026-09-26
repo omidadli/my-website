@@ -1,4 +1,5 @@
 import type { Env } from './api/_shared';
+import type { SeoGlobalLike, SeoPageLike, SeoPostLike } from '../lib/seoDefaults';
 
 /**
  * Shared helpers for the crawler endpoints (`/robots.txt`, `/sitemap.xml`).
@@ -13,14 +14,14 @@ import type { Env } from './api/_shared';
 
 export const DEFAULT_SITE_URL = 'https://omidadli01.site';
 
-/** Routes of the built-in pages (the SPA is hash-routed: `/#/services`). */
+/** Routes of the built-in pages (`/services`, …). */
 export const STATIC_ROUTES = ['services', 'portfolio', 'about', 'projects', 'blog', 'products', 'contact'];
 
 export interface PublicSiteContent {
-  GLOBAL_SEO?: { canonicalBaseUrl?: string; robotsTxt?: string } | null;
-  BLOG_POSTS?: Array<{ id?: string; slug?: string; status?: string; seo?: { noIndex?: boolean } }> | null;
+  GLOBAL_SEO?: SeoGlobalLike | null;
+  BLOG_POSTS?: SeoPostLike[] | null;
   CUSTOM_PAGES?: Array<{ slug?: string }> | null;
-  PAGE_SEO?: Record<string, { noIndex?: boolean } | undefined> | null;
+  PAGE_SEO?: Record<string, SeoPageLike | undefined> | null;
 }
 
 /** Loads the published content blob; `null` when nothing was saved yet (site runs on its defaults). */
@@ -56,7 +57,7 @@ const escapeXml = (s: string): string =>
 const isValidSlug = (s: unknown): s is string => typeof s === 'string' && /^[\w\u0600-\u06FF-]{1,120}$/.test(s);
 
 export const buildSitemapXml = (baseUrl: string, content: PublicSiteContent | null, lastmodIso: string | null): string => {
-  const url = (hashPath: string) => `${baseUrl}/#/${hashPath}`;
+  const url = (path: string) => `${baseUrl}/${path}`;
   const pageSeo = content?.PAGE_SEO || {};
   const entries: Array<{ loc: string; priority: string }> = [{ loc: `${baseUrl}/`, priority: '1.0' }];
 

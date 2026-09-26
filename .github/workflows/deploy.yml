@@ -91,3 +91,14 @@ jobs:
           echo "$body" | grep -q '"ok":true' || { echo "::error title=Smoke test failed::$url returned an error payload."; exit 1; }
           echo "$body" | grep -q '"data":null' && echo "::warning title=Live content is empty::The site is rendering built-in defaults. Run the 'Sync content to live site' workflow once to seed the database from content/site-content.json."
           echo "live API OK"
+
+          # Path routing + edge <head> middleware + crawler files.
+          base="${SITE_URL%/}"
+          code=$(curl -s -o /tmp/services.html -w '%{http_code}' --max-time 20 "$base/services")
+          [ "$code" = "200" ] || { echo "::error title=Smoke test failed::$base/services returned HTTP $code (SPA fallback / middleware broken)."; exit 1; }
+          grep -q 'rel="canonical" href="[^"]*/services"' /tmp/services.html || echo "::warning title=Edge head not applied::$base/services has no per-route canonical — check functions/_middleware.ts."
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$base/definitely-not-a-page-$RANDOM")
+          [ "$code" = "404" ] || echo "::warning title=Unknown routes are not 404::got HTTP $code for an unknown path."
+          curl -fsS --max-time 20 "$base/robots.txt" | grep -qi '^user-agent' || echo "::warning title=robots.txt::$base/robots.txt is not a robots file."
+          curl -fsS --max-time 20 "$base/sitemap.xml" | grep -q '<urlset' || echo "::warning title=sitemap.xml::$base/sitemap.xml is not a sitemap."
+          echo "routing + crawler files OK"

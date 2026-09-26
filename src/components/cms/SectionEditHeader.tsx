@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pencil, Plus, Trash2, Settings, Sparkles, Check, X } from 'lucide-react';
 import { useContent, getByPath } from '../../context/ContentContext';
+import { linkProps, navigate } from '../../utils/router';
 
 interface SectionEditHeaderProps {
   title: string;
@@ -95,7 +96,7 @@ export const SectionEditHeader: React.FC<SectionEditHeaderProps> = ({
         )}
 
         <a
-          href="#admin"
+          {...linkProps('/admin', () => navigate('/admin'))}
           className="px-3 py-1.5 rounded-xl bg-[color:var(--nd-accent-soft)] hover:bg-[color:var(--nd-accent)] hover:text-white text-[color:var(--nd-accent)] border border-transparent font-bold flex items-center gap-1.5 transition-all cursor-pointer"
         >
           <Settings className="w-3.5 h-3.5" />

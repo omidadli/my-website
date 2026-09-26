@@ -3,6 +3,7 @@ import { Page, Theme } from '../types';
 import { useContent } from '../context/ContentContext';
 import { EditableText } from '../components/cms/EditableText';
 import { Mail, Phone, MapPin, Send, MessageCircle, Linkedin, Instagram, Twitter, ShieldCheck } from 'lucide-react';
+import { linkProps, pathForPage } from '../utils/router';
 
 interface FooterProps {
   theme: Theme;
@@ -55,12 +56,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdminModal }) 
               <ul className="space-y-2.5">
                 {navItems.map((item) => (
                   <li key={item.id}>
-                    <button
-                      onClick={() => onNavigate(item.pageSlug as Page)}
+                    <a
+                      {...linkProps(pathForPage(item.pageSlug), () => onNavigate(item.pageSlug as Page))}
                       className="text-xs font-bold nd-muted hover:text-[color:var(--nd-accent)] transition-colors cursor-pointer"
                     >
                       {item.label}
-                    </button>
+                    </a>
                   </li>
                 ))}
               </ul>
@@ -72,12 +73,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdminModal }) 
               <ul className="space-y-2.5">
                 {services.map((s) => (
                   <li key={s.id}>
-                    <button
-                      onClick={() => onNavigate('services')}
+                    <a
+                      {...linkProps(pathForPage('services'), () => onNavigate('services'))}
                       className="text-xs font-bold nd-muted hover:text-[color:var(--nd-accent)] transition-colors cursor-pointer text-right"
                     >
                       {s.title}
-                    </button>
+                    </a>
                   </li>
                 ))}
               </ul>

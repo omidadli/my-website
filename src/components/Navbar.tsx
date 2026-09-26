@@ -3,6 +3,7 @@ import { Page, Theme } from '../types';
 import { useContent } from '../context/ContentContext';
 import { Menu, X, ArrowUpLeft, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { linkProps, pathForPage } from '../utils/router';
 
 interface NavbarProps {
   theme: Theme;
@@ -85,7 +86,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       >
         <div className="flex items-center gap-2 ps-2 pe-2 sm:ps-3 sm:pe-2.5 py-2">
           {/* Brand */}
-          <button onClick={() => go('home')} className="flex items-center gap-2.5 shrink-0 cursor-pointer me-1 sm:me-3">
+          <a {...linkProps(pathForPage('home'), () => go('home'))} aria-label="صفحه اصلی" className="flex items-center gap-2.5 shrink-0 cursor-pointer me-1 sm:me-3">
             <span className="w-9 h-9 rounded-xl nd-grad grid place-items-center text-white font-black text-sm shadow-sm">
               ع
             </span>
@@ -93,16 +94,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="block text-[13px] font-black text-[color:var(--nd-ink)]">امید عدلی</span>
               <span className="block text-[9.5px] font-bold text-[color:var(--nd-faint)]">Performance Marketing & CRO</span>
             </span>
-          </button>
+          </a>
 
           {/* Desktop links */}
           <nav className="hidden lg:flex items-center gap-0.5 mx-auto">
             {navItems.map((item) => {
               const active = currentPage === item.pageSlug;
               return (
-                <button
+                <a
                   key={item.id}
-                  onClick={() => go(item.pageSlug)}
+                  {...linkProps(pathForPage(item.pageSlug), () => go(item.pageSlug))}
+                  aria-current={active ? 'page' : undefined}
                   className={`px-3.5 xl:px-4 py-2 rounded-full text-[12px] font-extrabold transition-all cursor-pointer ${
                     active
                       ? 'bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)] shadow-sm'
@@ -110,7 +112,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }`}
                 >
                   {item.label}
-                </button>
+                </a>
               );
             })}
           </nav>
@@ -121,13 +123,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           {onToggleTheme && <ThemeSwitch theme={theme} onToggle={onToggleTheme} />}
 
           {/* CTA */}
-          <button
-            onClick={() => go('contact')}
+          <a
+            {...linkProps(pathForPage('contact'), () => go('contact'))}
             className="nd-btn nd-btn-accent hidden sm:inline-flex px-5 py-2.5 text-[12px] shrink-0"
           >
             <span>گفتگوی رایگان</span>
             <ArrowUpLeft className="w-3.5 h-3.5" />
-          </button>
+          </a>
 
           {/* Mobile toggle */}
           <button
@@ -153,21 +155,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             {navItems.map((item) => {
               const active = currentPage === item.pageSlug;
               return (
-                <button
+                <a
                   key={item.id}
-                  onClick={() => go(item.pageSlug)}
-                  className={`w-full text-right px-4 py-3 rounded-2xl text-sm font-extrabold transition-colors cursor-pointer ${
+                  {...linkProps(pathForPage(item.pageSlug), () => go(item.pageSlug))}
+                  aria-current={active ? 'page' : undefined}
+                  className={`block w-full text-right px-4 py-3 rounded-2xl text-sm font-extrabold transition-colors cursor-pointer ${
                     active ? 'bg-[color:var(--nd-ink)] text-[color:var(--nd-bg)]' : 'text-[color:var(--nd-ink-2)] hover:bg-[color:var(--nd-line)]'
                   }`}
                 >
                   {item.label}
-                </button>
+                </a>
               );
             })}
-            <button onClick={() => go('contact')} className="nd-btn nd-btn-accent w-full py-3.5 text-sm mt-2">
+            <a {...linkProps(pathForPage('contact'), () => go('contact'))} className="nd-btn nd-btn-accent w-full py-3.5 text-sm mt-2">
               <span>گفتگوی رایگان</span>
               <ArrowUpLeft className="w-4 h-4" />
-            </button>
+            </a>
           </motion.div>
         )}
       </AnimatePresence>

@@ -26,6 +26,7 @@ import { ChatWidget } from './components/ChatWidget';
 import { MascotAvatar } from './components/mascot/MascotAvatar';
 import { MascotWelcomeOverlay } from './components/mascot/MascotWelcomeOverlay';
 import { useMascotEvents } from './components/mascot/useMascotEvents';
+import { NAVIGATE_EVENT, currentRoute, navigate, pathForPage, postPath, routeToPath } from './utils/router';
 
 function MainLayout({
   theme,
@@ -34,9 +35,15 @@ function MainLayout({
   theme: Theme;
   onToggleTheme: () => void;
 }) {
-  const [currentPage, setCurrentPage] = useState<Page>('home');
+  // Start on the page the URL points at (no flash of the home page on deep links /
+  // shared post URLs). Custom CMS pages are resolved by the URL effect below once
+  // the content is available.
+  const [initialRoute] = useState(() => currentRoute([]).route);
+  const [currentPage, setCurrentPage] = useState<Page>(() => initialRoute?.page ?? 'home');
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<CaseStudy | null>(null);
-  const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(null);
+  const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(() =>
+    initialRoute?.page === 'blog' ? initialRoute.postId : null,
+  );
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
   const [isThemeTransitioning, setIsThemeTransitioning] = useState<boolean>(false);
 
@@ -68,49 +75,37 @@ function MainLayout({
     }, 480);
   }, [onToggleTheme]);
 
-  // Read initial page & admin trigger from URL hash or pathname on load
+  // URL → page state. Real paths (/services, /blog/<slug>, /<custom-slug>); legacy
+  // hash links (/#/blog/<slug>) are upgraded to the path form on arrival.
   useEffect(() => {
-    const handleHashChange = () => {
-      const rawHash = window.location.hash.replace('#', '');
-      const pathname = window.location.pathname;
-
-      if (rawHash === 'admin' || pathname === '/admin' || pathname.startsWith('/admin')) {
-        setCurrentPage('admin');
-        return;
-      }
-      
-      if (rawHash.startsWith('blog/')) {
-        const pId = rawHash.replace('blog/', '');
-        setCurrentPage('blog');
-        setSelectedBlogPostId(pId);
-        return;
-      }
-
-      const validPages: Page[] = [
-        'home', 'services', 'portfolio', 'about', 'blog', 'contact', 
-        'projects', 'products', 'admin'
-      ];
-      const customSlugs = (data.CUSTOM_PAGES || []).map((cp) => cp.slug);
-      if (customSlugs.includes(rawHash)) {
-        setCurrentPage(rawHash as Page);
-        setSelectedBlogPostId(null);
-        return;
-      }
-      if (validPages.includes(rawHash as Page)) {
-        setCurrentPage(rawHash as Page);
-        // bare 'blog' = the article LIST — always drop the selected post so
-        // clicking the "آموزش" nav while reading a post goes back to the list.
-        // (blog/<id> hashes were handled and returned above.)
-        setSelectedBlogPostId(null);
-      } else if (!rawHash) {
+    const customSlugs = (data.CUSTOM_PAGES || []).map((cp) => cp.slug);
+    const syncFromUrl = () => {
+      const { route, upgradedFromHash } = currentRoute(customSlugs);
+      if (!route) {
+        // Unknown path (the server already answered 404 for crawlers): show home.
         setCurrentPage('home');
         setSelectedBlogPostId(null);
+        return;
       }
+      if (upgradedFromHash) {
+        try { window.history.replaceState(null, '', routeToPath(route)); } catch { /* ignore */ }
+      }
+      setCurrentPage(route.page);
+      // bare /blog = the article LIST — always drop the selected post so
+      // clicking the "آموزش" nav while reading a post goes back to the list.
+      setSelectedBlogPostId(route.page === 'blog' ? route.postId : null);
     };
 
-    handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    syncFromUrl();
+    window.addEventListener('popstate', syncFromUrl);
+    window.addEventListener(NAVIGATE_EVENT, syncFromUrl);
+    // Old in-page links of the form href="#/blog/…" (e.g. in a saved chat transcript).
+    window.addEventListener('hashchange', syncFromUrl);
+    return () => {
+      window.removeEventListener('popstate', syncFromUrl);
+      window.removeEventListener(NAVIGATE_EVENT, syncFromUrl);
+      window.removeEventListener('hashchange', syncFromUrl);
+    };
   }, [data.CUSTOM_PAGES]);
 
   // Theme root attributes — drives the ND token system + legacy branches
@@ -130,14 +125,17 @@ function MainLayout({
     // Navigating to 'blog' always means the article LIST — drop the selected
     // post even when coming from a post detail page.
     setSelectedBlogPostId(null);
-    window.location.hash = page === 'home' ? '' : page;
+    navigate(pathForPage(page));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSelectBlogPost = (postId: string) => {
-    setSelectedBlogPostId(postId);
+    // Public URL prefers the slug; the detail page accepts id or slug.
+    const post = (data.BLOG_POSTS || []).find((p) => p.id === postId || (!!p.slug && p.slug === postId)) || null;
+    const key = postId ? (post ? post.slug || post.id : postId) : null;
+    setSelectedBlogPostId(key);
     setCurrentPage('blog');
-    window.location.hash = `blog/${postId}`;
+    navigate(key ? postPath(post || { id: key }) : '/blog');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -145,7 +143,7 @@ function MainLayout({
     setSelectedCaseStudy(study);
     if (study && currentPage !== 'portfolio') {
       setCurrentPage('portfolio');
-      window.location.hash = 'portfolio';
+      navigate('/portfolio');
     }
   };
 
