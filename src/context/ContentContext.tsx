@@ -15,6 +15,8 @@ import {
   BlogComment
 } from '../types';
 import { defaultGlobalSeo as sharedGlobalSeoDefaults } from '../../lib/seoDefaults';
+import { mergeContentDefaults } from '../utils/contentDefaults';
+import { publicContentView } from '../../lib/contentVisibility';
 
 const LOCAL_STORAGE_KEY = 'OMID_ADLI_SITE_CONTENT_V3';
 const LOCAL_STORAGE_PIN_KEY = 'OMID_ADLI_ADMIN_PIN_CODE';
@@ -312,8 +314,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
         // Restore SERVICES, STATS, TIMELINE, HOW_I_WORK_STEPS to default initialData
         return { 
-          ...defaultContentState, 
-          ...parsed,
+          ...mergeContentDefaults(defaultContentState, parsed),
           SERVICES: initialData.SERVICES,
           STATS: initialData.STATS,
           TIMELINE: initialData.TIMELINE,
@@ -367,18 +368,20 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const lastSyncedJson = useRef<string | null>(null);
 
   /** Merge a cloud payload over the defaults so partial/older payloads can't blank out fields. */
-  const mergeRemote = (r: any): ContentState => ({
-    ...defaultContentState,
-    ...r,
-    PERSONAL_INFO: { ...defaultContentState.PERSONAL_INFO, ...(r.PERSONAL_INFO || {}) },
-    GLOBAL_SEO: { ...defaultGlobalSeo, ...(r.GLOBAL_SEO || {}) },
-    AI_TOOLS_CONFIG: {
-      ...initialData.AI_TOOLS_CONFIG,
-      ...(r.AI_TOOLS_CONFIG || {}),
-      channels: { ...initialData.AI_TOOLS_CONFIG.channels, ...(r.AI_TOOLS_CONFIG?.channels || {}) },
-      tools: { ...initialData.AI_TOOLS_CONFIG.tools, ...(r.AI_TOOLS_CONFIG?.tools || {}) },
-    },
-  });
+  const mergeRemote = (r: any): ContentState => {
+    const merged = mergeContentDefaults(defaultContentState, r);
+    return {
+      ...merged,
+      PERSONAL_INFO: { ...defaultContentState.PERSONAL_INFO, ...merged.PERSONAL_INFO },
+      GLOBAL_SEO: { ...defaultGlobalSeo, ...merged.GLOBAL_SEO },
+      AI_TOOLS_CONFIG: {
+        ...initialData.AI_TOOLS_CONFIG,
+        ...merged.AI_TOOLS_CONFIG,
+        channels: { ...initialData.AI_TOOLS_CONFIG.channels, ...merged.AI_TOOLS_CONFIG.channels },
+        tools: { ...initialData.AI_TOOLS_CONFIG.tools, ...merged.AI_TOOLS_CONFIG.tools },
+      },
+    };
+  };
 
   /** Pull the latest cloud content into this tab. Returns true when the cloud had content. */
   const adoptRemote = async (): Promise<boolean> => {
@@ -411,8 +414,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       } else if (!cancelled) {
         remoteUpdatedAt.current = remote?.updatedAt || '';
       }
-      if (!cancelled && api.getToken()) {
-        const ok = await api.verify();
+      if (!cancelled) {
+        const ok = api.getToken() ? await api.verify() : false;
         if (!cancelled) setIsAdmin(ok);
       }
       cloudReady.current = true;
@@ -1002,18 +1005,12 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setActiveEditModal(null);
   };
 
-  // Visitors never see drafts — admin sees everything.
-  const publicData = useMemo(() => {
-    if (isAdmin) return data;
-    const noDrafts = <T extends { status?: string }>(arr?: T[]): T[] => (arr || []).filter((i) => i?.status !== 'draft');
-    return {
-      ...data,
-      BLOG_POSTS: noDrafts(data.BLOG_POSTS),
-      SERVICES: noDrafts(data.SERVICES),
-      PRODUCTS: noDrafts(data.PRODUCTS),
-      CASE_STUDIES: noDrafts(data.CASE_STUDIES),
-    };
-  }, [data, isAdmin]);
+  // Apply the same privacy boundary on the client too (e.g. immediately after
+  // an admin signs out without a page reload).
+  const publicData = useMemo(
+    () => isAdmin ? data : publicContentView(data) as ContentState,
+    [data, isAdmin],
+  );
 
   return (
     <ContentContext.Provider

@@ -30,6 +30,7 @@ export const CustomCursor: React.FC = () => {
         setIsVisible(true);
         setIsHovered(Boolean(t?.closest('a, button, select, [role="button"], [data-hover]')));
       }
+      if (!raf) raf = requestAnimationFrame(render);
     };
     const onLeave = () => setIsVisible(false);
     const onEnter = () => setIsVisible(true);
@@ -43,13 +44,13 @@ export const CustomCursor: React.FC = () => {
       if (ringRef.current) {
         ringRef.current.style.transform = `translate3d(${ringPos.current.x}px, ${ringPos.current.y}px, 0) translate(-50%, -50%)`;
       }
-      raf = requestAnimationFrame(render);
+      const distance = Math.abs(targetPos.current.x - ringPos.current.x) + Math.abs(targetPos.current.y - ringPos.current.y);
+      raf = distance > 0.2 ? requestAnimationFrame(render) : 0;
     };
 
     window.addEventListener('mousemove', onMove, { passive: true });
     document.addEventListener('mouseleave', onLeave);
     document.addEventListener('mouseenter', onEnter);
-    raf = requestAnimationFrame(render);
 
     return () => {
       window.removeEventListener('mousemove', onMove);

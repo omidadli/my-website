@@ -1,4 +1,5 @@
 import { Env, requireAuth, json, unauthorized, MAX_CONTENT_BYTES, CONTENT_TOO_LARGE_MESSAGE, ensureCoreTables, ensureCoreTablesSafe } from './_shared';
+import { publicContentView } from '../../lib/contentVisibility';
 
 /** Cloud comments (D1 `comments` table) are the source of truth for visitor submissions. */
 const fetchCloudComments = async (env: Env, forAdmin: boolean) => {
@@ -43,9 +44,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const data = JSON.parse(row.data);
     // Merge cloud comments (canonical source) into the content payload.
     const cloudComments = await fetchCloudComments(env, !!admin);
-    const localComments = (data.BLOG_COMMENTS || []).filter((c: any) => !String(c.id || '').startsWith('c-'));
-    data.BLOG_COMMENTS = [...cloudComments, ...localComments];
-    return new Response(JSON.stringify({ ok: true, data, updatedAt: row.updated_at }), {
+    const localComments = (Array.isArray(data.BLOG_COMMENTS) ? data.BLOG_COMMENTS : [])
+      .filter((c: any) => c && !String(c.id || '').startsWith('c-'));
+    const combined = { ...data, BLOG_COMMENTS: [...cloudComments, ...localComments] };
+    const visibleData = admin ? combined : publicContentView(combined);
+    return new Response(JSON.stringify({ ok: true, data: visibleData, updatedAt: row.updated_at }), {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         // Admin responses contain pending comments + emails → never cache them.

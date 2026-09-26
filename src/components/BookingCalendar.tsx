@@ -6,6 +6,7 @@ import { inputCls } from './nd/Kit';
 import { usePreservedState } from '../utils/statePreserver';
 import { useContent } from '../context/ContentContext';
 import { whatsappFallbackUrl } from '../utils/leadFallback';
+import { localDateKey } from '../utils/date';
 
 interface BookingCalendarProps {
   theme: Theme;
@@ -39,7 +40,8 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
       d.setDate(d.getDate() + i);
       const day = fmtWeekday.format(d);
       const dm = fmtDayMonth.format(d);
-      out.push({ iso: d.toISOString().slice(0, 10), day, date: dm, full: `${dm} - ${day}` });
+      // Build the date in local time; UTC conversion can shift the selected day.
+      out.push({ iso: localDateKey(d), day, date: dm, full: `${dm} - ${day}` });
     }
     return out;
   }, []);
@@ -94,7 +96,7 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
         <div>
           <h3 className={`nd-h2 text-xl ${isDark ? 'text-white' : ''}`}>رزرو جلسه‌ی مشاوره‌ی آنلاین</h3>
           <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'nd-muted'}`}>
-            یک زمان مناسب انتخاب کنید؛ لینک جلسه‌ی Google Meet برایتان ایمیل می‌شود.
+            یک زمان پیشنهادی انتخاب کنید؛ پس از بررسی درخواست، برای هماهنگی نهایی و ارسال لینک جلسه با شما تماس می‌گیریم.
           </p>
         </div>
       </div>
@@ -249,7 +251,7 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
           </div>
           <h4 className={`nd-h2 text-2xl ${isDark ? 'text-white' : ''}`}>رزرو شما ثبت شد!</h4>
           <p className={`text-xs max-w-md mx-auto leading-relaxed ${isDark ? 'text-slate-400' : 'nd-muted'}`}>
-            درخواست جلسه‌ی <strong className="text-[color:var(--nd-accent)]">{selectedDate.full} - ساعت {selectedTime}</strong> ثبت شد؛ لینک Google Meet به ایمیل {bookingForm.email} ارسال می‌شود.
+            درخواست جلسه‌ی <strong className="text-[color:var(--nd-accent)]">{selectedDate.full} - ساعت {selectedTime}</strong> ثبت شد. برای تأیید زمان و فرستادن لینک جلسه، با ایمیل {bookingForm.email} هماهنگ می‌کنیم.
           </p>
           <div className="pt-4">
             <button

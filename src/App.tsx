@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Theme, Page, CaseStudy } from './types';
 import { ContentProvider, useContent } from './context/ContentContext';
@@ -11,22 +11,23 @@ import { AdminFloatingBar } from './components/cms/AdminFloatingBar';
 import { AdminLoginModal } from './components/cms/AdminLoginModal';
 import { ScrollProgress, Grain } from './components/motion/Cinematic';
 import { HomePage } from './pages/HomePage';
-import { ServicesPage } from './pages/ServicesPage';
-import { PortfolioPage } from './pages/PortfolioPage';
-import { AboutPage } from './pages/AboutPage';
-import { BlogPage } from './pages/BlogPage';
-import { BlogPostDetailPage } from './pages/BlogPostDetailPage';
-import { ContactPage } from './pages/ContactPage';
-import { ProjectsPage } from './pages/ProjectsPage';
-import { ProductsPage } from './pages/ProductsPage';
-import { AdminPage } from './pages/AdminPage';
-import { CustomPageView } from './pages/CustomPageView';
+// Keep the first paint lean: only the active route's page chunk is loaded.
+const ServicesPage = lazy(() => import('./pages/ServicesPage').then((m) => ({ default: m.ServicesPage })));
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage').then((m) => ({ default: m.PortfolioPage })));
+const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const BlogPage = lazy(() => import('./pages/BlogPage').then((m) => ({ default: m.BlogPage })));
+const BlogPostDetailPage = lazy(() => import('./pages/BlogPostDetailPage').then((m) => ({ default: m.BlogPostDetailPage })));
+const ContactPage = lazy(() => import('./pages/ContactPage').then((m) => ({ default: m.ContactPage })));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((m) => ({ default: m.ProjectsPage })));
+const ProductsPage = lazy(() => import('./pages/ProductsPage').then((m) => ({ default: m.ProductsPage })));
+const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const CustomPageView = lazy(() => import('./pages/CustomPageView').then((m) => ({ default: m.CustomPageView })));
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SEOHead } from './components/SEOHead';
-import { ChatWidget } from './components/ChatWidget';
-import { MascotAvatar } from './components/mascot/MascotAvatar';
-import { MascotWelcomeOverlay } from './components/mascot/MascotWelcomeOverlay';
+const ChatWidget = lazy(() => import('./components/ChatWidget').then((m) => ({ default: m.ChatWidget })));
+const MascotAvatar = lazy(() => import('./components/mascot/MascotAvatar').then((m) => ({ default: m.MascotAvatar })));
+const MascotWelcomeOverlay = lazy(() => import('./components/mascot/MascotWelcomeOverlay').then((m) => ({ default: m.MascotWelcomeOverlay })));
 import { useMascotEvents } from './components/mascot/useMascotEvents';
 import { NAVIGATE_EVENT, currentRoute, navigate, pathForPage, postPath, routeToPath } from './utils/router';
 
@@ -228,12 +229,13 @@ function MainLayout({
         <AnimatePresence mode="wait">
           <motion.div
             key={showNotFound ? '__not_found__' : currentPage}
-            initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
           >
             <ErrorBoundary name="page" resetKeys={[currentPage, selectedBlogPostId, showNotFound]}>
+              <Suspense fallback={<div role="status" aria-live="polite" className="mx-auto my-20 flex min-h-40 items-center justify-center text-sm text-[color:var(--nd-muted)]">در حال بارگذاری صفحه…</div>}>
             {showNotFound && (
               <NotFoundPage theme={theme} onNavigate={handleNavigate} onSelectPost={handleSelectBlogPost} />
             )}
@@ -321,6 +323,7 @@ function MainLayout({
                   onNavigate={handleNavigate}
                 />
               )}
+              </Suspense>
             </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
@@ -330,21 +333,21 @@ function MainLayout({
       <ErrorBoundary name="AdminFloatingBar" fallback={null}><AdminFloatingBar /></ErrorBoundary>
       {currentPage !== 'admin' && (
         <ErrorBoundary name="ChatWidget" fallback={null}>
-          <ChatWidget theme={theme} />
+          <Suspense fallback={null}><ChatWidget theme={theme} /></Suspense>
         </ErrorBoundary>
       )}
 
       {/* Mascot assistant — avatar reacts to site events, clicks open the chat */}
       {currentPage !== 'admin' && (
         <ErrorBoundary name="MascotAvatar" fallback={null}>
-          <MascotAvatar />
+          <Suspense fallback={null}><MascotAvatar /></Suspense>
         </ErrorBoundary>
       )}
 
       {/* Cinematic Welcome & Waiting Experience */}
       {currentPage !== 'admin' && (
         <ErrorBoundary name="MascotWelcomeOverlay" fallback={null}>
-          <MascotWelcomeOverlay theme={theme} />
+          <Suspense fallback={null}><MascotWelcomeOverlay theme={theme} /></Suspense>
         </ErrorBoundary>
       )}
 

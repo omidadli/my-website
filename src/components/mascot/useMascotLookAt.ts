@@ -74,6 +74,9 @@ export function useMascotLookAt(
     if (typeof window === 'undefined') return;
     if (optsRef.current.disabled) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // Pointer tracking continuously animates at display refresh rate; touch users
+    // cannot benefit from cursor-follow, so skip the loop and save mobile CPU.
+    if (window.matchMedia('(pointer: coarse)').matches) return;
 
     let rafId = 0;
     // Head / body orientation

@@ -5,6 +5,8 @@ import { inputCls } from '../components/nd/Kit';
 import { ChevronLeft, ArrowRight, Sparkles, MessageSquare, CheckCircle2, ShieldCheck, Link2, Clock, Eye, CalendarDays } from 'lucide-react';
 import { motion } from 'motion/react';
 import { linkProps, postPath } from '../utils/router';
+import { safeRecordArray } from '../utils/contentDefaults';
+import { imageFallback } from '../utils/imageFallback';
 
 interface BlogPostDetailPageProps {
   theme: Theme;
@@ -16,8 +18,19 @@ interface BlogPostDetailPageProps {
 export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, postId, onNavigate, onSelectPost }) => {
   const isDark = theme === 'dark';
   const { data, addBlogComment } = useContent();
-  const blogPosts = data.BLOG_POSTS || [];
+  const blogPosts = safeRecordArray<NonNullable<typeof data.BLOG_POSTS[number]>>(data.BLOG_POSTS)
+    .filter((item) => typeof item.id === 'string' && item.id.length > 0);
   const post = blogPosts.find((p) => p.id === postId || (!!p.slug && p.slug === postId));
+  const postToc = Array.isArray(post?.tableOfContents)
+    ? post.tableOfContents.filter((item) => item && typeof item === 'object' && typeof item.title === 'string' && typeof item.id === 'string')
+    : [];
+  const postSections = Array.isArray(post?.sections)
+    ? post.sections.filter((section) => section && typeof section === 'object').map((section) => ({
+        ...section,
+        content: typeof section.content === 'string' ? section.content : '',
+        keyPoints: Array.isArray(section.keyPoints) ? section.keyPoints.filter((point): point is string => typeof point === 'string') : [],
+      }))
+    : [];
 
   const [commentName, setCommentName] = useState('');
   const [commentEmail, setCommentEmail] = useState('');
@@ -28,7 +41,8 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
   const [copied, setCopied] = useState(false);
 
   const relatedPosts = blogPosts.filter((p) => p.id !== post?.id).slice(0, 3);
-  const postComments = (data.BLOG_COMMENTS || []).filter((c) => c.postId === post?.id && c.isApproved);
+  const postComments = safeRecordArray<NonNullable<typeof data.BLOG_COMMENTS[number]>>(data.BLOG_COMMENTS)
+    .filter((comment) => comment.postId === post?.id && comment.isApproved);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).catch(() => {});
@@ -117,19 +131,19 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
         </div>
         {post.coverImage && (
           <div className={`rounded-[var(--nd-radius-card)] overflow-hidden border shadow-md aspect-[21/9] ${isDark ? 'border-white/12' : 'border-white/70'}`}>
-            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={imageFallback()} />
           </div>
         )}
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start max-w-6xl mx-auto">
         {/* TOC */}
-        {post.tableOfContents && post.tableOfContents.length > 0 && (
+        {postToc.length > 0 && (
           <aside className="lg:col-span-4 xl:col-span-3 lg:sticky lg:top-28 space-y-3">
             <div className="nd-card p-5 space-y-3">
               <h4 className={`nd-h2 text-xs ${isDark ? 'text-white' : ''}`}>در این مقاله</h4>
               <ul className="space-y-2">
-                {post.tableOfContents.map((t) => (
+                {postToc.map((t) => (
                   <li key={t.id}>
                     <button
                       onClick={() => document.getElementById(t.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -147,11 +161,11 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
         )}
 
         {/* Article body */}
-        <article className={`${post.tableOfContents?.length ? 'lg:col-span-8 xl:col-span-9' : 'lg:col-span-12'} space-y-10`}>
+        <article className={`${postToc.length ? 'lg:col-span-8 xl:col-span-9' : 'lg:col-span-12'} space-y-10`}>
           <p className={`${isDark ? 'text-slate-300' : 'text-[color:var(--nd-ink-2)]'} text-sm sm:text-base leading-loose`}>{post.excerpt}</p>
-          {post.sections && post.sections.length > 0 && (
+          {postSections.length > 0 && (
             <div className="space-y-10">
-              {post.sections.map((sec, sIdx) => (
+              {postSections.map((sec, sIdx) => (
                 <section key={sec.id || sIdx} id={sec.id} className="space-y-4 scroll-mt-28">
                   {sec.heading && (
                     <h2 className={`nd-h2 text-lg sm:text-2xl leading-snug flex items-center gap-3 ${isDark ? 'text-white' : ''}`}>
@@ -189,6 +203,7 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
               alt={post.author}
               className="w-20 h-20 rounded-2xl object-cover shadow-sm shrink-0"
               referrerPolicy="no-referrer"
+              onError={imageFallback('/avatar-fallback.svg')}
             />
             <div className="space-y-2 flex-1">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -301,7 +316,7 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
                 className="nd-card nd-card-hover overflow-hidden text-right flex flex-col group cursor-pointer"
               >
                 <div className={`aspect-[16/10] overflow-hidden border-b ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
-                  <img src={rel.coverImage} alt={rel.title} className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-700" referrerPolicy="no-referrer" />
+                  <img src={rel.coverImage} alt={rel.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-700" referrerPolicy="no-referrer" onError={imageFallback()} />
                 </div>
                 <div className="p-5 space-y-2.5 grow flex flex-col">
                   <span className="nd-chip w-fit">{rel.categoryFa}</span>

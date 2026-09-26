@@ -1,4 +1,4 @@
-import { Env, createToken, verifyToken, getBearer, safeEqual, json, unauthorized, getClientIp, ensureCoreTablesSafe } from './_shared';
+import { Env, createToken, requireAuth, safeEqual, json, unauthorized, getClientIp, ensureCoreTablesSafe } from './_shared';
 
 const WINDOW_MINUTES = 15;
 const MAX_FAILURES = 8;
@@ -58,7 +58,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  const user = await verifyToken(getBearer(request), env.AUTH_SECRET || '');
+  const user = await requireAuth(request, env);
   if (!user) return unauthorized('جلسه معتبر نیست یا منقضی شده است.');
   return json({ ok: true, username: user });
 };

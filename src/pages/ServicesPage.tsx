@@ -8,6 +8,7 @@ import { PageHero, Head, CtaPanel } from '../components/nd/Kit';
 import { FAQSection } from '../components/FAQSection';
 import { CheckCircle2, ArrowUpLeft, Sparkles, Target, Rocket, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { safeRecordArray } from '../utils/contentDefaults';
 
 interface ServicesPageProps {
   theme: Theme;
@@ -19,8 +20,9 @@ const GLOWS = ['blue', 'cyan', 'purple', 'emerald', 'gold', 'magenta'] as const;
 export const ServicesPage: React.FC<ServicesPageProps> = ({ theme, onNavigate }) => {
   const isDark = theme === 'dark';
   const { data } = useContent();
-  const servicesList: ServiceItem[] = data.SERVICES || [];
-  const howIWorkSteps = data.HOW_I_WORK_STEPS || [];
+  const servicesList: ServiceItem[] = safeRecordArray<ServiceItem>(data.SERVICES)
+    .filter((service) => typeof service.id === 'string');
+  const howIWorkSteps = safeRecordArray<any>(data.HOW_I_WORK_STEPS);
   const [activeTab, setActiveTab] = usePreservedState<'start' | 'sell' | 'grow'>('services_active_tab', 'start');
 
   const tabs = [
@@ -97,21 +99,21 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ theme, onNavigate })
                   <h2 className={`nd-h2 text-xl sm:text-2xl ${isDark ? 'text-white' : ''}`}>{service.title}</h2>
                   <p className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-sm leading-relaxed`}>{service.fullDesc}</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {service.tags.map((tag) => (
+                    {(Array.isArray(service.tags) ? service.tags : []).map((tag) => (
                       <span key={tag} className="nd-chip dir-ltr">#{tag}</span>
                     ))}
                   </div>
                 </div>
                 <div className={`space-y-2.5 pt-4 border-t ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
                   <span className={`text-[11px] font-extrabold ${isDark ? 'text-slate-400' : 'nd-muted'}`}>دستاوردهای کلیدی این سرویس:</span>
-                  {service.features.map((feat, fIdx) => (
+                  {(Array.isArray(service.features) ? service.features : []).map((feat, fIdx) => (
                     <div key={fIdx} className="flex items-center gap-2.5 text-xs">
                       <CheckCircle2 className="w-4 h-4 text-[color:var(--nd-success)] shrink-0" />
                       <span className={isDark ? 'text-slate-200' : 'text-[color:var(--nd-ink-2)]'}>{feat}</span>
                     </div>
                   ))}
                 </div>
-                {service.packages && service.packages.length > 0 && (
+                {Array.isArray(service.packages) && service.packages.length > 0 && (
                   <div className={`space-y-2.5 pt-4 border-t ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
                     <span className={`text-[11px] font-extrabold ${isDark ? 'text-amber-300' : 'text-[#b45309]'}`}>تعرفه و پکیج‌های قیمت‌گذاری:</span>
                     {service.packages.map((pkg, pIdx) => (

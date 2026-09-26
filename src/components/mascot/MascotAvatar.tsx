@@ -70,21 +70,26 @@ function LayerView({
   onReady,
   onEnded,
   onVideoEl,
+  staticMode,
 }: {
   layer: Layer;
   visible: boolean;
   onReady: () => void;
   onEnded: () => void;
   onVideoEl: (el: HTMLVideoElement | null) => void;
+  staticMode: boolean;
 }) {
   const style: React.CSSProperties = {
     opacity: visible ? 1 : 0,
     transition: `opacity ${FADE_MS}ms ease`,
   };
-  if (layer.step.img) {
+  if (layer.step.img || staticMode) {
+    const imageName = layer.step.img || layer.step.poster;
+    const imageSrc = imageName && META[imageName]?.src;
+    if (!imageSrc) return null;
     return (
       <img
-        src={META[layer.step.img].src}
+        src={imageSrc}
         alt=""
         draggable={false}
         decoding="async"
@@ -102,7 +107,7 @@ function LayerView({
       autoPlay
       muted
       playsInline
-      preload="auto"
+      preload="metadata"
       onCanPlay={onReady}
       onEnded={onEnded}
       className="mascot-layer mascot-layer--video"
@@ -234,6 +239,22 @@ export function MascotFigure({
   corner?: boolean;
   lookAtOptions?: Parameters<typeof useMascotLookAt>[3];
 }) {
+  const [staticMode, setStaticMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  });
+  useEffect(() => {
+    const coarse = window.matchMedia('(pointer: coarse)');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setStaticMode(coarse.matches || reduced.matches);
+    coarse.addEventListener?.('change', update);
+    reduced.addEventListener?.('change', update);
+    return () => {
+      coarse.removeEventListener?.('change', update);
+      reduced.removeEventListener?.('change', update);
+    };
+  }, []);
+
   const rootRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const screenRef = useRef<HTMLDivElement | null>(null);
@@ -424,6 +445,7 @@ export function MascotFigure({
             onReady={() => undefined}
             onEnded={() => handleEnded(front.key)}
             onVideoEl={attachVideo(front.key)}
+            staticMode={staticMode}
           />
           {back && (
             <LayerView
@@ -433,14 +455,12 @@ export function MascotFigure({
               onReady={() => handleReady(back.key)}
               onEnded={() => handleEnded(back.key)}
               onVideoEl={attachVideo(back.key)}
+              staticMode={staticMode}
             />
           )}
 
-          {/* Periodic natural blinking animation */}
-          <MascotEyelids
-            scene={scene}
-            activeStep={backIn && back ? back.step : front.step}
-          />
+          {/* Skip the blink timer along with video motion on touch/reduced-motion devices. */}
+          {!staticMode && <MascotEyelids scene={scene} activeStep={backIn && back ? back.step : front.step} />}
         </div>
       </div>
     </div>

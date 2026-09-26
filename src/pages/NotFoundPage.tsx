@@ -3,6 +3,7 @@ import { Theme, Page } from '../types';
 import { useContent } from '../context/ContentContext';
 import { linkProps, pathForPage, postPath } from '../utils/router';
 import { Home, BookOpen, MessageCircle, Compass } from 'lucide-react';
+import { safeRecordArray } from '../utils/contentDefaults';
 
 interface NotFoundPageProps {
   theme: Theme;
@@ -18,7 +19,9 @@ interface NotFoundPageProps {
 export const NotFoundPage: React.FC<NotFoundPageProps> = ({ theme, onNavigate, onSelectPost }) => {
   const isDark = theme === 'dark';
   const { data } = useContent();
-  const posts = (data.BLOG_POSTS || []).filter((p) => p.status !== 'draft').slice(0, 3);
+  const posts = safeRecordArray<NonNullable<typeof data.BLOG_POSTS[number]>>(data.BLOG_POSTS)
+    .filter((p) => typeof p.id === 'string' && typeof p.title === 'string' && p.status !== 'draft')
+    .slice(0, 3);
   const attempted = typeof window !== 'undefined' ? window.location.pathname : '';
 
   const quick: Array<{ page: Page; label: string; icon: React.ElementType }> = [

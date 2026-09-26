@@ -4,6 +4,7 @@ import { useContent } from '../context/ContentContext';
 import { Menu, X, ArrowUpLeft, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { linkProps, pathForPage } from '../utils/router';
+import { safeRecordArray } from '../utils/contentDefaults';
 
 interface NavbarProps {
   theme: Theme;
@@ -58,8 +59,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
-  const rawNavItems = data.NAVIGATION_MENU || [];
-  const navItems = [...rawNavItems].sort((a, b) => a.order - b.order).filter((i) => !i.isHidden);
+  const navItems = safeRecordArray<NonNullable<typeof data.NAVIGATION_MENU[number]>>(data.NAVIGATION_MENU)
+    .filter((item) => typeof item.pageSlug === 'string' && typeof item.label === 'string')
+    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+    .filter((item) => !item.isHidden);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);

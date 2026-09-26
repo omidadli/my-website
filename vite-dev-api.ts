@@ -26,6 +26,7 @@ import {
   type AiSettings,
 } from './lib/tools';
 import { getPlan, resolveFreeTrial } from './lib/toolPlans';
+import { publicContentView } from './lib/contentVisibility';
 import {
   PERSONAL_INFO,
   SERVICES,
@@ -57,6 +58,7 @@ const seedData = {
 const CONTENT_FILE = path.resolve(process.cwd(), '.dev-content.json');
 const COMMENTS_FILE = path.resolve(process.cwd(), '.dev-comments.json');
 const MEDIA_FILE = path.resolve(process.cwd(), '.dev-media.json');
+const MEDIA_FILES_FILE = path.resolve(process.cwd(), '.dev-media-files.json');
 const LEADS_FILE = path.resolve(process.cwd(), '.dev-leads.json');
 const TOOL_ACCESS_FILE = path.resolve(process.cwd(), '.dev-tool-access.json');
 const TOOL_MSGS_FILE = path.resolve(process.cwd(), '.dev-tool-msgs.json');
@@ -64,6 +66,27 @@ const TOOL_SETTINGS_FILE = path.resolve(process.cwd(), '.dev-tool-settings.json'
 const TOOL_TRIALS_FILE = path.resolve(process.cwd(), '.dev-tool-trials.json');
 // Dev-only signing secret for AI-tool access tokens (prod uses env.AUTH_SECRET).
 const DEV_TOOL_SECRET = process.env.AUTH_SECRET || 'dev-tool-secret-v1';
+const devAdminTokens = new Map<string, number>();
+
+const isDevAdminRequest = (req: import('http').IncomingMessage): boolean => {
+  const authorization = String(req.headers['authorization'] || '');
+  if (!authorization.startsWith('Bearer ')) return false;
+  const token = authorization.slice(7).trim();
+  const expiresAt = devAdminTokens.get(token);
+  if (!expiresAt) return false;
+  if (expiresAt <= Date.now()) {
+    devAdminTokens.delete(token);
+    return false;
+  }
+  return true;
+};
+
+const issueDevAdminToken = (): { token: string; expiresAt: number } => {
+  const expiresAt = Date.now() + 7 * 86400_000;
+  const token = `dev-${crypto.randomUUID()}`;
+  devAdminTokens.set(token, expiresAt);
+  return { token, expiresAt };
+};
 
 const safeReadJson = <T>(file: string, fallback: T): T => {
   try {
@@ -137,21 +160,40 @@ export function cmsDevApiPlugin(): Plugin {
           res.end(JSON.stringify(body));
         };
 
-        const readBody = async (): Promise<any> => {
-          return new Promise((resolve) => {
-            let data = '';
-            req.on('data', (chunk) => {
-              data += chunk;
-            });
-            req.on('end', () => {
-              try {
-                resolve(data ? JSON.parse(data) : {});
-              } catch {
-                resolve({});
-              }
-            });
-            req.on('error', () => resolve({}));
+        const readRawBody = async (): Promise<Buffer> => new Promise((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          let size = 0;
+          req.on('data', (chunk: Buffer | string) => {
+            const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            size += bytes.length;
+            if (size > 12 * 1024 * 1024) {
+              reject(new Error('Request body too large'));
+              req.destroy();
+              return;
+            }
+            chunks.push(bytes);
           });
+          req.on('end', () => resolve(Buffer.concat(chunks)));
+          req.on('error', reject);
+        });
+
+        const readBody = async (): Promise<any> => {
+          try {
+            const data = await readRawBody();
+            return data.length ? JSON.parse(data.toString('utf8')) : {};
+          } catch {
+            return {};
+          }
+        };
+
+        const readFormData = async (): Promise<FormData> => {
+          const contentType = req.headers['content-type'];
+          if (!contentType || !String(contentType).toLowerCase().startsWith('multipart/form-data')) {
+            throw new Error('Expected multipart form data');
+          }
+          const body = await readRawBody();
+          const headers = new Headers({ 'Content-Type': String(contentType) });
+          return new Request(url.href, { method: 'POST', headers, body }).formData();
         };
 
         try {
@@ -159,9 +201,19 @@ export function cmsDevApiPlugin(): Plugin {
           if (pathname === '/api/content') {
             if (method === 'GET') {
               const saved = safeReadJson<{ data: any; updatedAt: string } | null>(CONTENT_FILE, null);
-              return sendJson({ ok: true, data: saved?.data || null, updatedAt: saved?.updatedAt || null });
+              const isAdmin = isDevAdminRequest(req);
+              const raw = saved?.data;
+              const localComments = safeReadJson<any[]>(COMMENTS_FILE, []);
+              const merged = raw && typeof raw === 'object' && !Array.isArray(raw)
+                ? { ...raw, BLOG_COMMENTS: [
+                    ...(Array.isArray(raw.BLOG_COMMENTS) ? raw.BLOG_COMMENTS.filter((c: any) => c && !String(c.id || '').startsWith('c-')) : []),
+                    ...localComments,
+                  ] }
+                : raw;
+              return sendJson({ ok: true, data: isAdmin ? merged : publicContentView(merged), updatedAt: saved?.updatedAt || null });
             }
             if (method === 'PUT') {
+              if (!isDevAdminRequest(req)) return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
               const body = await readBody();
               if (typeof body.baseUpdatedAt === 'string') {
                 // Optimistic concurrency (mirrors functions/api/content.ts).
@@ -172,7 +224,12 @@ export function cmsDevApiPlugin(): Plugin {
                 }
               }
               const now = new Date().toISOString();
-              const payload = { data: body.data || null, updatedAt: now };
+              const nextData = body.data && typeof body.data === 'object'
+                ? { ...body.data, BLOG_COMMENTS: Array.isArray(body.data.BLOG_COMMENTS)
+                    ? body.data.BLOG_COMMENTS.filter((comment: any) => !String(comment?.id || '').startsWith('c-'))
+                    : [] }
+                : null;
+              const payload = { data: nextData, updatedAt: now };
               safeWriteJson(CONTENT_FILE, payload);
               return sendJson({ ok: true, updatedAt: now });
             }
@@ -185,27 +242,17 @@ export function cmsDevApiPlugin(): Plugin {
               const username = String(body.username || '').trim();
               const password = String(body.password || '');
               const expectedUser = process.env.ADMIN_USERNAME || 'admin';
-              const expectedPass = process.env.ADMIN_PASSWORD || '1234';
-
-              // In local dev, accept standard credentials or default 'admin'/'1234'
-              const isValid =
-                (username === expectedUser && password === expectedPass) ||
-                (username === 'admin' && (password === '1234' || password === 'admin'));
-
-              if (isValid || (!process.env.ADMIN_PASSWORD && password.length >= 4)) {
-                return sendJson({
-                  ok: true,
-                  token: `dev-token-${Date.now()}`,
-                  expiresAt: Date.now() + 7 * 86400 * 1000,
-                });
+              const expectedPass = process.env.ADMIN_PASSWORD;
+              if (!expectedPass) {
+                return sendJson({ ok: false, error: 'ورود ادمین در محیط توسعه غیرفعال است؛ ADMIN_PASSWORD را در محیط امن تنظیم کنید.' }, 503);
               }
-              return sendJson({ ok: false, error: 'نام کاربری یا رمز عبور اشتباه است (پیش‌فرض توسعه: admin / 1234).' }, 401);
+              if (username === expectedUser && password === expectedPass) {
+                return sendJson({ ok: true, ...issueDevAdminToken() });
+              }
+              return sendJson({ ok: false, error: 'نام کاربری یا رمز عبور اشتباه است.' }, 401);
             }
             if (method === 'GET') {
-              const auth = req.headers['authorization'] || '';
-              if (auth.startsWith('Bearer ')) {
-                return sendJson({ ok: true, username: 'admin' });
-              }
+              if (isDevAdminRequest(req)) return sendJson({ ok: true, username: 'admin' });
               return sendJson({ ok: false, error: 'جلسه نامعتبر است.' }, 401);
             }
           }
@@ -345,7 +392,7 @@ export function cmsDevApiPlugin(): Plugin {
 
           // --- 3b. /api/tools --- (dev mirror of functions/api/tools.ts)
           if (pathname === '/api/tools') {
-            const isAdmin = String(req.headers['authorization'] || '').startsWith('Bearer ');
+            const isAdmin = isDevAdminRequest(req);
             type DevGrant = { id: string; phone: string; productId: string; code: string; status: string; maxDevices: number; messageQuota?: number; devices: string[]; note: string; createdAt: string; expiresAt: string };
             const grants = safeReadJson<DevGrant[]>(TOOL_ACCESS_FILE, []);
             type DevTrial = { deviceId: string; productId: string; count: number };
@@ -620,8 +667,7 @@ export function cmsDevApiPlugin(): Plugin {
           if (pathname === '/api/leads') {
             const leads = safeReadJson<any[]>(LEADS_FILE, []);
             if (method === 'GET') {
-              const auth = req.headers['authorization'] || '';
-              if (!auth.startsWith('Bearer ')) {
+              if (!isDevAdminRequest(req)) {
                 return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
               }
               return sendJson({ ok: true, items: leads });
@@ -658,63 +704,110 @@ export function cmsDevApiPlugin(): Plugin {
             }
           }
 
-          // --- 6. /api/comments ---
+          // --- 8. /api/comments ---
           if (pathname === '/api/comments') {
             const comments = safeReadJson<any[]>(COMMENTS_FILE, []);
             if (method === 'GET') {
-              return sendJson({ ok: true, items: comments });
+              const isAdmin = isDevAdminRequest(req);
+              const items = isAdmin ? comments : comments
+                .filter((comment) => comment?.isApproved === true)
+                .map((comment) => ({ ...comment, authorEmail: '' }));
+              return sendJson({ ok: true, items });
             }
             if (method === 'POST') {
               const body = await readBody();
+              const postId = String(body?.postId || '').trim();
+              const authorName = String(body?.authorName || '').trim().slice(0, 80);
+              const authorEmail = String(body?.authorEmail || '').trim().slice(0, 160);
+              const content = String(body?.content || '').trim().slice(0, 3000);
+              if (body?.website) return sendJson({ ok: true, id: 'ignored' });
+              if (!postId || !authorName || !authorEmail || content.length < 3) return sendJson({ ok: false, error: 'لطفاً تمام فیلدهای دیدگاه را تکمیل کنید.' }, 400);
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authorEmail)) return sendJson({ ok: false, error: 'آدرس ایمیل معتبر نیست.' }, 400);
               const newComment = {
-                id: `c-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                postId: String(body.postId || ''),
-                authorName: String(body.authorName || 'کاربر'),
-                authorEmail: String(body.authorEmail || ''),
-                content: String(body.content || ''),
-                date: new Date().toLocaleDateString('fa-IR'),
+                id: `c-${Date.now()}-${crypto.randomUUID()}`,
+                postId, authorName, authorEmail, content,
+                date: new Date().toLocaleString('fa-IR'),
                 createdAt: new Date().toISOString(),
-                isApproved: true,
+                isApproved: false,
                 reply: '',
               };
               comments.unshift(newComment);
-              safeWriteJson(COMMENTS_FILE, comments);
+              safeWriteJson(COMMENTS_FILE, comments.slice(0, 1000));
               return sendJson({ ok: true, id: newComment.id });
             }
             if (method === 'PATCH') {
+              if (!isDevAdminRequest(req)) return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
               const body = await readBody();
-              const idx = comments.findIndex((c) => c.id === body.id);
+              const idx = comments.findIndex((comment) => comment.id === body.id);
               if (idx >= 0) {
                 if (typeof body.isApproved === 'boolean') comments[idx].isApproved = body.isApproved;
-                if (typeof body.reply === 'string') comments[idx].reply = body.reply;
+                if (typeof body.reply === 'string') comments[idx].reply = String(body.reply).slice(0, 2000);
                 safeWriteJson(COMMENTS_FILE, comments);
               }
               return sendJson({ ok: true });
             }
             if (method === 'DELETE') {
+              if (!isDevAdminRequest(req)) return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
               const id = url.searchParams.get('id');
-              const filtered = comments.filter((c) => c.id !== id);
+              const filtered = comments.filter((comment) => comment.id !== id);
               safeWriteJson(COMMENTS_FILE, filtered);
               return sendJson({ ok: true });
             }
           }
 
-          // --- 6. /api/media ---
+          // --- 7. /api/media ---
+          if (pathname === '/api/media/file' && method === 'GET') {
+            const key = url.searchParams.get('key') || '';
+            const files = safeReadJson<Record<string, { data: string; contentType: string }>>(MEDIA_FILES_FILE, {});
+            const stored = files[key];
+            if (!stored) return sendJson({ ok: false, error: 'فایل پیدا نشد.' }, 404);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', stored.contentType);
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            if (stored.contentType.includes('svg')) res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'");
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            res.end(Buffer.from(stored.data, 'base64'));
+            return;
+          }
           if (pathname === '/api/media') {
             const mediaList = safeReadJson<any[]>(MEDIA_FILE, []);
-            if (method === 'GET') {
-              return sendJson({ ok: true, items: mediaList });
+            if (method === 'GET') return sendJson({ ok: true, items: mediaList });
+            if (method === 'POST') {
+              if (!isDevAdminRequest(req)) return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
+              const declaredLength = Number(req.headers['content-length'] || 0);
+              if (declaredLength > 11 * 1024 * 1024) return sendJson({ ok: false, error: 'حجم فایل بیش از حد مجاز است.' }, 413);
+              const form = await readFormData();
+              const file = form.get('file');
+              if (!(file instanceof File)) return sendJson({ ok: false, error: 'فایل ارسال نشده است.' }, 400);
+              const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'image/avif', 'application/pdf'];
+              if (!allowedTypes.includes(file.type)) return sendJson({ ok: false, error: 'نوع فایل پشتیبانی نمی‌شود.' }, 415);
+              if (!file.size || file.size > 10 * 1024 * 1024) return sendJson({ ok: false, error: 'حجم فایل بیش از حد مجاز است.' }, 413);
+              const key = `dev/${crypto.randomUUID()}`;
+              const title = String(form.get('title') || file.name || '').slice(0, 160);
+              const alt = String(form.get('alt') || title).slice(0, 240);
+              const now = new Date().toISOString();
+              const files = safeReadJson<Record<string, { data: string; contentType: string }>>(MEDIA_FILES_FILE, {});
+              files[key] = { data: Buffer.from(await file.arrayBuffer()).toString('base64'), contentType: file.type };
+              safeWriteJson(MEDIA_FILES_FILE, files);
+              const item = { id: key, key, url: `/api/media/file?key=${encodeURIComponent(key)}`, title, alt, sizeKb: Math.ceil(file.size / 1024), contentType: file.type, createdAt: now };
+              mediaList.unshift(item);
+              safeWriteJson(MEDIA_FILE, mediaList);
+              return sendJson({ ok: true, item });
             }
             if (method === 'DELETE') {
+              if (!isDevAdminRequest(req)) return sendJson({ ok: false, error: 'فقط ادمین.' }, 401);
               const key = url.searchParams.get('key');
               const filtered = mediaList.filter((m) => m.key !== key);
               safeWriteJson(MEDIA_FILE, filtered);
+              const files = safeReadJson<Record<string, { data: string; contentType: string }>>(MEDIA_FILES_FILE, {});
+              if (key) delete files[key];
+              safeWriteJson(MEDIA_FILES_FILE, files);
               return sendJson({ ok: true });
             }
           }
 
-          // Default fallback for any unspecified /api endpoints
-          return sendJson({ ok: true, message: 'Dev API endpoint active' });
+          // Unknown API routes should be real 404s, not false-positive successes.
+          return sendJson({ ok: false, error: 'API endpoint not found.' }, 404);
         } catch (err: any) {
           return sendJson({ ok: false, error: err?.message || 'Server error' }, 500);
         }
