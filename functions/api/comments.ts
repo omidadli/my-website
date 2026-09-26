@@ -1,4 +1,4 @@
-import { Env, requireAuth, json, unauthorized, getClientIp } from './_shared';
+import { Env, requireAuth, json, unauthorized, getClientIp, ensureCoreTablesSafe } from './_shared';
 
 /**
  * Public comment endpoints (WordPress-style: visitors submit, admin moderates).
@@ -38,6 +38,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const ip = getClientIp(request);
+  await ensureCoreTablesSafe(env);
 
   // Rate limit: max 5 comments per IP per hour.
   // NOTE: the `date` column is a PERSIAN locale string (display only) and can't

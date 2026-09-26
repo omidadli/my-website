@@ -6,9 +6,12 @@ admin API. Ask Claude things like _"change the products page headline"_,
 _"raise the VIP price of the business-therapist tool"_, or _"grant 30 days of
 access to 0912…"_ and it happens on the live site.
 
-> Content edits made through the MCP go straight to the **live database**. If you
-> keep content in Git (recommended — see `content/site-content.json`), run
-> `npm run content:export` in the repo afterwards so Git stays in sync.
+> Content edits made through the MCP go straight to the **live database**. To
+> keep Git in sync (recommended — see `content/site-content.json`), run the
+> **Export live content to Git** workflow from the GitHub Actions tab afterwards
+> (or `npm run content:export` locally). A nightly schedule also exports
+> automatically, and the Git → live sync is a per-section merge that never
+> discards live-only sections.
 
 ## What Claude can do (tools)
 

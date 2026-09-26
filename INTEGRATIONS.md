@@ -26,14 +26,21 @@ short-lived; just log in again when it expires.
 ### Content (the whole CMS state)
 
 ```
-GET  /api/content                       →  { ok, data: <ContentState>, updatedAt }   (public read)
-PUT  /api/content   { "data": <ContentState> }  →  { ok, updatedAt }                 (admin only)
+GET  /api/content                                        →  { ok, data: <ContentState>, updatedAt }   (public read)
+PUT  /api/content   { "data": <ContentState>, "baseUpdatedAt"?: string }  →  { ok, updatedAt }        (admin only)
+                                                          →  409 { ok:false, code:"conflict", updatedAt } if changed since baseUpdatedAt
 ```
 
 `data` is one JSON object with sections like `PERSONAL_INFO`, `PRODUCTS`,
 `PRODUCTS_PAGE_DATA`, `AI_TOOLS_CONFIG`, etc. A PUT replaces the whole blob, so
 read → modify → write. Max 5 MB. Blog comments are stored separately and are
 stripped from the blob automatically.
+
+**Optimistic concurrency:** send the `updatedAt` you read as `baseUpdatedAt`.
+If anyone else (admin panel, Claude MCP, CI sync) saved in between, the API
+answers **409** and you re-read + re-apply instead of overwriting their edit.
+`scripts/site-client.mjs` → `updateContent(mutate)` does this loop for you; the
+MCP server, the sync script and the admin panel all use it.
 
 ### Paid AI tools
 
@@ -74,8 +81,12 @@ workflows keep the live site in step with the repo:
 
 | Workflow | Trigger | Effect |
 |----------|---------|--------|
-| `.github/workflows/deploy.yml` | any push to `main` | build + `wrangler pages deploy dist` |
-| `.github/workflows/sync-content.yml` | push to `main` changing `content/site-content.json` | push that content into the live DB |
+| `.github/workflows/deploy.yml` | any push to `main` | type-check + build + `wrangler pages deploy dist` + smoke-test `/api/content` |
+| `.github/workflows/sync-content.yml` | push to `main` changing `content/site-content.json` (or manual) | **merge** that content into the live DB (see below) |
+| `.github/workflows/export-content.yml` | manual, or nightly 02:30 UTC | pull the live content back into Git and commit it |
+
+Every workflow prints a visible **warning** (instead of silently passing) when
+its secrets are missing.
 
 ### Required GitHub repo secrets
 
@@ -94,7 +105,8 @@ Settings → Secrets and variables → Actions → **New repository secret**:
 > project. Rename both if yours differs.
 
 > D1 tables/columns are created automatically at runtime by the API
-> (`ensureTables`), so no migration step runs in CI. To apply schema manually:
+> (`ensureCoreTables` in `functions/api/_shared.ts` + `ensureTables` in
+> `tools.ts`), so no migration step runs in CI. To apply the schema manually:
 > `npx wrangler d1 execute <DB> --remote --file=./schema.sql`.
 
 ### Content as code (round-trip)
@@ -105,16 +117,28 @@ Settings → Secrets and variables → Actions → **New repository secret**:
 npm run content:gen      # (re)generate the file from the app's built-in defaults
 npm run content:export   # live site  → content/site-content.json  (pull live edits into Git)
 npm run content:import   # content/site-content.json → live site   (what CI runs)
+#   import options: --base <old-version.json>  --force  --dry-run
 ```
 
 All three read `SITE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` from the
-environment. Typical loop:
+environment.
+
+**Import is a per-section merge, not a blind overwrite:**
+
+- sections that exist only on the live site (`THEME_CONFIG`, `NAVIGATION_MENU`,
+  `MEDIA_LIBRARY`, `VERSION_HISTORY`, …) are always preserved;
+- on a push, CI passes the pre-push version of the file as a 3-way merge base:
+  a section is taken from Git only if Git changed it, live-only edits are kept,
+  and if **both** sides changed the same section the run fails with
+  instructions (re-run it manually with `force = true` to let Git win);
+- `export` strips runtime state (`BLOG_COMMENTS`, `VERSION_HISTORY`,
+  `AUDIT_LOGS`) so Git only holds authored content.
+
+Typical loop:
 
 1. Edit content — either commit a change to `content/site-content.json`, **or**
-   edit via the admin panel / Claude MCP and then `npm run content:export`.
-2. Push to `main`. `deploy.yml` redeploys the code; if the content file changed,
-   `sync-content.yml` pushes it live.
-
-> ⚠️ Because pushing `content/site-content.json` overwrites the live content,
-> pick **one** primary way to edit content (Git *or* the live panel) and use
-> `content:export` / `content:import` to reconcile the other.
+   edit via the admin panel / Claude MCP.
+2. After live edits, run the **Export live content to Git** workflow (Actions →
+   Run workflow) or `npm run content:export` locally; the nightly schedule also
+   picks them up. Push to `main` redeploys code, and a changed content file is
+   merged live by `sync-content.yml`.

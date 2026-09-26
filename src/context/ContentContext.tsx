@@ -351,6 +351,35 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // ---------- Cloud (Cloudflare D1) persistence ----------
   const [persistence, setPersistence] = useState<'local' | 'cloud'>('local');
   const cloudReady = useRef(false);
+  /** Version stamp of the content this tab last read from / saved to the cloud (optimistic concurrency). */
+  const remoteUpdatedAt = useRef<string | null>(null);
+  /** Serialized snapshot of what the cloud currently holds — lets us skip no-op saves. */
+  const lastSyncedJson = useRef<string | null>(null);
+
+  /** Merge a cloud payload over the defaults so partial/older payloads can't blank out fields. */
+  const mergeRemote = (r: any): ContentState => ({
+    ...defaultContentState,
+    ...r,
+    PERSONAL_INFO: { ...defaultContentState.PERSONAL_INFO, ...(r.PERSONAL_INFO || {}) },
+    GLOBAL_SEO: { ...defaultGlobalSeo, ...(r.GLOBAL_SEO || {}) },
+    AI_TOOLS_CONFIG: {
+      ...initialData.AI_TOOLS_CONFIG,
+      ...(r.AI_TOOLS_CONFIG || {}),
+      channels: { ...initialData.AI_TOOLS_CONFIG.channels, ...(r.AI_TOOLS_CONFIG?.channels || {}) },
+      tools: { ...initialData.AI_TOOLS_CONFIG.tools, ...(r.AI_TOOLS_CONFIG?.tools || {}) },
+    },
+  });
+
+  /** Pull the latest cloud content into this tab. Returns true when the cloud had content. */
+  const adoptRemote = async (): Promise<boolean> => {
+    const remote = await api.getContent();
+    if (!remote?.data) return false;
+    const merged = mergeRemote(remote.data);
+    remoteUpdatedAt.current = remote.updatedAt || null;
+    lastSyncedJson.current = JSON.stringify(merged);
+    setData(merged);
+    return true;
+  };
 
   // On mount: detect API, pull remote content, restore admin session from token.
   useEffect(() => {
@@ -361,20 +390,12 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setPersistence('cloud');
       const remote = await api.getContent();
       if (!cancelled && remote?.data) {
-        const r = remote.data;
-        setData({
-          ...defaultContentState,
-          ...r,
-          // Deep-merge critical objects so partial/older cloud payloads can't blank out fields.
-          PERSONAL_INFO: { ...defaultContentState.PERSONAL_INFO, ...(r.PERSONAL_INFO || {}) },
-          GLOBAL_SEO: { ...defaultGlobalSeo, ...(r.GLOBAL_SEO || {}) },
-          AI_TOOLS_CONFIG: {
-            ...initialData.AI_TOOLS_CONFIG,
-            ...(r.AI_TOOLS_CONFIG || {}),
-            channels: { ...initialData.AI_TOOLS_CONFIG.channels, ...(r.AI_TOOLS_CONFIG?.channels || {}) },
-            tools: { ...initialData.AI_TOOLS_CONFIG.tools, ...(r.AI_TOOLS_CONFIG?.tools || {}) },
-          },
-        });
+        const merged = mergeRemote(remote.data);
+        remoteUpdatedAt.current = remote.updatedAt || null;
+        lastSyncedJson.current = JSON.stringify(merged);
+        setData(merged);
+      } else if (!cancelled) {
+        remoteUpdatedAt.current = remote?.updatedAt || '';
       }
       if (!cancelled && api.getToken()) {
         const ok = await api.verify();
@@ -388,12 +409,32 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   // Debounced push of every content change to D1 (only while logged in).
+  // The save is conditional on the version this tab last saw: if the site was
+  // edited elsewhere in the meantime (Claude MCP, another tab, the Git sync) the
+  // API answers 409 → we reload the latest version instead of overwriting it.
   useEffect(() => {
     if (persistence !== 'cloud' || !cloudReady.current || !isAdmin) return;
-    const t = setTimeout(() => {
-      api.saveContent(data).then((res) => {
-        if (!res.ok) console.warn('Cloud save failed:', res.error);
-      });
+    const t = setTimeout(async () => {
+      const json = JSON.stringify(data);
+      if (json === lastSyncedJson.current) return; // nothing new to save
+      const res = await api.saveContent(data, remoteUpdatedAt.current);
+      if (res.ok) {
+        remoteUpdatedAt.current = res.updatedAt || remoteUpdatedAt.current;
+        lastSyncedJson.current = json;
+        return;
+      }
+      if (res.conflict) {
+        console.warn('Cloud save skipped: content changed elsewhere — reloading the latest version.');
+        remoteUpdatedAt.current = res.updatedAt || ''; // resync the stamp even if the reload below finds no content
+        await adoptRemote();
+        window.dispatchEvent(
+          new CustomEvent('nd:content-conflict', {
+            detail: { message: 'محتوا هم‌زمان از جای دیگری (مثلاً کلاد یا تب دیگر) تغییر کرده بود؛ آخرین نسخه بارگذاری شد. لطفاً آخرین تغییرت را دوباره اعمال کن.' },
+          })
+        );
+        return;
+      }
+      console.warn('Cloud save failed:', res.error);
     }, 1200);
     return () => clearTimeout(t);
   }, [data, persistence, isAdmin]);
@@ -499,9 +540,17 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (persistence === 'cloud') {
       const res = await api.login(username, password || '');
       if (res.ok) {
+        // Never push this tab's (possibly stale) state over the live content on
+        // login: adopt the latest cloud version first; only seed when the cloud is empty.
+        const hadRemote = await adoptRemote().catch(() => false);
+        if (!hadRemote) {
+          const seeded = await api.saveContent(data, remoteUpdatedAt.current ?? '');
+          if (seeded.ok) {
+            remoteUpdatedAt.current = seeded.updatedAt || null;
+            lastSyncedJson.current = JSON.stringify(data);
+          }
+        }
         setIsAdmin(true);
-        // Seed/backup: push the current (remote-merged) state once after login.
-        api.saveContent(data).catch(() => {});
         logActivity('ورود موفق', `کاربر «${username}» از طریق سرویس ابری وارد پیشخوان شد.`);
         return true;
       }

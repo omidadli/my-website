@@ -1,4 +1,4 @@
-import { Env, requireAuth, json, getClientIp } from './_shared';
+import { Env, requireAuth, json, getClientIp, ensureCoreTablesSafe } from './_shared';
 import {
   buildDigest,
   buildSoulPrompt,
@@ -41,6 +41,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const ip = getClientIp(request);
+  await ensureCoreTablesSafe(env);
 
   // Rate limit: 15 messages per hour per IP.
   try {

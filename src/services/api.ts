@@ -80,15 +80,28 @@ export const api = {
     }
   },
 
-  async saveContent(data: any): Promise<{ ok: boolean; error?: string }> {
+  /**
+   * Save the whole content state. Pass `baseUpdatedAt` (the `updatedAt` of the
+   * version this tab last read/saved) to make the save conditional: if the site
+   * was edited elsewhere in the meantime (Claude MCP, another tab, CI sync) the
+   * API answers 409 and `conflict: true` is returned instead of overwriting it.
+   */
+  async saveContent(
+    data: any,
+    baseUpdatedAt?: string | null
+  ): Promise<{ ok: boolean; updatedAt?: string | null; conflict?: boolean; error?: string }> {
     try {
+      const body: Record<string, unknown> = { data };
+      if (typeof baseUpdatedAt === 'string') body.baseUpdatedAt = baseUpdatedAt;
       const r = await fetch('/api/content', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...headers() },
-        body: JSON.stringify({ data }),
+        body: JSON.stringify(body),
       });
       const j = await r.json().catch(() => ({}));
-      return r.ok && j?.ok ? { ok: true } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+      if (r.ok && j?.ok) return { ok: true, updatedAt: j.updatedAt || null };
+      if (r.status === 409) return { ok: false, conflict: true, updatedAt: j?.updatedAt || null, error: j?.error || 'محتوا در جای دیگری تغییر کرده است.' };
+      return { ok: false, error: j?.error || `خطای سرور (${r.status})` };
     } catch {
       return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
     }

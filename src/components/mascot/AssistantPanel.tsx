@@ -119,7 +119,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
   const clearChatHistory = useCallback(() => {
     chatStorage.clearMessages();
     setMessages(cfg?.greeting ? [{ role: 'model', content: cfg.greeting }] : []);
-    mascotAct('greet');
+    mascotAct('wave');
   }, [cfg?.greeting, setMessages]);
 
   // Web Speech API Integration

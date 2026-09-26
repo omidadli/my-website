@@ -11,6 +11,9 @@
  *   ADMIN_PASSWORD  admin password              (same as the Cloudflare secret)
  */
 
+/** Return this from an updateContent() mutator to skip the write entirely. */
+export const NO_CHANGE = Symbol('no-change');
+
 export class SiteClient {
   constructor({ baseUrl, username, password } = {}) {
     this.baseUrl = (baseUrl || process.env.SITE_URL || 'http://localhost:3000').replace(/\/+$/, '');
@@ -34,7 +37,11 @@ export class SiteClient {
     let data;
     try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
     if (!res.ok || data?.ok === false) {
-      throw new Error(`${method} ${path} → ${res.status}: ${data?.error || text || 'request failed'}`);
+      const err = new Error(`${method} ${path} → ${res.status}: ${data?.error || text || 'request failed'}`);
+      err.status = res.status;
+      err.code = data?.code;
+      err.data = data;
+      throw err;
     }
     return data;
   }
@@ -60,9 +67,50 @@ export class SiteClient {
     return data.data; // { ...ContentState }
   }
 
-  /** Overwrite the entire content state. `content` is the ContentState object. */
-  async putContent(content) {
-    return this._req('/api/content', { method: 'PUT', body: { data: content } });
+  /** Read the content together with its version stamp: { data, updatedAt }. */
+  async getContentWithMeta() {
+    const data = await this._req('/api/content', { method: 'GET' });
+    return { data: data.data, updatedAt: data.updatedAt || '' };
+  }
+
+  /**
+   * Overwrite the entire content state. `content` is the ContentState object.
+   * Pass `baseUpdatedAt` (from getContentWithMeta) to make the save conditional:
+   * the API answers 409 (err.code === 'conflict') if someone else saved in between.
+   */
+  async putContent(content, { baseUpdatedAt } = {}) {
+    const body = { data: content };
+    if (typeof baseUpdatedAt === 'string') body.baseUpdatedAt = baseUpdatedAt;
+    return this._req('/api/content', { method: 'PUT', body });
+  }
+
+  /**
+   * Safe read → modify → write. `mutate(content, meta)` edits the object in place
+   * (or returns a replacement). On a 409 conflict the content is re-read and the
+   * mutation re-applied, so concurrent editors (admin panel, Claude, CI) never
+   * silently overwrite each other. `fallback()` supplies a base document when
+   * the live content is empty (fresh site); without it, empty content is passed
+   * to `mutate` as `null`.
+   */
+  async updateContent(mutate, { retries = 3, fallback } = {}) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const { data, updatedAt } = await this.getContentWithMeta();
+      const empty = !data || typeof data !== 'object' || Object.keys(data).length === 0;
+      let content = empty ? (fallback ? await fallback() : null) : data;
+      const seeded = empty && !!content;
+      const out = await mutate(content, { seeded, updatedAt });
+      if (out === NO_CHANGE) return { ok: true, skipped: true, updatedAt, seeded: false };
+      if (out && typeof out === 'object') content = out;
+      try {
+        const r = await this.putContent(content, { baseUpdatedAt: updatedAt });
+        return { ...r, seeded };
+      } catch (e) {
+        lastErr = e;
+        if (e?.code !== 'conflict' && e?.status !== 409) throw e;
+      }
+    }
+    throw new Error(`Content changed concurrently ${retries + 1} times in a row; giving up. Last error: ${lastErr?.message}`);
   }
 
   // --- Paid AI tools (محصولات هوشمند) -------------------------------------

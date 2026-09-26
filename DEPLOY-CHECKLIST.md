@@ -97,9 +97,13 @@ Cloudflare خودش با هر پوش روی `main` سایت را می‌سازد
 `CLOUDFLARE_API_TOKEN` (توکن با دسترسی Pages: Edit) و `CLOUDFLARE_ACCOUNT_ID`.
 
 **همگام‌سازیِ محتوا (هر دو حالت):** اگر می‌خواهی تغییرِ فایلِ
-`content/site-content.json` روی گیت‌هاب خودکار روی دیتابیسِ زنده بنشیند، این سه
-سکرت را هم در Actions اضافه کن: `SITE_URL`، `ADMIN_USERNAME`، `ADMIN_PASSWORD`.
-(جزئیات کامل در `INTEGRATIONS.md`.)
+`content/site-content.json` روی گیت‌هاب خودکار روی دیتابیسِ زنده بنشیند (و
+برعکس، ویرایش‌های پنل ادمین/کلاد شبانه به گیت برگردد)، این سه سکرت را هم در
+Actions اضافه کن: `SITE_URL` (= `https://omidadli01.site`)، `ADMIN_USERNAME`،
+`ADMIN_PASSWORD`. بعد یک‌بار ورک‌فلوی **Sync content to live site** را دستی اجرا
+کن تا دیتابیسِ خالی از روی فایل گیت پر شود. همگام‌سازی به‌صورت **ادغامِ بخش‌به‌بخش**
+است و بخش‌هایی که فقط روی سایت زنده وجود دارند (تم، منو، کتابخانه رسانه…) را
+پاک نمی‌کند. (جزئیات کامل در `INTEGRATIONS.md`.)
 
 ---
 

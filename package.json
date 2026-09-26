@@ -11,7 +11,9 @@
     "lint": "tsc --noEmit",
     "content:gen": "tsx scripts/gen-default-content.mts",
     "content:export": "node scripts/sync-content.mjs export",
-    "content:import": "node scripts/sync-content.mjs import"
+    "content:import": "node scripts/sync-content.mjs import",
+    "test": "node scripts/sync-content.test.mjs && tsx scripts/mascot-integration.test.ts",
+    "lint:functions": "tsc -p functions/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

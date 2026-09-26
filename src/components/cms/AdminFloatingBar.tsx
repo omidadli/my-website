@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Save, Download, Upload, RotateCcw, Lock, Edit3, CheckCircle, Sparkles } from 'lucide-react';
 import { useContent } from '../../context/ContentContext';
 
@@ -16,12 +16,24 @@ export const AdminFloatingBar: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isAdmin) return null;
-
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, ms = 3000) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), ms);
   };
+
+  // A conditional cloud save was rejected because the content changed elsewhere
+  // (Claude MCP, another tab, Git sync) — the context already reloaded the latest
+  // version; tell the admin so they can re-apply their last change.
+  useEffect(() => {
+    const onConflict = (e: Event) => {
+      const msg = (e as CustomEvent<{ message?: string }>).detail?.message;
+      showToast(msg || 'محتوا هم‌زمان از جای دیگری تغییر کرده بود؛ آخرین نسخه بارگذاری شد.', 8000);
+    };
+    window.addEventListener('nd:content-conflict', onConflict);
+    return () => window.removeEventListener('nd:content-conflict', onConflict);
+  }, []);
+
+  if (!isAdmin) return null;
 
   const handleSave = () => {
     saveChanges();

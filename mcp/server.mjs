@@ -49,6 +49,11 @@ async function loadContent({ seedIfEmpty = false } = {}) {
   const live = await client.getContent();
   if (!isEmptyContent(live)) return { content: live, seeded: false };
   if (!seedIfEmpty) return { content: null, seeded: false };
+  return { content: readSeed(), seeded: true };
+}
+
+/** Base document for the first write on a fresh site (content/site-content.json). */
+function readSeed() {
   let seed;
   try {
     seed = JSON.parse(readFileSync(SEED_FILE, 'utf8'));
@@ -56,15 +61,18 @@ async function loadContent({ seedIfEmpty = false } = {}) {
     throw new Error(`Live content is empty and the seed file could not be read (${SEED_FILE}): ${e.message}. Run "npm run content:import" in the repo once, then retry.`);
   }
   if (isEmptyContent(seed)) throw new Error(`Seed file ${SEED_FILE} is empty — run "npm run content:gen" in the repo first.`);
-  return { content: seed, seeded: true };
+  return seed;
 }
 
-/** Read → mutate → write helper shared by every write tool. */
+/**
+ * Read → mutate → write helper shared by every write tool. Conditional save:
+ * if the content changes on the site between our read and our write (admin
+ * panel, CI sync, another Claude session) the API answers 409 and the client
+ * re-reads and re-applies the mutation — nobody's edit is silently lost.
+ */
 async function updateContent(mutate) {
-  const { content, seeded } = await loadContent({ seedIfEmpty: true });
-  mutate(content);
-  const r = await client.putContent(content);
-  return { savedAt: r.updatedAt, ...(seeded ? { seededFromGit: true, note: 'Live content was empty; seeded it from content/site-content.json before applying this change.' } : {}) };
+  const r = await client.updateContent((content) => { mutate(content); }, { fallback: readSeed });
+  return { savedAt: r.updatedAt, ...(r.seeded ? { seededFromGit: true, note: 'Live content was empty; seeded it from content/site-content.json before applying this change.' } : {}) };
 }
 
 const server = new McpServer({ name: 'omidadli-site-mcp', version: '1.0.0' });

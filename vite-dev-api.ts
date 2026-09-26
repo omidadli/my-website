@@ -162,6 +162,14 @@ export function cmsDevApiPlugin(): Plugin {
             }
             if (method === 'PUT') {
               const body = await readBody();
+              if (typeof body.baseUpdatedAt === 'string') {
+                // Optimistic concurrency (mirrors functions/api/content.ts).
+                const saved = safeReadJson<{ data: any; updatedAt: string } | null>(CONTENT_FILE, null);
+                const current = saved?.updatedAt || '';
+                if (current !== body.baseUpdatedAt) {
+                  return sendJson({ ok: false, code: 'conflict', error: 'محتوا از زمانی که آن را خوانده‌اید تغییر کرده است؛ دوباره بخوانید و تغییر را اعمال کنید.', updatedAt: current || null }, 409);
+                }
+              }
               const now = new Date().toISOString();
               const payload = { data: body.data || null, updatedAt: now };
               safeWriteJson(CONTENT_FILE, payload);

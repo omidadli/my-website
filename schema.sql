@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS comments (
   date TEXT NOT NULL,
   is_approved INTEGER NOT NULL DEFAULT 0,
   reply TEXT DEFAULT '',
-  ip TEXT DEFAULT ''
+  ip TEXT DEFAULT '',
+  created_at TEXT DEFAULT ''               -- ISO timestamp (rate limiting); `date` is the Persian display string
 );
 
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments (post_id);

@@ -1,14 +1,30 @@
 name: Sync content to live site
 
-# When content/site-content.json changes on main, push it into the live site's
-# database via the admin API. This makes the Git file the source of truth for
-# site content: edit it in a commit/PR and it goes live automatically.
+# When content/site-content.json changes on main, merge it into the live site's
+# database via the admin API. Edit the file in a commit/PR and it goes live.
+#
+# Safety: the import is a per-section MERGE, not a blind overwrite —
+#   * sections that only exist on the live site (theme, navigation, media
+#     library, version history …) are preserved;
+#   * on push, the pre-push version of the file is used as a 3-way merge base, so
+#     sections edited on the live site (admin panel / Claude MCP) since the last
+#     export are kept unless Git changed the same section (→ conflict → the run
+#     fails with instructions; re-run manually with force=true to let Git win).
 on:
   push:
     branches: [main]
     paths:
       - 'content/site-content.json'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'On conflict let Git win (overwrite live edits in conflicting sections)'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Only report what would change'
+        type: boolean
+        default: false
 
 concurrency:
   group: sync-content
@@ -19,21 +35,44 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HAS_SITE_URL: ${{ secrets.SITE_URL != '' }}
-    # Runs after a deploy so the live API is up to receive the content.
     steps:
-      - name: Checkout
+      - name: Checkout (full history — needed to read the pre-push version)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      # Skipped until you add the SITE_URL secret, so it never hard-fails before setup.
-      - name: Push content to the live site
+      - name: Missing secrets → explain instead of silently passing
+        if: ${{ env.HAS_SITE_URL != 'true' }}
+        run: |
+          echo "::warning title=Content sync skipped::Add the repository secrets SITE_URL (https://omidadli01.site), ADMIN_USERNAME and ADMIN_PASSWORD (Settings → Secrets and variables → Actions) to enable Git → live-site content sync."
+
+      # The version of the content file BEFORE this push = 3-way merge base.
+      - name: Extract merge base
+        if: ${{ env.HAS_SITE_URL == 'true' && github.event_name == 'push' }}
+        run: |
+          before="${{ github.event.before }}"
+          if [ -n "$before" ] && ! echo "$before" | grep -Eq '^0+$' && git cat-file -e "$before:content/site-content.json" 2>/dev/null; then
+            git show "$before:content/site-content.json" > /tmp/base.json
+            echo "merge base: $before"
+          else
+            echo '{}' > /tmp/base.json
+            echo "no usable merge base (first push / force-push) — Git wins for changed sections"
+          fi
+
+      - name: Merge content into the live site
         if: ${{ env.HAS_SITE_URL == 'true' }}
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-        run: node scripts/sync-content.mjs import
+        run: |
+          args=""
+          [ "${{ github.event_name }}" = "push" ] && args="$args --base /tmp/base.json"
+          [ "${{ inputs.force }}" = "true" ] && args="$args --force"
+          [ "${{ inputs.dry_run }}" = "true" ] && args="$args --dry-run"
+          node scripts/sync-content.mjs import $args
