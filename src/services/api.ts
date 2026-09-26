@@ -56,7 +56,7 @@ export const setToken = (token?: string | null) => {
 export const probe = async (): Promise<boolean> => {
   if (cloudAvailable !== null) return cloudAvailable;
   try {
-    const r = await fetch('/api/content', { method: 'GET', cache: 'no-store' });
+    const r = await fetch('/api/content', { method: 'GET', cache: 'no-store', headers: headers() });
     // Any real API response (200/401/500) means functions exist; a Vite/SPA 404 HTML page means they don't.
     const ct = r.headers.get('Content-Type') || '';
     cloudAvailable = ct.includes('application/json');
@@ -82,7 +82,7 @@ export const api = {
       return primed;
     }
     try {
-      const r = await fetch('/api/content', { cache: 'no-store' });
+      const r = await fetch('/api/content', { cache: 'no-store', headers: headers() });
       if (!r.ok) return null;
       const j = await r.json();
       return j?.ok ? { data: j.data, updatedAt: j.updatedAt } : null;

@@ -7,6 +7,8 @@ import { IconBadge3D } from '../components/3D/3DIconBadge';
 import { PageHero, Head, CtaPanel } from '../components/nd/Kit';
 import { GraduationCap, Award, Sparkles, Target, Rocket } from 'lucide-react';
 import { motion } from 'motion/react';
+import { safeRecordArray } from '../utils/contentDefaults';
+import { imageFallback } from '../utils/imageFallback';
 
 interface AboutPageProps {
   theme: Theme;
@@ -17,12 +19,18 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onNavigate }) => {
   const isDark = theme === 'dark';
   const { data } = useContent();
   const personal = data.PERSONAL_INFO;
-  const timeline = data.TIMELINE || [];
-  const selectProjects = data.SELECT_PROJECTS || [];
-  const otherCollaborations = data.OTHER_COLLABORATIONS || [];
-  const educationAndCourses = data.EDUCATION_AND_COURSES;
-  const skillsTools = data.SKILLS_TOOLS || [];
-  const allSkills = data.ALL_SKILLS_LIST;
+  const timeline = safeRecordArray<any>(data.TIMELINE);
+  const selectProjects = safeRecordArray<any>(data.SELECT_PROJECTS);
+  const otherCollaborations = safeRecordArray<any>(data.OTHER_COLLABORATIONS);
+  const educationAndCourses = data.EDUCATION_AND_COURSES && typeof data.EDUCATION_AND_COURSES === 'object'
+    ? data.EDUCATION_AND_COURSES
+    : { education: [], courses: [] };
+  const education = safeRecordArray<any>(educationAndCourses.education);
+  const courses = safeRecordArray<any>(educationAndCourses.courses);
+  const skillsTools = safeRecordArray<any>(data.SKILLS_TOOLS);
+  const allSkills = data.ALL_SKILLS_LIST && typeof data.ALL_SKILLS_LIST === 'object' ? data.ALL_SKILLS_LIST : null;
+  const hardSkillGroups = safeRecordArray<any>(allSkills?.hard);
+  const softSkillGroups = safeRecordArray<any>(allSkills?.soft);
 
   const philosophy = [
     {
@@ -67,7 +75,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onNavigate }) => {
         <div className="lg:col-span-5">
           <div className="nd-card rounded-[var(--nd-radius-panel)] p-7 space-y-6 relative overflow-hidden">
             <div className="relative w-fit mx-auto">
-              <img src={personal.avatar} alt={personal.name} className="w-40 h-40 rounded-[var(--nd-radius-card)] object-cover shadow-md" />
+              <img src={personal.avatar} alt={personal.name} onError={imageFallback('/avatar-fallback.svg')} className="w-40 h-40 rounded-[var(--nd-radius-card)] object-cover shadow-md" />
               <div className="absolute -bottom-4 -right-4">
                 <IconBadge3D iconName="award" theme={theme} size="lg" glowColor="magenta" />
               </div>
@@ -150,11 +158,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onNavigate }) => {
             </div>
           ))}
         </div>
-        {allSkills && (
+        {(hardSkillGroups.length > 0 || softSkillGroups.length > 0) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[
-              { title: 'مهارت‌های تخصصی', groups: allSkills.hard },
-              { title: 'مهارت‌های نرم', groups: allSkills.soft },
+              { title: 'مهارت‌های تخصصی', groups: hardSkillGroups },
+              { title: 'مهارت‌های نرم', groups: softSkillGroups },
             ].map((col, ci) => (
               <div key={ci} className="nd-card p-6 space-y-5">
                 <h3 className={`nd-h2 text-base ${isDark ? 'text-white' : ''}`}>{col.title}</h3>
@@ -162,7 +170,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onNavigate }) => {
                   <div key={gi} className="space-y-2">
                     <span className={`text-xs font-extrabold ${isDark ? 'text-slate-300' : 'text-[color:var(--nd-ink-2)]'}`}>{g.title}</span>
                     <div className="flex flex-wrap gap-1.5">
-                      {g.tags.map((tag: string) => (
+                      {(Array.isArray(g.tags) ? g.tags.filter((tag: unknown): tag is string => typeof tag === 'string') : []).map((tag: string) => (
                         <span key={tag} className="nd-chip">{tag}</span>
                       ))}
                     </div>
@@ -239,7 +247,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onNavigate }) => {
               <GraduationCap className="w-5 h-5" />
               <h3 className={`nd-h2 text-base ${isDark ? 'text-white' : ''}`}>تحصیلات</h3>
             </div>
-            {educationAndCourses.education.map((edu: any, idx: number) => (
+            {education.map((edu: any, idx: number) => (
               <div key={idx} className={`space-y-1 border-t pt-4 ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
                 <div className={`nd-h2 text-sm ${isDark ? 'text-white' : ''}`}>{edu.title}</div>
                 <p className={`text-xs ${isDark ? 'text-slate-400' : 'nd-muted'}`}>{edu.institute} · {edu.year}</p>
@@ -253,7 +261,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ theme, onNavigate }) => {
               <h3 className={`nd-h2 text-base ${isDark ? 'text-white' : ''}`}>دوره‌های تخصصی</h3>
             </div>
             <div className={`space-y-3 border-t pt-4 ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
-              {educationAndCourses.courses.map((crs: any, idx: number) => (
+              {courses.map((crs: any, idx: number) => (
                 <div key={idx} className={`flex items-center justify-between text-xs pb-2 border-b ${isDark ? 'border-white/5' : 'border-[color:var(--nd-line)]'}`}>
                   <div>
                     <span className={`font-extrabold block ${isDark ? 'text-white' : ''}`}>{crs.title}</span>

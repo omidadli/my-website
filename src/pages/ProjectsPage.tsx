@@ -15,7 +15,9 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ theme = 'dark', onNa
   const isDark = theme === 'dark';
   const { data } = useContent();
   const projectsData = data.PROJECTS_PAGE_DATA;
-  const projectsList = data.ONGOING_PROJECTS || [];
+  const projectsList = Array.isArray(data.ONGOING_PROJECTS)
+    ? data.ONGOING_PROJECTS.filter((project) => project && typeof project === 'object')
+    : [];
 
   return (
     <div className="space-y-14 py-4 max-w-5xl mx-auto">

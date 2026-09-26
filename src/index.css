@@ -1241,6 +1241,13 @@ body.chat-open .mascot-root {
   }
 }
 
+/* Phones have limited fill-rate; avoid full-screen blur layers and ambient animations. */
+@media (max-width: 640px), (pointer: coarse) {
+  .nd-blob { display: none !important; }
+  .nd-conic-ring { animation: none !important; filter: none !important; }
+  .nd-particle { display: none !important; }
+}
+
 /* ---------- theme toggle flicker suppression ---------- */
 html.theme-transitioning,
 html.theme-transitioning *,

@@ -36,7 +36,7 @@ export const ProductsPage: React.FC<ProductsPageProps> = ({ theme = 'dark', onNa
         onNavigate={onNavigate}
       />
 
-      {cfg?.enabled === false ? (
+      {cfg?.enabled === false || visibleTools.length === 0 ? (
         <section className="nd-card p-10 text-center space-y-3">
           <Sparkles className="w-8 h-8 mx-auto text-[color:var(--nd-accent)]" />
           <h2 className={`nd-h2 text-lg ${isDark ? 'text-white' : ''}`}>ابزارهای هوشمند به‌زودی</h2>

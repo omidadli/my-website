@@ -4,6 +4,7 @@ import { useContent } from '../context/ContentContext';
 import { EditableText } from '../components/cms/EditableText';
 import { Mail, Phone, MapPin, Send, MessageCircle, Linkedin, Instagram, Twitter, ShieldCheck } from 'lucide-react';
 import { linkProps, pathForPage } from '../utils/router';
+import { safeRecordArray } from '../utils/contentDefaults';
 
 interface FooterProps {
   theme: Theme;
@@ -14,8 +15,13 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdminModal }) => {
   const { data } = useContent();
   const personal = data.PERSONAL_INFO;
-  const navItems = [...(data.NAVIGATION_MENU || [])].sort((a, b) => a.order - b.order).filter((i) => !i.isHidden);
-  const services = (data.SERVICES || []).slice(0, 5);
+  const navItems = safeRecordArray<NonNullable<typeof data.NAVIGATION_MENU[number]>>(data.NAVIGATION_MENU)
+    .filter((item) => typeof item.pageSlug === 'string' && typeof item.label === 'string')
+    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+    .filter((item) => !item.isHidden);
+  const services = safeRecordArray<NonNullable<typeof data.SERVICES[number]>>(data.SERVICES)
+    .filter((service) => typeof service.id === 'string' && typeof service.title === 'string')
+    .slice(0, 5);
 
   const socials = [
     { id: 'telegram', href: personal.telegramUrl, icon: Send, label: 'تلگرام' },

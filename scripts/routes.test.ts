@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { legacyHashToPath, parsePath, pathForPage, pathForPost, postPath, routeToPath } from '../lib/routes';
-import { buildDocumentTitle, defaultGlobalSeo, resolveSeo } from '../lib/seoDefaults';
+import { buildDocumentTitle, defaultGlobalSeo, findPublishedPost, resolveSeo } from '../lib/seoDefaults';
 
 // ---- paths ----
 assert.deepEqual(parsePath('/'), { page: 'home', postId: null });
@@ -61,6 +61,10 @@ assert.equal(post.keywords, 'a, b');
 assert.equal(post.ogType, 'article');
 assert.equal(resolveSeo({ page: 'blog', post: { id: 'p', title: 't', status: 'draft' } }).noIndex, true, 'drafts hidden from crawlers');
 assert.equal(resolveSeo({ page: 'blog', post: { id: 'p', title: 't', status: 'draft' }, isAdmin: true }).noIndex, false, 'admin previews drafts');
+const cmsPosts = [{ id: 'published', slug: 'published', title: 'Public', status: 'published' }, { id: 'draft', slug: 'draft', title: 'Secret draft', status: 'draft' }];
+assert.equal(findPublishedPost(cmsPosts, 'published')?.title, 'Public');
+assert.equal(findPublishedPost(cmsPosts, 'draft'), null, 'edge middleware must not render draft content in crawler metadata');
+assert.equal(findPublishedPost(cmsPosts, 'published')?.id, 'published', 'published slugs resolve in edge metadata');
 assert.equal(resolveSeo({ page: 'blog', post: { id: 'p', title: 't', seo: { title: 'SEO', ogImage: 'https://x/y.png' } } }).ogImage, 'https://x/y.png');
 assert.equal(buildDocumentTitle('X', { titleTemplate: '' }), `X | ${defaultGlobalSeo.siteTitle}`, 'empty template → "base | site"');
 assert.equal(buildDocumentTitle('X', { titleTemplate: '%s — برند' }), 'X — برند');

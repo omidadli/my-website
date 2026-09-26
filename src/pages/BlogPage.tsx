@@ -8,6 +8,8 @@ import { motion } from 'motion/react';
 import { usePreservedState } from '../utils/statePreserver';
 import { linkProps, postPath } from '../utils/router';
 import { categoryOrder, normalizeCategory } from '../data/blogTaxonomy';
+import { safeRecordArray } from '../utils/contentDefaults';
+import { imageFallback } from '../utils/imageFallback';
 
 interface BlogPageProps {
   theme: Theme;
@@ -19,7 +21,14 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
   const isDark = theme === 'dark';
   const { data } = useContent();
   const pageData = data.BLOG_PAGE_DATA;
-  const posts: BlogPost[] = data.BLOG_POSTS || [];
+  const posts: BlogPost[] = safeRecordArray<BlogPost>(data.BLOG_POSTS)
+    .filter((post) => typeof post.id === 'string' && post.id.length > 0)
+    .map((post) => ({
+      ...post,
+      title: typeof post.title === 'string' ? post.title : 'بدون عنوان',
+      excerpt: typeof post.excerpt === 'string' ? post.excerpt : '',
+      categoryFa: typeof post.categoryFa === 'string' ? post.categoryFa : 'عمومی',
+    }));
   const [query, setQuery] = usePreservedState<string>('blog_search_query', '');
   const [category, setCategory] = usePreservedState<string>('blog_category_filter', 'all');
   const [newsletterEmail, setNewsletterEmail] = usePreservedState<string>('blog_newsletter_email', '');
@@ -102,7 +111,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
             </div>
           </div>
           <div className={`rounded-[var(--nd-radius-card)] overflow-hidden aspect-[16/10] border ${isDark ? 'border-white/12' : 'border-white/60'} shadow-md`}>
-            <img src={featured.coverImage} alt={featured.title} className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700" referrerPolicy="no-referrer" />
+            <img src={featured.coverImage} alt={featured.title} className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700" referrerPolicy="no-referrer" onError={imageFallback()} />
           </div>
         </motion.a>
       )}
@@ -131,7 +140,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
                 className="nd-card nd-card-hover overflow-hidden text-right flex flex-col group cursor-pointer"
               >
                 <div className={`aspect-[16/9] overflow-hidden border-b ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
-                  <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-700" referrerPolicy="no-referrer" />
+                  <img src={post.coverImage} alt={post.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-700" referrerPolicy="no-referrer" onError={imageFallback()} />
                 </div>
                 <div className="p-6 space-y-3 flex flex-col grow">
                   <div className="flex items-center gap-2">

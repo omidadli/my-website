@@ -79,7 +79,7 @@ export const buildSitemapXml = (baseUrl: string, content: PublicSiteContent | nu
     if (pageSeo[route]?.noIndex) continue;
     entries.push({ loc: url(route), priority: '0.8' });
   }
-  for (const cp of content?.CUSTOM_PAGES || []) {
+  for (const cp of (Array.isArray(content?.CUSTOM_PAGES) ? content.CUSTOM_PAGES : [])) {
     if (isValidSlug(cp?.slug)) entries.push({ loc: url(cp.slug), priority: '0.8' });
   }
   // Same source of truth as the edge middleware (`_middleware.ts`): when D1 has
@@ -87,7 +87,11 @@ export const buildSitemapXml = (baseUrl: string, content: PublicSiteContent | nu
   // on the built-in defaults, so the sitemap has to list those posts too. Without
   // this fallback a fresh database produced a sitemap with only the 8 static
   // pages while every /blog/<id> URL was live and indexable.
-  const posts = Array.isArray(content?.BLOG_POSTS) && content!.BLOG_POSTS.length > 0
+  // Deliberately the same condition the middleware uses: an *empty* array means
+  // the CMS really has no posts (and /blog/<id> answers 404), so the sitemap must
+  // not advertise URLs that do not exist. Only a missing/null list means "no
+  // content row yet" → the bundled defaults are what the site serves.
+  const posts: SeoPostLike[] = Array.isArray(content?.BLOG_POSTS)
     ? (content!.BLOG_POSTS as SeoPostLike[])
     : (DEFAULT_BLOG_POSTS as unknown as SeoPostLike[]);
 

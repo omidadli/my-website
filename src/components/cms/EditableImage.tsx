@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { useContent, getByPath } from '../../context/ContentContext';
 import { MediaPickerModal } from './MediaPickerModal';
+import { imageFallback } from '../../utils/imageFallback';
 
 interface EditableImageProps {
   path: string;
@@ -18,7 +19,7 @@ export const EditableImage: React.FC<EditableImageProps> = ({
   path,
   className = '',
   alt = 'Image',
-  fallbackSrc = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+  fallbackSrc = '/image-fallback.svg',
   defaultSrc = '',
   src = '',
   aspectRatio
@@ -29,7 +30,7 @@ export const EditableImage: React.FC<EditableImageProps> = ({
   const currentValue = getByPath(data, path) || defaultSrc || src || fallbackSrc;
 
   if (!isAdmin) {
-    return <img src={currentValue} alt={alt} className={className} referrerPolicy="no-referrer" />;
+    return <img src={currentValue} alt={alt} className={className} referrerPolicy="no-referrer" onError={imageFallback()} />;
   }
 
   const handleSelectImage = (newUrl: string) => {
@@ -38,7 +39,7 @@ export const EditableImage: React.FC<EditableImageProps> = ({
 
   return (
     <div className="relative group/img inline-block overflow-visible">
-      <img src={currentValue} alt={alt} className={className} referrerPolicy="no-referrer" />
+      <img src={currentValue} alt={alt} className={className} referrerPolicy="no-referrer" onError={imageFallback()} />
 
       <button
         type="button"

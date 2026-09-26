@@ -28,12 +28,16 @@ for (const id of bundledIds) {
   assert.ok(locs(empty).includes(`${base}/blog/${id}`), `fallback lists /blog/${id}`);
 }
 
-// ---- empty (but present) array behaves like "no content" ----
-assert.deepEqual(
-  locs(buildSitemapXml(base, { BLOG_POSTS: [] }, null)).sort(),
-  locs(empty).sort(),
-  'an empty BLOG_POSTS array falls back to the bundled posts too',
+// ---- an *empty* array means the CMS genuinely has no posts ----
+// The middleware answers 404 for /blog/<id> in that case, so the sitemap must not
+// advertise the bundled defaults (it would list URLs that do not exist).
+const emptyArray = buildSitemapXml(base, { BLOG_POSTS: [] }, null);
+assert.equal(
+  locs(emptyArray).filter((l) => l.includes('/blog/')).length,
+  0,
+  'an empty BLOG_POSTS array adds no post URLs',
 );
+assert.ok(locs(emptyArray).includes(`${base}/blog`), 'the blog index itself is still listed');
 
 // ---- real CMS content wins over the defaults ----
 const fromCms = buildSitemapXml(
