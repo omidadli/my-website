@@ -34,6 +34,9 @@ import {
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { MaskLines, Magnetic } from '../components/motion/Cinematic';
 import { linkProps, postPath } from '../utils/router';
+import { normalizeCaseStudies } from '../utils/caseStudies';
+import { safeRecordArray } from '../utils/contentDefaults';
+import { imageFallback } from '../utils/imageFallback';
 
 interface HomePageProps {
   theme: Theme;
@@ -124,16 +127,16 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
   const carouselRef = useRef<HTMLDivElement>(null);
 
   const personal = data.PERSONAL_INFO;
-  const stats = data.STATS || [];
-  const services = data.SERVICES || [];
-  const caseStudies = data.CASE_STUDIES || [];
-  const testimonials = data.TESTIMONIALS || [];
-  const howIWork = data.HOMEPAGE_HOW_I_WORK_STEPS || data.HOW_I_WORK_STEPS || [];
-  const timeline = data.TIMELINE || [];
-  const otherCollaborations = data.OTHER_COLLABORATIONS || [];
-  const whyOmidPoints = data.WHY_OMID_POINTS || [];
-  const skills = data.SKILLS_TOOLS || [];
-  const homeSections = data.PAGE_SECTIONS['home'] || [];
+  const stats = safeRecordArray<NonNullable<typeof data.STATS[number]>>(data.STATS);
+  const services = safeRecordArray<NonNullable<typeof data.SERVICES[number]>>(data.SERVICES);
+  const caseStudies = normalizeCaseStudies(data.CASE_STUDIES);
+  const testimonials = safeRecordArray<NonNullable<typeof data.TESTIMONIALS[number]>>(data.TESTIMONIALS);
+  const howIWork = safeRecordArray<any>(data.HOMEPAGE_HOW_I_WORK_STEPS || data.HOW_I_WORK_STEPS);
+  const timeline = safeRecordArray<any>(data.TIMELINE);
+  const otherCollaborations = safeRecordArray<any>(data.OTHER_COLLABORATIONS);
+  const whyOmidPoints = safeRecordArray<any>(data.WHY_OMID_POINTS);
+  const skills = safeRecordArray<any>(data.SKILLS_TOOLS);
+  const homeSections = safeRecordArray<any>(data.PAGE_SECTIONS?.['home']);
 
   const featuredStudies = (caseStudies.filter((c) => c.featured).length ? caseStudies.filter((c) => c.featured) : caseStudies).slice(0, 6);
   const homepageStudies = featuredStudies.slice(0, 4);
@@ -279,6 +282,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                       src={personal.avatar}
                       alt={personal.name}
                       referrerPolicy="no-referrer"
+                      onError={imageFallback('/avatar-fallback.svg')}
                       className={`w-7 h-7 rounded-full object-cover ring-2 ${isDark ? 'ring-white/30' : 'ring-white'}`}
                     />
                     <span className={`-ms-2 w-7 h-7 rounded-full ring-2 grid place-items-center text-[10px] font-black text-white nd-grad ${isDark ? 'ring-white/30' : 'ring-white'}`}>
@@ -406,7 +410,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
               className={`relative z-10 nd-card max-w-3xl mx-auto p-6 sm:p-8 flex flex-col sm:flex-row items-start gap-5 ${isDark ? '-mt-10 sm:-mt-12' : 'mt-6'}`}
             >
-              <img src={personal.avatar} alt={personal.name} className="w-16 h-16 rounded-2xl object-cover shadow-sm shrink-0" />
+              <img src={personal.avatar} alt={personal.name} loading="lazy" decoding="async" onError={imageFallback('/avatar-fallback.svg')} className="w-16 h-16 rounded-2xl object-cover shadow-sm shrink-0" />
               <p className="text-sm sm:text-base leading-relaxed text-[color:var(--nd-ink-2)]">
                 <span className="font-black text-[color:var(--nd-accent)] ml-1">من امید عدلی هستم؛</span>
                 متخصص رشد دیجیتال برای فروشگاه‌ها. کمک می‌کنم بفهمید مشتری‌ها کجا شما را پیدا می‌کنند، چرا بعضی‌ها خرید می‌کنند و بعضی‌ها نه، و برای بهتر شدن فروش باید دقیقاً روی چه چیزی کار کنید.
@@ -700,7 +704,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                             <h3 className="nd-h2 text-base sm:text-lg">{srv.title}</h3>
                             <p className="nd-muted text-xs sm:text-sm leading-relaxed">{srv.shortDesc}</p>
                             <div className="flex flex-wrap gap-1.5">
-                              {(srv.tags || []).slice(0, 3).map((t) => (
+                              {(Array.isArray(srv.tags) ? srv.tags : []).slice(0, 3).map((t) => (
                                 <span key={t} className="nd-chip dir-ltr">{t}</span>
                               ))}
                             </div>
@@ -890,7 +894,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                   <div className="space-y-4">
                     <p className="text-sm sm:text-base leading-relaxed font-medium text-[color:var(--nd-ink-2)]">{testimonials[0].quote}</p>
                     <div className="flex flex-wrap items-center gap-3">
-                      <img src={testimonials[0].avatarUrl} alt={testimonials[0].clientName} className="w-10 h-10 rounded-full object-cover" />
+                      <img src={testimonials[0].avatarUrl} alt={testimonials[0].clientName} loading="lazy" decoding="async" onError={imageFallback('/avatar-fallback.svg')} className="w-10 h-10 rounded-full object-cover" />
                       <span>
                         <span className="block text-xs font-black text-[color:var(--nd-ink)]">{testimonials[0].clientName} — {testimonials[0].company}</span>
                         <span className="block text-[11px] font-bold text-[color:var(--nd-faint)]">{testimonials[0].clientRole}</span>
@@ -972,7 +976,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
       /* ============ 9. FINAL CTA ============ */
       /* ============ 8.5 INSIGHTS — lead magnet + latest writing ============ */
       case 'INSIGHTS': {
-        const posts = (data.BLOG_POSTS || []).slice(0, 3);
+        const posts = safeRecordArray<any>(data.BLOG_POSTS).slice(0, 3);
         return (
           <section className="py-14 sm:py-20">
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">

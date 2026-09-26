@@ -65,10 +65,10 @@ export const buildSitemapXml = (baseUrl: string, content: PublicSiteContent | nu
     if (pageSeo[route]?.noIndex) continue;
     entries.push({ loc: url(route), priority: '0.8' });
   }
-  for (const cp of content?.CUSTOM_PAGES || []) {
+  for (const cp of (Array.isArray(content?.CUSTOM_PAGES) ? content.CUSTOM_PAGES : [])) {
     if (isValidSlug(cp?.slug)) entries.push({ loc: url(cp.slug), priority: '0.8' });
   }
-  for (const post of content?.BLOG_POSTS || []) {
+  for (const post of (Array.isArray(content?.BLOG_POSTS) ? content.BLOG_POSTS : [])) {
     if (!post || post.status === 'draft' || post.seo?.noIndex) continue;
     const slug = isValidSlug(post.slug) ? post.slug : isValidSlug(post.id) ? post.id : null;
     if (slug) entries.push({ loc: url(`blog/${slug}`), priority: '0.7' });

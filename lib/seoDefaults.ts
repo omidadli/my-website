@@ -38,6 +38,10 @@ export interface SeoPostLike {
   seo?: SeoPageLike;
 }
 
+/** Resolve a public post by ID or slug; drafts are never routable by public crawlers. */
+export const findPublishedPost = <T extends SeoPostLike>(posts: readonly T[], idOrSlug: string): T | null =>
+  posts.find((post) => post && post.status !== 'draft' && (post.id === idOrSlug || post.slug === idOrSlug)) || null;
+
 export const defaultGlobalSeo = {
   siteTitle: 'امید عدلی | مشاور و مجری پرفورمنس مارکتینگ و CRO',
   titleTemplate: '%s | امید عدلی',

@@ -7,6 +7,7 @@ import { IconBadge3D } from '../components/3D/3DIconBadge';
 import { PageHero } from '../components/nd/Kit';
 import { ArrowUpLeft, ChevronLeft, X, AlertTriangle, Lightbulb, TrendingUp, Globe, ExternalLink, Sparkles, Target, Rocket, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { normalizeCaseStudies, safeExternalUrl } from '../utils/caseStudies';
 
 interface PortfolioPageProps {
   theme: Theme;
@@ -23,7 +24,9 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
 }) => {
   const isDark = theme === 'dark';
   const { data } = useContent();
-  const caseStudiesList = data.CASE_STUDIES || [];
+  const caseStudiesList = normalizeCaseStudies(data.CASE_STUDIES);
+  const detailStudy = selectedCaseStudy ? normalizeCaseStudies([selectedCaseStudy])[0] : null;
+  const detailPreviewUrl = safeExternalUrl(detailStudy?.liveUrl);
   // Modal UX: Escape to close + background scroll lock
   useEffect(() => {
     if (!selectedCaseStudy) return;
@@ -41,6 +44,8 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
 
   const [selectedPath, setSelectedPath] = usePreservedState<string>('portfolio_selected_path', 'all');
   const [selectedIndustry, setSelectedIndustry] = usePreservedState<string>('portfolio_selected_industry', 'all');
+  const [showPreview, setShowPreview] = useState(false);
+  useEffect(() => setShowPreview(false), [selectedCaseStudy?.id]);
 
   const pathFilters = [
     { key: 'all', label: 'همه مسیرها', icon: Layers },
@@ -200,9 +205,13 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
 
       {/* Detail modal */}
       <AnimatePresence>
-        {selectedCaseStudy && (
-          <div className={`fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-xl ${isDark ? 'bg-black/80' : 'bg-[#17171c]/40'}`}>
+        {detailStudy && (
+          <div role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onSelectCaseStudy(null); }} className={`fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-xl ${isDark ? 'bg-black/80' : 'bg-[#17171c]/40'}`}>
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="case-study-title"
+              onMouseDown={(event) => event.stopPropagation()}
               initial={{ opacity: 0, scale: 0.96, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 20 }}
@@ -221,52 +230,47 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
 
               <div className={`space-y-4 pt-2 pb-6 border-b ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="nd-chip">{selectedCaseStudy.industryFa}</span>
-                  <span className={`text-xs ${isDark ? 'text-slate-400' : 'nd-muted'}`}>مشتری: {selectedCaseStudy.client}</span>
+                  <span className="nd-chip">{detailStudy.industryFa}</span>
+                  <span className={`text-xs ${isDark ? 'text-slate-400' : 'nd-muted'}`}>مشتری: {detailStudy.client}</span>
                 </div>
-                <h2 className={`nd-h2 text-xl sm:text-3xl leading-tight ${isDark ? 'text-white' : ''}`}>{selectedCaseStudy.title}</h2>
+                <h2 id="case-study-title" className={`nd-h2 text-xl sm:text-3xl leading-tight ${isDark ? 'text-white' : ''}`}>{detailStudy.title}</h2>
               </div>
 
-              {selectedCaseStudy.liveUrl && (
-                <div className="my-8 space-y-3">
+              {detailPreviewUrl && (
+                <section className="my-8 space-y-3" aria-label="پیش‌نمایش وب‌سایت">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <h3 className={`nd-h2 text-base flex items-center gap-2 ${isDark ? 'text-white' : ''}`}>
                       <Globe className="w-5 h-5 text-[color:var(--nd-accent)]" />
                       پیش‌نمایش زنده وب‌سایت
                     </h3>
-                    <a
-                      href={selectedCaseStudy.liveUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="nd-chip hover:text-[color:var(--nd-accent)] transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      باز کردن در تب جدید
+                    <a href={detailPreviewUrl} target="_blank" rel="noopener noreferrer" className="nd-chip hover:text-[color:var(--nd-accent)] transition-colors">
+                      <ExternalLink className="w-3.5 h-3.5" /> باز کردن در تب جدید
                     </a>
                   </div>
-                  <div className={`rounded-3xl border overflow-hidden ${isDark ? 'border-white/12' : 'border-[color:var(--nd-line)]'}`}>
-                    <div className={`flex items-center gap-2 px-4 py-3 border-b ${isDark ? 'bg-white/5 border-white/10' : 'bg-[color:var(--nd-bg)] border-[color:var(--nd-line)]'}`}>
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
-                      <span className={`ms-3 text-[11px] truncate dir-ltr ${isDark ? 'text-slate-400' : 'nd-muted'}`}>{selectedCaseStudy.liveUrl}</span>
+                  {!showPreview ? (
+                    <div className={`rounded-3xl border p-5 sm:p-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${isDark ? 'border-white/10 bg-white/5' : 'border-[color:var(--nd-line)] bg-[color:var(--nd-bg)]'}`}>
+                      <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'nd-muted'}`}>
+                        برای جلوگیری از بارگذاری سنگین و نمایش صفحهٔ خالی در سایت‌هایی که iframe را مسدود می‌کنند، پیش‌نمایش فقط با درخواست شما بارگذاری می‌شود.
+                      </p>
+                      <button type="button" onClick={() => setShowPreview(true)} className="nd-btn nd-btn-accent px-5 py-3 text-xs shrink-0">بارگذاری پیش‌نمایش</button>
                     </div>
-                    <iframe
-                      src={selectedCaseStudy.liveUrl}
-                      title={selectedCaseStudy.title}
-                      loading="lazy"
-                      className="w-full h-[420px] sm:h-[560px] bg-white"
-                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                    />
-                  </div>
-                </div>
+                  ) : (
+                    <div className={`rounded-3xl border overflow-hidden ${isDark ? 'border-white/12' : 'border-[color:var(--nd-line)]'}`}>
+                      <div className={`flex items-center justify-between gap-2 px-4 py-3 border-b ${isDark ? 'bg-white/5 border-white/10' : 'bg-[color:var(--nd-bg)] border-[color:var(--nd-line)]'}`}>
+                        <span className={`text-[11px] truncate dir-ltr ${isDark ? 'text-slate-400' : 'nd-muted'}`}>{detailPreviewUrl}</span>
+                        <button type="button" onClick={() => setShowPreview(false)} className="text-xs font-bold text-[color:var(--nd-accent)]">بستن پیش‌نمایش</button>
+                      </div>
+                      <iframe src={detailPreviewUrl} title={detailStudy.title} loading="lazy" referrerPolicy="no-referrer" className="w-full h-[300px] sm:h-[480px] bg-white" sandbox="allow-scripts allow-forms allow-popups" />
+                    </div>
+                  )}
+                </section>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-8">
                 {[
-                  { icon: AlertTriangle, label: 'چالش اولیه', text: selectedCaseStudy.challenge, tint: 'var(--nd-peach-soft)', fg: '#d97706' },
-                  { icon: Lightbulb, label: 'راهکار پیاده‌شده', text: selectedCaseStudy.solution, tint: 'var(--nd-sky-soft)', fg: '#1d6fd8' },
-                  { icon: TrendingUp, label: 'نتایج حاصله', text: selectedCaseStudy.results, tint: 'var(--nd-mint-soft)', fg: '#0f9d6e' },
+                  { icon: AlertTriangle, label: 'چالش اولیه', text: detailStudy.challenge, tint: 'var(--nd-peach-soft)', fg: '#d97706' },
+                  { icon: Lightbulb, label: 'راهکار پیاده‌شده', text: detailStudy.solution, tint: 'var(--nd-sky-soft)', fg: '#1d6fd8' },
+                  { icon: TrendingUp, label: 'نتایج حاصله', text: detailStudy.results, tint: 'var(--nd-mint-soft)', fg: '#0f9d6e' },
                 ].map((b, i) => (
                   <div
                     key={i}
@@ -288,7 +292,7 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
                   مقایسه دقیق شاخص‌ها (قبل و بعد از پروژه)
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {selectedCaseStudy.metricsComparison.map((metric, idx) => (
+                  {detailStudy.metricsComparison.map((metric, idx) => (
                     <div key={idx} className={`p-5 rounded-2xl border space-y-2 ${isDark ? 'bg-white/5 border-white/10' : 'bg-[color:var(--nd-bg-soft)] border-[color:var(--nd-line)]'}`}>
                       <span className={`text-xs font-bold block ${isDark ? 'text-slate-400' : 'nd-muted'}`}>{metric.label}</span>
                       <div className="flex items-center justify-between pt-1">

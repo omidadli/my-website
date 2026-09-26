@@ -1,7 +1,7 @@
 import type { Env } from './api/_shared';
 import { loadPublicContent, resolveBaseUrl, type PublicSiteContent } from './_seo';
 import { parsePath, pathForPage, postPath } from '../lib/routes';
-import { resolveSeo, buildDocumentTitle, NOT_FOUND_TITLE, type SeoPostLike } from '../lib/seoDefaults';
+import { resolveSeo, buildDocumentTitle, findPublishedPost, NOT_FOUND_TITLE, type SeoPostLike } from '../lib/seoDefaults';
 import { BLOG_POSTS as DEFAULT_BLOG_POSTS } from '../src/data/content';
 
 /**
@@ -44,7 +44,10 @@ interface HeadValues {
 }
 
 const headFor = (pathname: string, content: PublicSiteContent | null, baseUrl: string): HeadValues | null => {
-  const customSlugs = (content?.CUSTOM_PAGES || []).map((cp) => String(cp?.slug || '')).filter(Boolean);
+  const customSlugs = (Array.isArray(content?.CUSTOM_PAGES) ? content.CUSTOM_PAGES : [])
+    .filter((page) => page && typeof page === 'object')
+    .map((cp) => String(cp?.slug || ''))
+    .filter(Boolean);
   const route = parsePath(pathname, customSlugs);
   const globalSeo = content?.GLOBAL_SEO || null;
   const pageSeo = content?.PAGE_SEO || {};
@@ -57,7 +60,7 @@ const headFor = (pathname: string, content: PublicSiteContent | null, baseUrl: s
 
   if (route.page === 'blog' && route.postId) {
     const posts = (Array.isArray(content?.BLOG_POSTS) ? content!.BLOG_POSTS : DEFAULT_BLOG_POSTS) as SeoPostLike[];
-    const post = posts.find((p) => p && (p.id === route.postId || (!!p.slug && p.slug === route.postId))) || null;
+    const post = findPublishedPost(posts, route.postId);
     if (!post) {
       const seo = resolveSeo({ page: 'blog', globalSeo, pageSeo: pageSeo.blog });
       const title = buildDocumentTitle(NOT_FOUND_TITLE, globalSeo || {});
