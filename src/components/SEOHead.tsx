@@ -121,4 +121,11 @@ function setLinkRel(rel: string, href: string) {
     document.head.appendChild(element);
   }
   element.setAttribute('href', href);
+  if (rel === 'icon') {
+    // Keep the MIME type in sync with the file, otherwise an SVG/PNG favicon set from the CMS may be ignored.
+    const ext = (href.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
+    const type = ext === 'svg' ? 'image/svg+xml' : ext === 'png' ? 'image/png' : ext === 'ico' ? 'image/x-icon' : '';
+    if (type) element.setAttribute('type', type);
+    else element.removeAttribute('type');
+  }
 }

@@ -54,6 +54,21 @@ POST /api/tools   { action: "unlock" | "chat" | "session", … }                
 
 API keys live only server-side and are **never** returned in full (only masked).
 
+Abuse limits (public actions): `unlock` — 10 failed codes / 15 min per IP+phone and 60 per IP
+(429); `chat` — paid: 60 msgs / hour per phone, free trial: N msgs per device (CMS setting,
+default 3) **and** 30 msgs / hour per IP (429, `code: "trial_ended"`). Access codes are
+accepted with Persian digits, lowercase, spaces or a missing dash (`m4k 7q2x` → `M4K-7Q2X`).
+
+### Crawlers
+
+```
+GET /robots.txt     →  GLOBAL_SEO.robotsTxt from the CMS (or a default) + Sitemap line
+GET /sitemap.xml    →  home, built-in pages, custom pages, published (non-noindex) posts
+```
+
+Both are Pages Functions (`functions/robots.txt.ts`, `functions/sitemap.xml.ts`) fed by the
+same content blob as the site, cached for 1 hour.
+
 ---
 
 ## 2. MCP server (connect the site to Claude)

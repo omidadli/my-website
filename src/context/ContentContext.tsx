@@ -24,10 +24,12 @@ export const defaultGlobalSeo: GlobalSeoConfig = {
   titleTemplate: '%s | امید عدلی',
   defaultMetaDesc: 'خدمات تخصصی پرفورمنس مارکتینگ، بهینه‌سازی نرخ تبدیل (CRO)، کمپین‌های گوگل ادز و آنالیز پیشرفته رفتار کاربر.',
   defaultKeywords: 'پرفورمنس مارکتینگ, CRO, دیجیتال مارکتینگ, گوگل ادز, امید عدلی, بهینه‌سازی نرخ تبدیل',
-  faviconUrl: '/favicon.ico',
-  ogImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80',
+  // Only files that really exist in /public — /favicon.ico never shipped, so browsers got the SPA's HTML.
+  faviconUrl: '/logo.svg',
+  // Own photo instead of a stock portrait of a stranger in link previews (WhatsApp/Telegram/LinkedIn).
+  ogImage: 'https://omidadli01.site/profile-photo-web.jpg',
   canonicalBaseUrl: 'https://omidadli01.site',
-  robotsTxt: 'User-agent: *\nAllow: /\nSitemap: https://omidadli01.site/sitemap.xml',
+  robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://omidadli01.site/sitemap.xml',
 };
 
 export const defaultNavigationMenu: NavigationMenuItem[] = [
@@ -896,11 +898,11 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       )
       .join('\n');
 
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemap.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
   };
 
   const generateRobotsTxt = () => {
-    return data.GLOBAL_SEO.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: https://omidadli01.site/sitemap.xml';
+    return data.GLOBAL_SEO.robotsTxt || defaultGlobalSeo.robotsTxt;
   };
 
   const addBlogComment = async (comment: { postId: string; authorName: string; authorEmail: string; content: string }): Promise<{ ok: boolean; error?: string }> => {
