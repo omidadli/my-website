@@ -15,6 +15,25 @@ let cloudAvailable: boolean | null = null;
 /** Body of the probe response, handed to the first getContent() so boot needs one round-trip, not two. */
 let primedContent: { data: any; updatedAt: string | null } | null | undefined;
 
+/** Why a login attempt failed — the form shows a different (and actually useful) message per kind. */
+export type LoginFailureKind = 'not-configured' | 'locked' | 'invalid' | 'network' | 'error';
+
+/** Live diagnostics from GET /api/health (names + booleans only, never secret values). */
+export interface AuthHealth {
+  ok: boolean;
+  service?: string;
+  /** true when answered by the local Vite dev API rather than the deployed Pages Function. */
+  dev?: boolean;
+  ready?: boolean;
+  message?: string;
+  auth: { configured: boolean; missing: string[] };
+  bindings?: { d1: boolean; r2: boolean };
+  database?: { reachable: boolean | null; loginAttemptsTable: boolean | null };
+  login: { locked: boolean; failedAttempts: number; maxFailures: number; windowMinutes: number; retryAfterMinutes: number };
+  hints?: string[];
+  checkedAt?: string;
+}
+
 export interface CloudMediaItem {
   id: string;
   key: string;
@@ -118,7 +137,10 @@ export const api = {
     }
   },
 
-  async login(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  async login(
+    username: string,
+    password: string
+  ): Promise<{ ok: boolean; error?: string; kind?: LoginFailureKind; missing?: string[] }> {
     try {
       const r = await fetch('/api/auth', {
         method: 'POST',
@@ -130,9 +152,36 @@ export const api = {
         setToken(j.token);
         return { ok: true };
       }
-      return { ok: false, error: j?.error || 'ورود ناموفق بود.' };
+      // Distinguish the causes: 503 = Cloudflare secrets never reached this deployment,
+      // 429 = this IP is temporarily locked out, 401 = the credentials really don't match.
+      const kind: LoginFailureKind =
+        r.status === 503 ? 'not-configured' : r.status === 429 ? 'locked' : r.status === 401 ? 'invalid' : 'error';
+      return {
+        ok: false,
+        kind,
+        missing: Array.isArray(j?.missing) ? j.missing.map(String) : undefined,
+        error:
+          j?.error ||
+          (kind === 'invalid'
+            ? 'نام کاربری یا رمز عبور اشتباه است.'
+            : kind === 'locked'
+              ? 'تلاش‌های ناموفق زیاد؛ ورود موقتاً قفل شده است.'
+              : `ورود ناموفق بود (${r.status}).`),
+      };
     } catch {
-      return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
+      return { ok: false, kind: 'network', error: 'اتصال به سرور برقرار نشد.' };
+    }
+  },
+
+  /** Live self-diagnosis of the admin login pipeline; null when the Functions API isn't deployed. */
+  async authHealth(): Promise<AuthHealth | null> {
+    try {
+      const r = await fetch('/api/health', { cache: 'no-store' });
+      if (!r.ok) return null;
+      const j = await r.json().catch(() => null);
+      return j?.ok && j?.auth && j?.login ? (j as AuthHealth) : null;
+    } catch {
+      return null;
     }
   },
 

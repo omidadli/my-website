@@ -43,14 +43,16 @@ Pages → پروژه‌ات → **Settings → Functions → D1 database binding
 - Database: همان `omidadli01-site-db`
 
 ## قدم ۵ — متغیرهای محرمانه (Secrets) را تعریف کن
-Pages → پروژه‌ات → **Settings → Environment variables** (روی محیط **Production**).
-این چهار مورد را اضافه کن (نوع: **Secret / Encrypted**):
+Pages → پروژه‌ات → **Settings → Variables and Secrets** (در داشبوردهای قدیمی‌تر:
+Environment variables) روی محیط **Production**.
+این چهار مورد را اضافه کن (نوع: **Secret / Encrypted** — نه Plain text، چون این پروژه
+`wrangler.toml` دارد و متغیرهای متنی با هر دیپلوی پاک می‌شوند):
 
 | نام متغیر | مقدار |
 |-----------|-------|
 | `AUTH_SECRET` | یک رشته‌ی تصادفیِ بلند (پایین یکی برایت ساختم) |
-| `ADMIN_USERNAME` | نام کاربریِ دلخواهِ ادمین |
-| `ADMIN_PASSWORD` | رمزِ قویِ دلخواهِ ادمین |
+| `ADMIN_USERNAME` | نام کاربریِ دلخواهِ ادمین (به بزرگی/کوچکی حروف حساس است) |
+| `ADMIN_PASSWORD` | رمزِ قویِ دلخواهِ ادمین (بدون فاصله‌ی اول/آخر) |
 | `GEMINI_API_KEY` | کلید Gemini برای پاسخ‌های واقعیِ هوش مصنوعی *(اختیاری ولی توصیه‌شده)* |
 
 یک `AUTH_SECRET` آماده (می‌توانی همین را استفاده کنی یا خودت بسازی):
@@ -59,6 +61,18 @@ T0BHe7_AjrsbNcYRmgjcoRnXH7mGtD6N6Yf9g96TNB0
 ```
 > بدون `AUTH_SECRET` و `ADMIN_*` پنل ادمین کار نمی‌کند. `GEMINI_API_KEY` را از
 > https://aistudio.google.com/apikey بگیر (رایگان).
+>
+> ⚠️ **این سکرت‌ها فقط به دیپلویمنتِ بعدی می‌رسند** (Pages آن‌ها را در زمان دیپلوی به
+> بیلد تزریق می‌کند) — پس بعد از افزودنشان حتماً قدم ۶ را انجام بده، وگرنه فرم ورود همان
+> «نام کاربری یا رمز عبور اشتباه است» را نشان می‌دهد.
+>
+> ⚠️ سکرت‌های **GitHub** (Settings → Secrets and variables → Actions) جای این‌ها را
+> نمی‌گیرند؛ آن‌ها برای همگام‌سازی محتوا هستند (و اگر `CLOUDFLARE_API_TOKEN` را داشته
+> باشی، ورک‌فلوی دیپلوی همین سه مقدار را خودش به کلودفلر می‌فرستد).
+>
+> برای تشخیص زنده‌ی وضعیت، `https://omidadli01.site/api/health` را باز کن
+> (فقط نام متغیرها و true/false را نشان می‌دهد، هرگز مقدار رمز را). راهنمای کامل:
+> [docs/LOGIN-TROUBLESHOOTING.md](./docs/LOGIN-TROUBLESHOOTING.md).
 
 ## قدم ۶ — انتشار
 بعد از قدم‌های بالا، در داشبورد Pages دکمه‌ی **Retry deployment** را بزن (یا یک
@@ -70,7 +84,12 @@ T0BHe7_AjrsbNcYRmgjcoRnXH7mGtD6N6Yf9g96TNB0
 > `https://omidadli01.site` استفاده کن.
 
 ## قدم ۷ — تست نهایی
-- به `https<آدرس سایت>/admin` برو و با `ADMIN_USERNAME` / `ADMIN_PASSWORD` وارد شو.
+- اول `https://omidadli01.site/api/health` را باز کن: باید `"ready": true` و
+  `"auth": { "configured": true, "missing": [] }` باشد. اگر `missing` پر بود،
+  سکرت‌ها به این دیپلویمنت نرسیده‌اند → قدم ۵ و ۶ را دوباره (و حتماً با دیپلوی جدید).
+- به `https://omidadli01.site/admin` برو و با `ADMIN_USERNAME` / `ADMIN_PASSWORD` وارد شو
+  (اگر ورود رد شد، پیام واقعیِ سرور بالای فرم نشان داده می‌شود؛ راهنمای رفع مشکل:
+  [docs/LOGIN-TROUBLESHOOTING.md](./docs/LOGIN-TROUBLESHOOTING.md)).
 - صفحه‌ی محصولات → یک ابزار → چند پیامِ رایگانِ آزمایشی را تست کن.
 - در پنل ادمین یک «دسترسی» برای یک شماره صادر کن و با کد، ابزار را باز کن.
 

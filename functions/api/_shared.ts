@@ -98,6 +98,25 @@ export const json = (body: unknown, init: ResponseInit = {}): Response =>
 
 export const unauthorized = (msg = 'احراز هویت ناموفق است.') => json({ ok: false, error: msg }, { status: 401 });
 
+/** Login rate limiting (used by /api/auth and reported by the /api/health diagnostics). */
+export const LOGIN_WINDOW_MINUTES = 15;
+export const LOGIN_MAX_FAILURES = 8;
+
+/**
+ * Which pieces of the admin-login configuration are actually visible to *this deployment*.
+ *
+ * Cloudflare Pages binds environment variables and secrets into a deployment at build/deploy
+ * time — a secret added in the dashboard (or with `wrangler pages secret put`) does NOT reach
+ * the deployment that is already serving traffic until a new deployment runs. That is the #1
+ * reason a correct username/password is rejected, so it is worth reporting explicitly.
+ * Returns names only, never values, which keeps /api/health safe to expose publicly.
+ */
+export const authConfigStatus = (env: Env): { configured: boolean; missing: string[] } => {
+  const required: (keyof Env)[] = ['ADMIN_USERNAME', 'ADMIN_PASSWORD', 'AUTH_SECRET'];
+  const missing = required.filter((name) => !env[name]).map(String);
+  return { configured: missing.length === 0, missing };
+};
+
 export const getClientIp = (request: Request): string =>
   request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
 

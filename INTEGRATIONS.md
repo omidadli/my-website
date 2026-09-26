@@ -18,10 +18,25 @@ Base URL = your site origin (e.g. `https://omidadli01.site`).
 ```
 POST /api/auth      { "username": "...", "password": "..." }  →  { "ok": true, "token": "..." }
 GET  /api/auth      Authorization: Bearer <token>            →  { "ok": true, "username": "..." }
+GET  /api/health    (public, read-only)                      →  { ok, ready, auth:{configured,missing[]}, bindings, login:{locked,…}, hints[] }
 ```
 
 Send `Authorization: Bearer <token>` on every admin call below. The token is
 short-lived; just log in again when it expires.
+
+`POST /api/auth` failure codes — they mean different things and the login form now
+says which one happened instead of always "wrong password":
+
+| Code | Meaning |
+|------|---------|
+| `401` | the credentials don't match `ADMIN_USERNAME` / `ADMIN_PASSWORD` (case-sensitive; the password is compared verbatim, spaces included) |
+| `503` | those secrets (+ `AUTH_SECRET`) are **not bound to this deployment** → add them in Cloudflare and redeploy |
+| `429` | 8 failed attempts from this IP in 15 min → temporarily locked out |
+
+`GET /api/health` is the one-request diagnosis of that pipeline. It reports variable
+**names and booleans only** (never values), so it is safe to leave public, and the
+admin login screen renders its findings as a banner. Full walkthrough:
+[docs/LOGIN-TROUBLESHOOTING.md](./docs/LOGIN-TROUBLESHOOTING.md).
 
 ### Content (the whole CMS state)
 
@@ -112,7 +127,7 @@ workflows keep the live site in step with the repo:
 
 | Workflow | Trigger | Effect |
 |----------|---------|--------|
-| `.github/workflows/deploy.yml` | any push to `main` | type-check + build + `wrangler pages deploy dist` + smoke-test `/api/content` |
+| `.github/workflows/deploy.yml` | any push to `main` | type-check + build + push `ADMIN_*`/`AUTH_SECRET` to Cloudflare + `wrangler pages deploy dist` + smoke-test `/api/content` + verify admin login |
 | `.github/workflows/sync-content.yml` | push to `main` changing `content/site-content.json` (or manual) | **merge** that content into the live DB (see below) |
 | `.github/workflows/export-content.yml` | manual, or nightly 02:30 UTC | pull the live content back into Git and commit it |
 
@@ -128,8 +143,24 @@ Settings → Secrets and variables → Actions → **New repository secret**:
 | `CLOUDFLARE_API_TOKEN` | deploy | Cloudflare token with *Pages: Edit* + *D1: Edit* |
 | `CLOUDFLARE_ACCOUNT_ID` | deploy | your Cloudflare account id |
 | `SITE_URL` | content sync | live site URL, e.g. `https://omidadli01.site` |
-| `ADMIN_USERNAME` | content sync | same as the Pages secret |
-| `ADMIN_PASSWORD` | content sync | same as the Pages secret |
+| `ADMIN_USERNAME` | content sync **+ pushed to Cloudflare by deploy** | same as the Pages secret |
+| `ADMIN_PASSWORD` | content sync **+ pushed to Cloudflare by deploy** | same as the Pages secret |
+| `AUTH_SECRET` | pushed to Cloudflare by deploy | same as the Pages secret (signs admin sessions) |
+
+**Admin login reads the Cloudflare side, not GitHub.** `ADMIN_*` in GitHub only
+exists for the content workflows — unless the deploy job copies them over. With
+`CLOUDFLARE_API_TOKEN` set, `deploy.yml` now does exactly that: it runs
+`wrangler pages secret put` for `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `AUTH_SECRET`
+(encrypted, values piped via stdin, never logged) **before** `wrangler pages deploy`,
+because Pages binds secrets into a deployment at deploy time — a secret added after
+the fact only reaches the *next* build. The job then logs in against the live
+`/api/auth` and prints `/api/health`, so a credential problem shows up in the run
+log as a warning with the exact HTTP code.
+
+If you deploy via the dashboard's "Connect to Git" instead (no `CLOUDFLARE_API_TOKEN`),
+set the three secrets in Cloudflare yourself — **type: Secret (encrypted)**, environment
+**Production** — and then redeploy. Details, including the `wrangler.toml` caveat and the
+rate-limit lockout: [docs/LOGIN-TROUBLESHOOTING.md](./docs/LOGIN-TROUBLESHOOTING.md).
 
 > The Pages **project name** in `deploy.yml` (`--project-name=my-website`) and in
 > `wrangler.toml` (`name = "my-website"`) must match your real Cloudflare Pages

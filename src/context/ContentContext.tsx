@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
-import { api } from '../services/api';
+import { api, type AuthHealth, type LoginFailureKind } from '../services/api';
 import * as initialData from '../data/content';
 
 import { 
@@ -223,13 +223,26 @@ export function setByPath(obj: any, path: string, value: any): any {
   return newObj;
 }
 
+/** Result of an admin login attempt — carries the *real* server reason so the UI can explain it. */
+export interface LoginResult {
+  ok: boolean;
+  /** Human-readable Persian explanation (server-provided when available). */
+  error?: string;
+  /** not-configured = Cloudflare secrets missing, locked = rate-limit, invalid = wrong credentials. */
+  kind?: LoginFailureKind;
+}
+
 interface ContentContextType {
   data: ContentState;
   isAdmin: boolean;
   setIsAdmin: (val: boolean) => void;
   pinCode: string;
   changePin: (newPin: string) => void;
-  loginAdmin: (username: string, password?: string) => Promise<boolean>;
+  loginAdmin: (username: string, password?: string) => Promise<LoginResult>;
+  /** Live /api/health snapshot (cloud mode only) — null until probed or when the API is absent. */
+  authHealth: AuthHealth | null;
+  /** Re-probe /api/health (e.g. right after a failed login). */
+  refreshAuthHealth: () => Promise<void>;
   /** 'cloud' when the Cloudflare D1 API is live, otherwise local-only mode. */
   persistence: 'local' | 'cloud';
   /** True once the mount probe finished (cloud content adopted, or confirmed local-only). */
@@ -360,6 +373,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // ---------- Cloud (Cloudflare D1) persistence ----------
   const [persistence, setPersistence] = useState<'local' | 'cloud'>('local');
+  const [authHealth, setAuthHealth] = useState<AuthHealth | null>(null);
   const [contentReady, setContentReady] = useState(false);
   const cloudReady = useRef(false);
   /** Version stamp of the content this tab last read from / saved to the cloud (optimistic concurrency). */
@@ -417,6 +431,13 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!cancelled) {
         const ok = api.getToken() ? await api.verify() : false;
         if (!cancelled) setIsAdmin(ok);
+        // Signed out → probe the login pipeline so the form can explain *why* a login fails
+        // (Cloudflare secrets not bound to this deployment / IP lockout) instead of always
+        // reporting "wrong username or password".
+        if (!cancelled && !ok) {
+          const health = await api.authHealth();
+          if (!cancelled) setAuthHealth(health);
+        }
       }
       cloudReady.current = true;
       if (!cancelled) setContentReady(true);
@@ -554,7 +575,12 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     logActivity('تغییر پین‌کد ادمین', 'رمز عبور ورود به پیشخوان مدیریت بروزرسانی شد.');
   };
 
-  const loginAdmin = async (username: string, password?: string): Promise<boolean> => {
+  /** Re-probe /api/health — used after a failed login so lockout/config state stays accurate. */
+  const refreshAuthHealth = async (): Promise<void> => {
+    setAuthHealth(await api.authHealth());
+  };
+
+  const loginAdmin = async (username: string, password?: string): Promise<LoginResult> => {
     if (persistence === 'cloud') {
       const res = await api.login(username, password || '');
       if (res.ok) {
@@ -569,20 +595,31 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
         setIsAdmin(true);
+        setAuthHealth(null);
         logActivity('ورود موفق', `کاربر «${username}» از طریق سرویس ابری وارد پیشخوان شد.`);
-        return true;
+        return { ok: true };
       }
-      logActivity('ورود ناموفق', 'نام کاربری یا رمز عبور اشتباه بود (سرویس ابری).');
-      return false;
+      // Log and surface the *actual* reason — "wrong password" is only one of three causes.
+      const reason =
+        res.kind === 'not-configured'
+          ? `سکرت‌های Cloudflare به دیپلویمنت نرسیده‌اند${res.missing?.length ? ` (${res.missing.join('، ')})` : ''}.`
+          : res.kind === 'locked'
+            ? 'ورود به دلیل تلاش‌های ناموفقِ زیاد موقتاً قفل است.'
+            : res.kind === 'network'
+              ? 'اتصال به سرویس ابری برقرار نشد.'
+              : 'نام کاربری یا رمز عبور اشتباه بود (سرویس ابری).';
+      logActivity('ورود ناموفق', reason);
+      refreshAuthHealth().catch(() => {});
+      return { ok: false, error: res.error || reason, kind: res.kind };
     }
     // Local dev fallback (no Cloudflare backend running): legacy PIN mode.
     if (!password && username === pinCode) {
       setIsAdmin(true);
       logActivity('ورود موفق', 'کاربر ادمین وارد پیشخوان شد (حالت محلی).');
-      return true;
+      return { ok: true };
     }
     logActivity('ورود ناموفق', 'تلاش برای ورود با رمز اشتباه.');
-    return false;
+    return { ok: false, error: 'رمز محلی وارد شده اشتباه است.', kind: 'invalid' };
   };
 
   const logoutAdmin = () => {
@@ -1022,6 +1059,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         pinCode,
         changePin,
         loginAdmin,
+        authHealth,
+        refreshAuthHealth,
         logoutAdmin,
         persistence,
         contentReady,

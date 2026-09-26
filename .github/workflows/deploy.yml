@@ -17,6 +17,9 @@ jobs:
     env:
       HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
       HAS_SITE_URL: ${{ secrets.SITE_URL != '' }}
+      HAS_ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME != '' }}
+      HAS_ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD != '' }}
+      HAS_AUTH_SECRET: ${{ secrets.AUTH_SECRET != '' }}
     permissions:
       contents: read
       deployments: write
@@ -42,6 +45,41 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # GitHub Actions secrets → Cloudflare Pages secrets (encrypted).
+      #
+      # The admin login reads ADMIN_USERNAME / ADMIN_PASSWORD / AUTH_SECRET from the *Cloudflare
+      # deployment environment*, never from GitHub — so credentials that only exist as Actions
+      # secrets can never log you in. This step makes GitHub the single source of truth and pushes
+      # them across. Two details that matter:
+      #   * ORDER: Pages binds env vars/secrets into a deployment at deploy time, so they must be
+      #     set BEFORE `pages deploy` below — setting them afterwards only affects the next build.
+      #   * TYPE: because this project has a wrangler.toml, plain (non-encrypted) dashboard
+      #     variables are managed by that file and can be dropped by a deploy; `pages secret put`
+      #     writes encrypted secrets, which survive.
+      # Values travel through stdin and are never printed (the output is redirected to /dev/null).
+      - name: Push admin credentials to Cloudflare
+        if: ${{ env.HAS_CF_TOKEN == 'true' && (env.HAS_ADMIN_PASSWORD == 'true' || env.HAS_ADMIN_USERNAME == 'true' || env.HAS_AUTH_SECRET == 'true') }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+        run: |
+          put_secret() { # $1 = secret name, $2 = value (from env, never echoed)
+            [ -z "$2" ] && return 0
+            # printf (not echo) so no trailing newline ends up inside the secret — a stray "\n"
+            # is a classic cause of "username or password is incorrect".
+            if printf '%s' "$2" | npx --yes wrangler@4 pages secret put "$1" --project-name=my-website > /dev/null 2>&1; then
+              echo "Cloudflare secret $1: set (production)"
+            else
+              echo "::warning title=Cloudflare secret $1::could not be set from Actions. Set it in the dashboard: Workers & Pages → my-website → Settings → Variables and Secrets → Production → type Secret."
+            fi
+          }
+          put_secret ADMIN_USERNAME "$ADMIN_USERNAME"
+          put_secret ADMIN_PASSWORD "$ADMIN_PASSWORD"
+          put_secret AUTH_SECRET "$AUTH_SECRET"
 
       # Deploys ./dist to the Cloudflare Pages project named in wrangler.toml.
       # D1 tables are created lazily at runtime by the API, so no migration step
@@ -102,3 +140,31 @@ jobs:
           curl -fsS --max-time 20 "$base/robots.txt" | grep -qi '^user-agent' || echo "::warning title=robots.txt::$base/robots.txt is not a robots file."
           curl -fsS --max-time 20 "$base/sitemap.xml" | grep -q '<urlset' || echo "::warning title=sitemap.xml::$base/sitemap.xml is not a sitemap."
           echo "routing + crawler files OK"
+
+      # End-to-end check of the thing people actually get stuck on: can the admin log in?
+      # Prints the live /api/health diagnosis (names + booleans only, never secret values) and
+      # then tries a real login with the GitHub credentials — a warning, never a red build, so a
+      # credential problem is reported loudly without blocking the deploy.
+      - name: Verify admin login on the live site
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_SITE_URL == 'true' && env.HAS_ADMIN_PASSWORD == 'true' }}
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          base="${SITE_URL%/}"
+          echo "--- /api/health ---"
+          curl -fsS --max-time 20 "$base/api/health" 2>/dev/null | head -c 800 || echo "(no answer — is the Functions API deployed?)"
+          echo
+          # Build the request body from env into a 0600 file so the password never appears in a
+          # command line or in the log, then delete it.
+          node -e 'const fs=require("fs");fs.writeFileSync("/tmp/login-body.json",JSON.stringify({username:process.env.ADMIN_USERNAME||"",password:process.env.ADMIN_PASSWORD||""}),{mode:0o600})'
+          code=$(curl -s -o /tmp/login.json -w '%{http_code}' --max-time 20 -X POST \
+            -H 'Content-Type: application/json' --data @/tmp/login-body.json "$base/api/auth")
+          shred -u /tmp/login-body.json 2>/dev/null || rm -f /tmp/login-body.json
+          if [ "$code" = "200" ]; then
+            echo "admin login OK (HTTP 200 — token issued)"
+          else
+            echo "::warning title=Admin login failed (HTTP $code)::$(head -c 300 /tmp/login.json | tr '\n' ' ') — 503 = the Cloudflare secrets are not bound to this deployment (add/re-add them and redeploy), 429 = that IP is rate-limited for 15 minutes, 401 = the Cloudflare value differs from the GitHub secret (trailing newline/space, letter case)."
+          fi
+          rm -f /tmp/login.json

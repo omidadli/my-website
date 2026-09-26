@@ -235,6 +235,37 @@ export function cmsDevApiPlugin(): Plugin {
             }
           }
 
+          // --- 1b. /api/health (dev parity with functions/api/health.ts) ---
+          if (pathname === '/api/health' && method === 'GET') {
+            // Dev login only needs ADMIN_PASSWORD (username defaults to "admin", AUTH_SECRET has a
+            // dev fallback), so report readiness against what this server actually checks.
+            const missing = ['ADMIN_PASSWORD'].filter((name) => !process.env[name]);
+            const configured = missing.length === 0;
+            return sendJson({
+              ok: true,
+              service: 'admin-auth',
+              dev: true,
+              ready: configured,
+              message: configured
+                ? 'حالت توسعه: ورود ادمین با متغیرهای محیطی محلی فعال است.'
+                : 'حالت توسعه: ADMIN_PASSWORD تنظیم نشده، پس ورود ادمین غیرفعال است (۵۰۳).',
+              auth: { configured, missing },
+              // No D1/R2 bindings in the Vite dev server (it keeps content in local JSON files),
+              // so omit them entirely — reporting `d1: false` here would raise a false alarm.
+              database: { reachable: null, loginAttemptsTable: null },
+              login: { locked: false, failedAttempts: 0, maxFailures: 8, windowMinutes: 15, retryAfterMinutes: 0 },
+              hints: configured
+                ? [
+                    'این پاسخ مربوط به سرور توسعه‌ی Vite است، نه سایت دیپلوی‌شده. برای تشخیص سایت اصلی، /api/health را روی دامنه‌ی زنده باز کنید.',
+                  ]
+                : [
+                    'در فایل .env پروژه (gitignore شده) این‌ها را بگذارید: ADMIN_USERNAME، ADMIN_PASSWORD، AUTH_SECRET و بعد سرور توسعه را دوباره اجرا کنید.',
+                    'برای تست مسیر واقعی ابری: npm run build && npx wrangler pages dev dist --port 8788 (سکرت‌ها از فایل .dev.vars خوانده می‌شوند).',
+                  ],
+              checkedAt: new Date().toISOString(),
+            });
+          }
+
           // --- 2. /api/auth ---
           if (pathname === '/api/auth') {
             if (method === 'POST') {

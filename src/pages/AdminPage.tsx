@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { CollectionEditor } from '../components/admin/CollectionEditor';
 import { FieldsForm, FieldDef } from '../components/admin/FieldsForm';
 import { SeoBox } from '../components/admin/SeoBox';
+import { LoginHealthNotice } from '../components/cms/LoginHealthNotice';
 import { ACard, ASectionTitle, AInput, ATextarea, ASelect, ALabel, ABadge, AConfirm, AModal } from '../components/admin/ui';
 import {
   LayoutDashboard, BookOpen, MessageSquare, Sparkles, Briefcase, ShoppingBag,
@@ -163,6 +164,7 @@ const newPost = () => ({
 export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   const {
     data, isAdmin, persistence, pinCode, changePin, loginAdmin, logoutAdmin,
+    authHealth, refreshAuthHealth,
     updateField, addItem, removeItem, moveItem, duplicateItem,
     exportJSON, importJSON, createSnapshot, rollbackSnapshot, deleteSnapshot,
     resetToDefaults, addMediaItem, removeMediaItem, logActivity,
@@ -285,17 +287,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginBusy(true);
-    const ok = persistence === 'cloud'
+    const res = persistence === 'cloud'
       ? await loginAdmin(loginUser.trim(), loginPass)
       : await loginAdmin(loginPass || loginUser.trim());
     setLoginBusy(false);
-    if (ok) {
+    if (res.ok) {
       setLoginError('');
       setLoginUser('');
       setLoginPass('');
       showToast('خوش آمدید! ورود به پیشخوان مدیریت با موفقیت انجام شد.');
     } else {
-      setLoginError(persistence === 'cloud' ? 'نام کاربری یا رمز عبور اشتباه است.' : 'رمز محلی وارد شده اشتباه است.');
+      setLoginError(res.error || (persistence === 'cloud' ? 'نام کاربری یا رمز عبور اشتباه است.' : 'رمز محلی وارد شده اشتباه است.'));
     }
   };
 
@@ -375,10 +377,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
             <h1 className="nd-h2 text-xl sm:text-2xl">ورود به پیشخوان مدیریت</h1>
             <p className="text-xs leading-relaxed nd-muted">
               {persistence === 'cloud'
-                ? 'نام کاربری و رمز عبوری را وارد کنید که در Secrets پنل Cloudflare تنظیم کرده‌اید.'
+                ? 'نام کاربری و رمز عبوری را وارد کنید که به‌صورت Secret در پروژه‌ی Pages کلودفلر تنظیم کرده‌اید (سکرت‌های GitHub Actions فقط برای همگام‌سازی محتوا هستند و روی ورود تاثیری ندارند).'
                 : 'حالت توسعه (بدون اتصال به Cloudflare): رمز محلی مدیریت را وارد کنید.'}
             </p>
           </div>
+          {persistence === 'cloud' && <LoginHealthNotice health={authHealth} onRecheck={refreshAuthHealth} />}
           <form onSubmit={handleLogin} className="space-y-4">
             {persistence === 'cloud' && (
               <div>
@@ -408,7 +411,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                 autoFocus={persistence !== 'cloud'}
               />
             </div>
-            {loginError && <div className="p-3 rounded-xl bg-[#fee2e2] text-[#b91c1c] text-xs font-extrabold text-center">{loginError}</div>}
+            {loginError && (
+              <div className="p-3 rounded-xl bg-[#fee2e2] text-[#b91c1c] text-[11px] font-extrabold leading-relaxed">{loginError}</div>
+            )}
             <button type="submit" disabled={loginBusy} className="nd-btn w-full py-3.5 text-sm nd-btn-accent disabled:opacity-50">
               <ShieldCheck className="w-5 h-5" />
               <span>{loginBusy ? 'در حال بررسی…' : 'ورود به پیشخوان'}</span>

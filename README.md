@@ -9,6 +9,7 @@ Live: https://omidadli01.site
 | [DEPLOY-CHECKLIST.md](./DEPLOY-CHECKLIST.md) | One-time Cloudflare setup (D1, bindings, secrets) — Persian |
 | [CMS-DEPLOY.md](./CMS-DEPLOY.md) | The CMS API, media storage, local development — Persian |
 | [INTEGRATIONS.md](./INTEGRATIONS.md) | HTTP API, GitHub → site workflows, content-as-code round-trip |
+| [docs/LOGIN-TROUBLESHOOTING.md](./docs/LOGIN-TROUBLESHOOTING.md) | رفع مشکل «نام کاربری یا رمز عبور اشتباه» در پنل ادمین (سکرت کلودفلر vs گیت‌هاب، `/api/health`) |
 | [mcp/README.md](./mcp/README.md) | Connect the site to Claude (MCP server) |
 | [docs/CONTENT-SYSTEM-MAP.md](./docs/CONTENT-SYSTEM-MAP.md) | نقشهٔ سیستم محتوایی: URLهای واقعی، خوشه‌های موضوعی، لینک داخلی |
 | [content/articles/README.md](./content/articles/README.md) | خروجیِ تولید محتوای ۱۲ هفته‌ای (Batchها و وضعیت انتشار) |

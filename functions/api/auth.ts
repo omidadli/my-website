@@ -1,11 +1,34 @@
-import { Env, createToken, requireAuth, safeEqual, json, unauthorized, getClientIp, ensureCoreTablesSafe } from './_shared';
-
-const WINDOW_MINUTES = 15;
-const MAX_FAILURES = 8;
+import {
+  Env,
+  createToken,
+  requireAuth,
+  safeEqual,
+  json,
+  unauthorized,
+  getClientIp,
+  ensureCoreTablesSafe,
+  authConfigStatus,
+  LOGIN_WINDOW_MINUTES as WINDOW_MINUTES,
+  LOGIN_MAX_FAILURES as MAX_FAILURES,
+} from './_shared';
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!env.ADMIN_USERNAME || !env.ADMIN_PASSWORD || !env.AUTH_SECRET) {
-    return json({ ok: false, error: 'سرویس ورود پیکربندی نشده است. Secrets را در پنل Cloudflare تنظیم کنید.' }, { status: 503 });
+  // Secrets are bound to a Pages deployment at deploy time: if they are missing here it is NOT
+  // a wrong-password problem, so say exactly that (and which names are missing) instead of 401.
+  const config = authConfigStatus(env);
+  if (!config.configured) {
+    return json(
+      {
+        ok: false,
+        error:
+          'سرویس ورود پیکربندی نشده است: ' +
+          config.missing.join(' و ') +
+          ' به این دیپلویمنت نرسیده‌اند. این متغیرها را در Cloudflare (Pages → Settings → Variables and Secrets، نوع Secret) بگذارید و سپس یک دیپلوی جدید بزنید؛ سکرت‌ها فقط به دیپلویمنتِ بعدی می‌رسند. برای تشخیص زنده: /api/health',
+        missing: config.missing,
+        hint: '/api/health',
+      },
+      { status: 503 },
+    );
   }
 
   const ip = getClientIp(request);

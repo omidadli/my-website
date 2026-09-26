@@ -26,6 +26,10 @@
   },
   "exclude": [
     "functions",
+    // scripts/auth-flow.test.mjs imports the Pages Functions directly and is run by tsx; keeping it
+    // out of this program stops the Cloudflare-only globals (PagesFunction/D1Database/R2Bucket) from
+    // being type-checked without @cloudflare/workers-types. `npm run lint:functions` covers them.
+    "scripts/auth-flow.test.mjs",
     "dist",
     "node_modules"
   ]

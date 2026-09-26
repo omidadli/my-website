@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, X, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useContent } from '../../context/ContentContext';
+import { LoginHealthNotice } from './LoginHealthNotice';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
@@ -9,7 +10,7 @@ interface AdminLoginModalProps {
 
 /** Quick edit-mode login (matches the /#admin gate: username+password in cloud mode). */
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClose }) => {
-  const { loginAdmin, persistence } = useContent();
+  const { loginAdmin, persistence, authHealth, refreshAuthHealth } = useContent();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,17 +21,17 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const ok = persistence === 'cloud'
+    const res = persistence === 'cloud'
       ? await loginAdmin(username.trim(), password)
       : await loginAdmin(password || username.trim());
     setBusy(false);
-    if (ok) {
+    if (res.ok) {
       setError('');
       setUsername('');
       setPassword('');
       onClose();
     } else {
-      setError(persistence === 'cloud' ? 'نام کاربری یا رمز عبور اشتباه است.' : 'رمز وارد شده اشتباه است.');
+      setError(res.error || (persistence === 'cloud' ? 'نام کاربری یا رمز عبور اشتباه است.' : 'رمز وارد شده اشتباه است.'));
     }
   };
 
@@ -51,6 +52,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {persistence === 'cloud' && <LoginHealthNotice health={authHealth} onRecheck={refreshAuthHealth} compact />}
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {persistence === 'cloud' && (
@@ -76,8 +79,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
             autoFocus={persistence !== 'cloud'}
           />
           {error && (
-            <p className="text-xs text-[#b91c1c] font-extrabold flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 shrink-0" />
+            <p className="text-xs text-[#b91c1c] font-extrabold flex items-start gap-1.5 leading-relaxed">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </p>
           )}
