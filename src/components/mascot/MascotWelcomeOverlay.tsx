@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Theme } from '../types';
+import { Theme } from '../../types';
 import { soulJourney } from './soul';
 
 interface MascotWelcomeOverlayProps {

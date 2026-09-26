@@ -1,4 +1,4 @@
-import { Env, requireAuth, json, unauthorized, getClientIp } from './_shared';
+import { Env, requireAuth, json, unauthorized, getClientIp, ensureCoreTablesSafe } from './_shared';
 
 /**
  * Lead capture — the site's conversion data must never be lost.
@@ -27,6 +27,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const ip = getClientIp(request);
+  await ensureCoreTablesSafe(env);
 
   // Rate limit: max 10 leads per IP per hour.
   try {

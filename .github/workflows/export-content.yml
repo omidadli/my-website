@@ -1,0 +1,65 @@
+name: Export live content to Git
+
+# Pulls the live site's content (edited via the admin panel or Claude MCP) back
+# into content/site-content.json and commits it, so Git stays the versioned
+# source of truth without needing any local tooling.
+#
+#   * Run it manually from the Actions tab after editing content with Claude, or
+#   * let the nightly schedule pick up changes automatically.
+#
+# Commits made with GITHUB_TOKEN do not trigger other workflows, so this never
+# loops back into "Sync content to live site".
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '30 2 * * *' # every night 02:30 UTC
+
+concurrency:
+  group: sync-content # never run concurrently with the Git → live sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SITE_URL: ${{ secrets.SITE_URL != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Missing secrets → explain instead of silently passing
+        if: ${{ env.HAS_SITE_URL != 'true' }}
+        run: |
+          echo "::warning title=Export skipped::Add the repository secrets SITE_URL (https://omidadli01.site), ADMIN_USERNAME and ADMIN_PASSWORD to enable exporting live content into Git."
+
+      - name: Export live content
+        if: ${{ env.HAS_SITE_URL == 'true' }}
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: node scripts/sync-content.mjs export
+
+      - name: Commit & push if changed
+        if: ${{ env.HAS_SITE_URL == 'true' }}
+        run: |
+          if git diff --quiet -- content/site-content.json; then
+            echo "content/site-content.json is already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content/site-content.json
+          git commit -m "content: export live site content ($(date -u +%Y-%m-%d\ %H:%M) UTC)"
+          git push origin HEAD:main
+          echo "::notice title=Content exported::content/site-content.json updated from the live site."

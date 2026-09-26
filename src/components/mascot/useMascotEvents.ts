@@ -162,6 +162,11 @@ export function generateSessionGoalSummary(currentPage: Page, trail: string[] = 
 const SCHEME_KEY = 'nd-mascot-v6';
 const SESSION_ASKED = 'nd-mascot-v6-asked';
 const SESSION_EXIT = 'nd-mascot-v6-exit';
+// Shared localStorage keys (written by the welcome modal / avatar name prompt).
+const NAME_KEY = 'nd-mascot-name';
+const SKIP_KEY = 'nd-mascot-skip';
+// Set to '1' to silence all proactive mascot cues (opt-out switch).
+const SILENCE_KEY = 'nd-mascot-silence';
 
 const rate = { lastText: null as string | null, lastAt: 0 };
 

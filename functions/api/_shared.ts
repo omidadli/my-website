@@ -101,6 +101,117 @@ export const unauthorized = (msg = 'احراز هویت ناموفق است.') =
 export const getClientIp = (request: Request): string =>
   request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
 
-export const MAX_CONTENT_BYTES = 5 * 1024 * 1024; // 5MB for content JSON
+/**
+ * Core D1 tables (mirror of schema.sql). Created lazily on first use so a brand-new
+ * database works without a manual `wrangler d1 execute … --file=schema.sql` step.
+ * Memoised per isolate: the CREATE statements run once, not on every request.
+ * (The paid-tools tables are handled by tools.ts → ensureTables.)
+ */
+const CORE_TABLE_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS content (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS media (
+    key TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    alt TEXT DEFAULT '',
+    size_kb INTEGER DEFAULT 0,
+    content_type TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS login_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    attempted_at TEXT NOT NULL,
+    success INTEGER NOT NULL DEFAULT 0
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts (ip, attempted_at)`,
+  `CREATE TABLE IF NOT EXISTS comments (
+    id TEXT PRIMARY KEY,
+    post_id TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    author_email TEXT NOT NULL,
+    content TEXT NOT NULL,
+    date TEXT NOT NULL,
+    is_approved INTEGER NOT NULL DEFAULT 0,
+    reply TEXT DEFAULT '',
+    ip TEXT DEFAULT '',
+    created_at TEXT DEFAULT ''
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_comments_post ON comments (post_id)`,
+  `CREATE TABLE IF NOT EXISTS leads (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL DEFAULT 'contact',
+    name TEXT NOT NULL,
+    email TEXT DEFAULT '',
+    contact TEXT DEFAULT '',
+    website TEXT DEFAULT '',
+    goal TEXT DEFAULT '',
+    service TEXT DEFAULT '',
+    details TEXT NOT NULL,
+    booking_date TEXT DEFAULT '',
+    booking_time TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    ip TEXT DEFAULT ''
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_leads_created ON leads (created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_leads_ip_time ON leads (ip, created_at)`,
+  `CREATE TABLE IF NOT EXISTS media_files (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size_kb INTEGER DEFAULT 0,
+    data_b64 TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    ip TEXT DEFAULT '',
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    mode TEXT DEFAULT 'local',
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_chat_ip_time ON chat_messages (ip, created_at)`,
+];
+
+let coreTablesReady: Promise<void> | null = null;
+
+export const ensureCoreTables = (env: Env): Promise<void> => {
+  if (!coreTablesReady) {
+    coreTablesReady = (async () => {
+      await env.DB.batch(CORE_TABLE_STATEMENTS.map((sql) => env.DB.prepare(sql)));
+      // Migration 0002 for databases created before `comments.created_at` existed (no-op otherwise).
+      try {
+        await env.DB.prepare(`ALTER TABLE comments ADD COLUMN created_at TEXT DEFAULT ''`).run();
+      } catch {
+        /* column already exists */
+      }
+    })().catch((e) => {
+      coreTablesReady = null; // allow a retry on the next request
+      throw e;
+    });
+  }
+  return coreTablesReady;
+};
+
+/** Best-effort variant for hot paths: never throws, never blocks the response on failure. */
+export const ensureCoreTablesSafe = async (env: Env): Promise<void> => {
+  try {
+    await ensureCoreTables(env);
+  } catch {
+    /* D1 unavailable — the caller's own error handling applies */
+  }
+};
+
+// The whole CMS state is one D1 row and D1 caps a row/string at 2,000,000 bytes
+// (https://developers.cloudflare.com/d1/platform/limits/). Reject earlier with a
+// clear message instead of letting the INSERT fail with an opaque 500.
+export const MAX_CONTENT_BYTES = 1_900_000;
+export const CONTENT_TOO_LARGE_MESSAGE =
+  'حجم محتوا بیش از حد مجاز (حدود ۱.۹ مگابایت) است. تصاویر را به‌جای درج مستقیم (base64) از «کتابخانهٔ رسانه» آپلود کنید و متن‌های خیلی بلند را کوتاه کنید.';
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB per media file
 export const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'image/avif', 'application/pdf'];

@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+      HAS_SITE_URL: ${{ secrets.SITE_URL != '' }}
     permissions:
       contents: read
       deployments: write
@@ -32,16 +33,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Catch type errors / regressions before they reach production (vite build does not type-check).
+      - name: Type-check & test
+        run: |
+          npm run lint
+          npm run lint:functions
+          npm test
+
       - name: Build
         run: npm run build
 
       # Deploys ./dist to the Cloudflare Pages project named in wrangler.toml.
-      # D1 schema/columns are auto-created at runtime by the API (ensureTables),
-      # so no separate migration step is required here.
+      # D1 tables are created lazily at runtime by the API, so no migration step
+      # is required here.
       #
-      # This step is SKIPPED until you add the CLOUDFLARE_API_TOKEN secret — so if
-      # you instead connect the repo via the Cloudflare Pages dashboard ("Connect
-      # to Git"), this workflow won't clash or fail; it just no-ops.
+      # SKIPPED (with a visible warning) until the CLOUDFLARE_API_TOKEN secret exists —
+      # if you deploy via the Cloudflare Pages dashboard ("Connect to Git") instead,
+      # this workflow just no-ops.
+      - name: Deploy skipped → explain why
+        if: ${{ env.HAS_CF_TOKEN != 'true' }}
+        run: echo "::warning title=Deploy skipped::Add the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to deploy from GitHub Actions."
+
       - name: Deploy to Cloudflare Pages
         if: ${{ env.HAS_CF_TOKEN == 'true' }}
         env:
@@ -59,3 +71,34 @@ jobs:
             echo "::error title=deploy::$(tail -n 15 deploy.log | tr '\n' ' ')"
             exit $code
           fi
+
+      # Verify the live API answers after the deploy (needs the SITE_URL secret).
+      - name: Smoke-test the live API
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_SITE_URL == 'true' }}
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          url="${SITE_URL%/}/api/content"
+          for i in 1 2 3 4 5 6; do
+            body=$(curl -fsS --max-time 20 "$url" 2>/dev/null) && break
+            echo "attempt $i: not ready yet, retrying in 10s…"; sleep 10
+          done
+          if [ -z "$body" ]; then
+            echo "::error title=Smoke test failed::$url did not answer after the deploy."
+            exit 1
+          fi
+          echo "$body" | head -c 300; echo
+          echo "$body" | grep -q '"ok":true' || { echo "::error title=Smoke test failed::$url returned an error payload."; exit 1; }
+          echo "$body" | grep -q '"data":null' && echo "::warning title=Live content is empty::The site is rendering built-in defaults. Run the 'Sync content to live site' workflow once to seed the database from content/site-content.json."
+          echo "live API OK"
+
+          # Path routing + edge <head> middleware + crawler files.
+          base="${SITE_URL%/}"
+          code=$(curl -s -o /tmp/services.html -w '%{http_code}' --max-time 20 "$base/services")
+          [ "$code" = "200" ] || { echo "::error title=Smoke test failed::$base/services returned HTTP $code (SPA fallback / middleware broken)."; exit 1; }
+          grep -q 'rel="canonical" href="[^"]*/services"' /tmp/services.html || echo "::warning title=Edge head not applied::$base/services has no per-route canonical — check functions/_middleware.ts."
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$base/definitely-not-a-page-$RANDOM")
+          [ "$code" = "404" ] || echo "::warning title=Unknown routes are not 404::got HTTP $code for an unknown path."
+          curl -fsS --max-time 20 "$base/robots.txt" | grep -qi '^user-agent' || echo "::warning title=robots.txt::$base/robots.txt is not a robots file."
+          curl -fsS --max-time 20 "$base/sitemap.xml" | grep -q '<urlset' || echo "::warning title=sitemap.xml::$base/sitemap.xml is not a sitemap."
+          echo "routing + crawler files OK"

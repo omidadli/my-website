@@ -12,6 +12,8 @@ import { compressImage } from '../utils/image';
 const TOKEN_KEY = 'nd_admin_token';
 
 let cloudAvailable: boolean | null = null;
+/** Body of the probe response, handed to the first getContent() so boot needs one round-trip, not two. */
+let primedContent: { data: any; updatedAt: string | null } | null | undefined;
 
 export interface CloudMediaItem {
   id: string;
@@ -58,6 +60,10 @@ export const probe = async (): Promise<boolean> => {
     // Any real API response (200/401/500) means functions exist; a Vite/SPA 404 HTML page means they don't.
     const ct = r.headers.get('Content-Type') || '';
     cloudAvailable = ct.includes('application/json');
+    if (cloudAvailable && r.ok) {
+      const j = await r.json().catch(() => null);
+      primedContent = j?.ok ? { data: j.data, updatedAt: j.updatedAt ?? null } : null;
+    }
   } catch {
     cloudAvailable = false;
   }
@@ -70,6 +76,11 @@ export const api = {
   setToken,
 
   async getContent(): Promise<{ data: any; updatedAt: string | null } | null> {
+    if (primedContent !== undefined) {
+      const primed = primedContent;
+      primedContent = undefined;
+      return primed;
+    }
     try {
       const r = await fetch('/api/content', { cache: 'no-store' });
       if (!r.ok) return null;
@@ -80,15 +91,28 @@ export const api = {
     }
   },
 
-  async saveContent(data: any): Promise<{ ok: boolean; error?: string }> {
+  /**
+   * Save the whole content state. Pass `baseUpdatedAt` (the `updatedAt` of the
+   * version this tab last read/saved) to make the save conditional: if the site
+   * was edited elsewhere in the meantime (Claude MCP, another tab, CI sync) the
+   * API answers 409 and `conflict: true` is returned instead of overwriting it.
+   */
+  async saveContent(
+    data: any,
+    baseUpdatedAt?: string | null
+  ): Promise<{ ok: boolean; updatedAt?: string | null; conflict?: boolean; error?: string }> {
     try {
+      const body: Record<string, unknown> = { data };
+      if (typeof baseUpdatedAt === 'string') body.baseUpdatedAt = baseUpdatedAt;
       const r = await fetch('/api/content', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...headers() },
-        body: JSON.stringify({ data }),
+        body: JSON.stringify(body),
       });
       const j = await r.json().catch(() => ({}));
-      return r.ok && j?.ok ? { ok: true } : { ok: false, error: j?.error || `خطای سرور (${r.status})` };
+      if (r.ok && j?.ok) return { ok: true, updatedAt: j.updatedAt || null };
+      if (r.status === 409) return { ok: false, conflict: true, updatedAt: j?.updatedAt || null, error: j?.error || 'محتوا در جای دیگری تغییر کرده است.' };
+      return { ok: false, error: j?.error || `خطای سرور (${r.status})` };
     } catch {
       return { ok: false, error: 'اتصال به سرور برقرار نشد.' };
     }

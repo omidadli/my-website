@@ -4,6 +4,7 @@ import { useContent } from '../context/ContentContext';
 import { inputCls } from '../components/nd/Kit';
 import { ChevronLeft, ArrowRight, Sparkles, MessageSquare, CheckCircle2, ShieldCheck, Link2, Clock, Eye, CalendarDays } from 'lucide-react';
 import { motion } from 'motion/react';
+import { linkProps, postPath } from '../utils/router';
 
 interface BlogPostDetailPageProps {
   theme: Theme;
@@ -68,10 +69,12 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
   if (!post) {
     return (
       <div className="text-center py-24 space-y-4">
-        <h2 className={`nd-h2 text-xl ${isDark ? 'text-white' : ''}`}>مقاله‌ای یافت نشد</h2>
-        <button onClick={() => onNavigate('blog')} className="nd-btn nd-btn-ghost px-6 py-3 text-xs">
+        <span className="inline-block px-4 py-1.5 rounded-full text-[11px] font-black tracking-widest bg-[color:var(--nd-accent-soft)] text-[color:var(--nd-accent)]">۴۰۴</span>
+        <h1 className={`nd-h2 text-xl ${isDark ? 'text-white' : ''}`}>مقاله‌ای با این آدرس پیدا نشد</h1>
+        <p className={`${isDark ? 'text-slate-400' : 'nd-muted'} text-sm max-w-md mx-auto`}>شاید حذف شده یا آدرسش عوض شده باشد؛ فهرست مقالات را ببین.</p>
+        <a {...linkProps('/blog', () => onNavigate('blog'))} className="nd-btn nd-btn-ghost px-6 py-3 text-xs inline-flex">
           <span>بازگشت به مقالات</span>
-        </button>
+        </a>
       </div>
     );
   }
@@ -288,13 +291,13 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {relatedPosts.map((rel) => (
-              <motion.button
+              <motion.a
                 key={rel.id}
                 initial={{ opacity: 0, y: 18 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-40px' }}
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                onClick={() => onSelectPost(rel.id)}
+                {...linkProps(postPath(rel), () => onSelectPost(rel.id))}
                 className="nd-card nd-card-hover overflow-hidden text-right flex flex-col group cursor-pointer"
               >
                 <div className={`aspect-[16/10] overflow-hidden border-b ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
@@ -309,7 +312,7 @@ export const BlogPostDetailPage: React.FC<BlogPostDetailPageProps> = ({ theme, p
                     <span>{rel.readTime}</span>
                   </span>
                 </div>
-              </motion.button>
+              </motion.a>
             ))}
           </div>
         </section>

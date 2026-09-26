@@ -21,11 +21,14 @@ import { ProjectsPage } from './pages/ProjectsPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { AdminPage } from './pages/AdminPage';
 import { CustomPageView } from './pages/CustomPageView';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { SEOHead } from './components/SEOHead';
 import { ChatWidget } from './components/ChatWidget';
 import { MascotAvatar } from './components/mascot/MascotAvatar';
 import { MascotWelcomeOverlay } from './components/mascot/MascotWelcomeOverlay';
 import { useMascotEvents } from './components/mascot/useMascotEvents';
+import { NAVIGATE_EVENT, currentRoute, navigate, pathForPage, postPath, routeToPath } from './utils/router';
 
 function MainLayout({
   theme,
@@ -34,13 +37,25 @@ function MainLayout({
   theme: Theme;
   onToggleTheme: () => void;
 }) {
-  const [currentPage, setCurrentPage] = useState<Page>('home');
+  // Start on the page the URL points at (no flash of the home page on deep links /
+  // shared post URLs). Custom CMS pages are resolved by the URL effect below once
+  // the content is available.
+  const [initialRoute] = useState(() => currentRoute([]).route);
+  const [currentPage, setCurrentPage] = useState<Page>(() => initialRoute?.page ?? 'home');
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<CaseStudy | null>(null);
-  const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(null);
+  const [selectedBlogPostId, setSelectedBlogPostId] = useState<string | null>(() =>
+    initialRoute?.page === 'blog' ? initialRoute.postId : null,
+  );
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
   const [isThemeTransitioning, setIsThemeTransitioning] = useState<boolean>(false);
+  /** URL matched no route. Rendered as a 404 view only once the content is loaded (custom CMS pages may still arrive). */
+  const [routeNotFound, setRouteNotFound] = useState<boolean>(() => initialRoute === null);
 
-  const { isAdmin, setIsAdmin, data } = useContent();
+  const { isAdmin, setIsAdmin, data, contentReady } = useContent();
+  // Re-check against the freshest custom-page slugs during render so a cloud-only
+  // CMS page never flashes the 404 view in the frame its content arrives.
+  const showNotFound =
+    routeNotFound && contentReady && currentRoute((data.CUSTOM_PAGES || []).map((cp) => cp.slug)).route === null;
 
   // Wire the avatar assistant to real site events (greetings, idle nudges, …)
   useMascotEvents(currentPage);
@@ -68,49 +83,39 @@ function MainLayout({
     }, 480);
   }, [onToggleTheme]);
 
-  // Read initial page & admin trigger from URL hash or pathname on load
+  // URL → page state. Real paths (/services, /blog/<slug>, /<custom-slug>); legacy
+  // hash links (/#/blog/<slug>) are upgraded to the path form on arrival.
   useEffect(() => {
-    const handleHashChange = () => {
-      const rawHash = window.location.hash.replace('#', '');
-      const pathname = window.location.pathname;
-
-      if (rawHash === 'admin' || pathname === '/admin' || pathname.startsWith('/admin')) {
-        setCurrentPage('admin');
-        return;
-      }
-      
-      if (rawHash.startsWith('blog/')) {
-        const pId = rawHash.replace('blog/', '');
-        setCurrentPage('blog');
-        setSelectedBlogPostId(pId);
-        return;
-      }
-
-      const validPages: Page[] = [
-        'home', 'services', 'portfolio', 'about', 'blog', 'contact', 
-        'projects', 'products', 'admin'
-      ];
-      const customSlugs = (data.CUSTOM_PAGES || []).map((cp) => cp.slug);
-      if (customSlugs.includes(rawHash)) {
-        setCurrentPage(rawHash as Page);
-        setSelectedBlogPostId(null);
-        return;
-      }
-      if (validPages.includes(rawHash as Page)) {
-        setCurrentPage(rawHash as Page);
-        // bare 'blog' = the article LIST — always drop the selected post so
-        // clicking the "آموزش" nav while reading a post goes back to the list.
-        // (blog/<id> hashes were handled and returned above.)
-        setSelectedBlogPostId(null);
-      } else if (!rawHash) {
+    const customSlugs = (data.CUSTOM_PAGES || []).map((cp) => cp.slug);
+    const syncFromUrl = () => {
+      const { route, upgradedFromHash } = currentRoute(customSlugs);
+      if (!route) {
+        // Unknown path (the server already answered 404 for crawlers): 404 view.
+        setRouteNotFound(true);
         setCurrentPage('home');
         setSelectedBlogPostId(null);
+        return;
       }
+      setRouteNotFound(false);
+      if (upgradedFromHash) {
+        try { window.history.replaceState(null, '', routeToPath(route)); } catch { /* ignore */ }
+      }
+      setCurrentPage(route.page);
+      // bare /blog = the article LIST — always drop the selected post so
+      // clicking the "آموزش" nav while reading a post goes back to the list.
+      setSelectedBlogPostId(route.page === 'blog' ? route.postId : null);
     };
 
-    handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    syncFromUrl();
+    window.addEventListener('popstate', syncFromUrl);
+    window.addEventListener(NAVIGATE_EVENT, syncFromUrl);
+    // Old in-page links of the form href="#/blog/…" (e.g. in a saved chat transcript).
+    window.addEventListener('hashchange', syncFromUrl);
+    return () => {
+      window.removeEventListener('popstate', syncFromUrl);
+      window.removeEventListener(NAVIGATE_EVENT, syncFromUrl);
+      window.removeEventListener('hashchange', syncFromUrl);
+    };
   }, [data.CUSTOM_PAGES]);
 
   // Theme root attributes — drives the ND token system + legacy branches
@@ -130,14 +135,17 @@ function MainLayout({
     // Navigating to 'blog' always means the article LIST — drop the selected
     // post even when coming from a post detail page.
     setSelectedBlogPostId(null);
-    window.location.hash = page === 'home' ? '' : page;
+    navigate(pathForPage(page));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSelectBlogPost = (postId: string) => {
-    setSelectedBlogPostId(postId);
+    // Public URL prefers the slug; the detail page accepts id or slug.
+    const post = (data.BLOG_POSTS || []).find((p) => p.id === postId || (!!p.slug && p.slug === postId)) || null;
+    const key = postId ? (post ? post.slug || post.id : postId) : null;
+    setSelectedBlogPostId(key);
     setCurrentPage('blog');
-    window.location.hash = `blog/${postId}`;
+    navigate(key ? postPath(post || { id: key }) : '/blog');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -145,7 +153,7 @@ function MainLayout({
     setSelectedCaseStudy(study);
     if (study && currentPage !== 'portfolio') {
       setCurrentPage('portfolio');
-      window.location.hash = 'portfolio';
+      navigate('/portfolio');
     }
   };
 
@@ -190,17 +198,17 @@ function MainLayout({
       </AnimatePresence>
 
       {/* SEO meta tags — driven by the CMS (global, per-page and per-post) */}
-      <SEOHead currentPage={currentPage} blogPostId={selectedBlogPostId} />
+      <SEOHead currentPage={currentPage} blogPostId={selectedBlogPostId} notFound={showNotFound} />
 
       {/* Cinematic reading progress + filmic grain */}
       <ScrollProgress />
       <Grain />
 
       {/* Custom Interactive Floating Cursor */}
-      <CustomCursor />
+      <ErrorBoundary name="CustomCursor" fallback={null}><CustomCursor /></ErrorBoundary>
 
       {/* Background Interactive Beam & Grid */}
-      <BackgroundBlobs theme={theme} />
+      <ErrorBoundary name="BackgroundBlobs" fallback={null}><BackgroundBlobs theme={theme} /></ErrorBoundary>
 
       {/* Glassmorphic Navigation Header */}
       <Navbar
@@ -214,18 +222,22 @@ function MainLayout({
       {/* Main Content Area with Cinematic Motion Page Transitions */}
       <main
         className={`flex-grow w-full relative z-10 pb-28 sm:pb-24 ${
-          currentPage === 'home' ? '' : 'max-w-6xl mx-auto px-4 sm:px-8 pt-28 sm:pt-32'
+          currentPage === 'home' && !showNotFound ? '' : 'max-w-6xl mx-auto px-4 sm:px-8 pt-28 sm:pt-32'
         }`}
       >
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentPage}
+            key={showNotFound ? '__not_found__' : currentPage}
             initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }}
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }}
             transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
           >
-            {currentPage === 'home' && (
+            <ErrorBoundary name="page" resetKeys={[currentPage, selectedBlogPostId, showNotFound]}>
+            {showNotFound && (
+              <NotFoundPage theme={theme} onNavigate={handleNavigate} onSelectPost={handleSelectBlogPost} />
+            )}
+            {!showNotFound && currentPage === 'home' && (
               <HomePage
                 theme={theme}
                 onNavigate={handleNavigate}
@@ -309,19 +321,32 @@ function MainLayout({
                   onNavigate={handleNavigate}
                 />
               )}
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>
 
       {/* Admin Floating Toolbar */}
-      <AdminFloatingBar />
-      {currentPage !== 'admin' && <ChatWidget theme={theme} />}
+      <ErrorBoundary name="AdminFloatingBar" fallback={null}><AdminFloatingBar /></ErrorBoundary>
+      {currentPage !== 'admin' && (
+        <ErrorBoundary name="ChatWidget" fallback={null}>
+          <ChatWidget theme={theme} />
+        </ErrorBoundary>
+      )}
 
       {/* Mascot assistant — avatar reacts to site events, clicks open the chat */}
-      {currentPage !== 'admin' && <MascotAvatar />}
+      {currentPage !== 'admin' && (
+        <ErrorBoundary name="MascotAvatar" fallback={null}>
+          <MascotAvatar />
+        </ErrorBoundary>
+      )}
 
       {/* Cinematic Welcome & Waiting Experience */}
-      {currentPage !== 'admin' && <MascotWelcomeOverlay theme={theme} />}
+      {currentPage !== 'admin' && (
+        <ErrorBoundary name="MascotWelcomeOverlay" fallback={null}>
+          <MascotWelcomeOverlay theme={theme} />
+        </ErrorBoundary>
+      )}
 
       {/* Admin PIN Login Modal */}
       <AdminLoginModal

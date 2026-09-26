@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Theme } from '../types';
 import { api } from '../services/api';
 import { Calendar as CalendarIcon, CheckCircle2, ArrowUpLeft, Video } from 'lucide-react';
 import { inputCls } from './nd/Kit';
 import { usePreservedState } from '../utils/statePreserver';
+import { useContent } from '../context/ContentContext';
+import { whatsappFallbackUrl } from '../utils/leadFallback';
 
 interface BookingCalendarProps {
   theme: Theme;
@@ -11,6 +13,10 @@ interface BookingCalendarProps {
 
 export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
   const isDark = theme === 'dark';
+  const { data } = useContent();
+  const personalInfo = data.PERSONAL_INFO;
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [selectedIso, setSelectedIso] = usePreservedState<string>('booking_selected_iso', '');
   const [selectedTime, setSelectedTime] = usePreservedState<string>('booking_selected_time', '۱۴:۰۰ بعدازظهر');
   const [step, setStep] = usePreservedState<1 | 2 | 3>('booking_step', 1);
@@ -42,10 +48,22 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
 
   const timeSlots = ['۱۰:۰۰ صبح', '۱۲:۳۰ ظهر', '۱۴:۰۰ بعدازظهر', '۱۶:۳۰ عصر', '۱۹:۰۰ شب'];
 
-  const handleConfirmBooking = (e: React.FormEvent) => {
+  const whatsappFallback = whatsappFallbackUrl(personalInfo, [
+    ['درخواست جلسه', `${selectedDate.full} - ساعت ${selectedTime}`],
+    ['نام', bookingForm.name],
+    ['ایمیل', bookingForm.email],
+    ['سایت/تلگرام', bookingForm.website],
+    ['هدف', bookingForm.goal],
+  ]);
+
+  const handleConfirmBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Persist the booking as a lead (admin sees it in پیشخوان → لیدها).
-    api
+    if (sending) return;
+    // Persist the booking as a lead (admin sees it in پیشخوان → لیدها) and only
+    // confirm once it is stored; otherwise offer WhatsApp so the request is not lost.
+    setSending(true);
+    setSendError(null);
+    const res = await api
       .postLead({
         source: 'booking',
         name: bookingForm.name.trim(),
@@ -56,7 +74,12 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
         bookingDate: selectedDate.iso,
         bookingTime: selectedTime,
       })
-      .catch(() => {});
+      .catch(() => ({ ok: false as const, error: 'اتصال به سرور برقرار نشد.' }));
+    setSending(false);
+    if (!res.ok) {
+      setSendError(res.error || 'ثبت درخواست ناموفق بود.');
+      return;
+    }
     setStep(3);
     window.dispatchEvent(new CustomEvent('nd:booking-success'));
   };
@@ -202,11 +225,20 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({ theme }) => {
             >
               مرحله قبل
             </button>
-            <button type="submit" className={`nd-btn px-8 py-3.5 text-xs ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'}`}>
+            <button type="submit" disabled={sending} aria-busy={sending} className={`nd-btn px-8 py-3.5 text-xs disabled:opacity-60 disabled:cursor-wait ${isDark ? 'bg-white text-[#17171c] hover:bg-slate-200' : 'nd-btn-accent'}`}>
               <Video className="w-4 h-4" />
-              <span>تایید نهایی و رزرو جلسه</span>
+              <span>{sending ? 'در حال ثبت…' : 'تایید نهایی و رزرو جلسه'}</span>
             </button>
           </div>
+          {sendError && (
+            <div role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-500 space-y-2">
+              <p>{sendError} درخواستت ثبت نشد؛ می‌تونی همین درخواست رو مستقیم در واتساپ بفرستی:</p>
+              <a href={whatsappFallback} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 underline underline-offset-2">
+                <span>ارسال از طریق واتساپ</span>
+                <ArrowUpLeft className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          )}
         </form>
       )}
 

@@ -6,9 +6,12 @@ admin API. Ask Claude things like _"change the products page headline"_,
 _"raise the VIP price of the business-therapist tool"_, or _"grant 30 days of
 access to 0912…"_ and it happens on the live site.
 
-> Content edits made through the MCP go straight to the **live database**. If you
-> keep content in Git (recommended — see `content/site-content.json`), run
-> `npm run content:export` in the repo afterwards so Git stays in sync.
+> Content edits made through the MCP go straight to the **live database**. To
+> keep Git in sync (recommended — see `content/site-content.json`), run the
+> **Export live content to Git** workflow from the GitHub Actions tab afterwards
+> (or `npm run content:export` locally). A nightly schedule also exports
+> automatically, and the Git → live sync is a per-section merge that never
+> discards live-only sections.
 
 ## What Claude can do (tools)
 
@@ -40,9 +43,14 @@ Cloudflare secrets):
 
 | Variable | Example |
 |----------|---------|
-| `SITE_URL` | `https://my-website.pages.dev` |
+| `SITE_URL` | `https://omidadli01.site` (the live custom domain — **not** `my-website.pages.dev`, which belongs to someone else) |
 | `ADMIN_USERNAME` | your admin username |
 | `ADMIN_PASSWORD` | your admin password |
+
+> **First run on a fresh site:** if the live database has never been saved
+> (`GET /api/content` returns `data: null`), `ping` reports `contentEmpty: true`.
+> The first write tool you use (e.g. `set_field`) automatically seeds the live
+> database from `content/site-content.json` and then applies your change.
 
 Quick local check (with the dev server running on :3000):
 
@@ -66,7 +74,7 @@ Add an entry under `mcpServers` (use the absolute path to `server.mjs`):
       "command": "node",
       "args": ["/ABSOLUTE/PATH/TO/my-website01/mcp/server.mjs"],
       "env": {
-        "SITE_URL": "https://my-website.pages.dev",
+        "SITE_URL": "https://omidadli01.site",
         "ADMIN_USERNAME": "your-admin-username",
         "ADMIN_PASSWORD": "your-admin-password"
       }
@@ -82,7 +90,7 @@ Start with _"use omidadli-site ping"_ to confirm it's connected.
 
 ```bash
 claude mcp add omidadli-site \
-  --env SITE_URL=https://my-website.pages.dev \
+  --env SITE_URL=https://omidadli01.site \
   --env ADMIN_USERNAME=your-admin-username \
   --env ADMIN_PASSWORD=your-admin-password \
   -- node /ABSOLUTE/PATH/TO/my-website01/mcp/server.mjs

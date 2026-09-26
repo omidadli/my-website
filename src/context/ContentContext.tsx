@@ -14,21 +14,13 @@ import {
   ThemeConfig,
   BlogComment
 } from '../types';
+import { defaultGlobalSeo as sharedGlobalSeoDefaults } from '../../lib/seoDefaults';
 
 const LOCAL_STORAGE_KEY = 'OMID_ADLI_SITE_CONTENT_V3';
 const LOCAL_STORAGE_PIN_KEY = 'OMID_ADLI_ADMIN_PIN_CODE';
 const DEFAULT_PIN = '1234';
 
-export const defaultGlobalSeo: GlobalSeoConfig = {
-  siteTitle: 'امید عدلی | مشاور و مجری پرفورمنس مارکتینگ و CRO',
-  titleTemplate: '%s | امید عدلی',
-  defaultMetaDesc: 'خدمات تخصصی پرفورمنس مارکتینگ، بهینه‌سازی نرخ تبدیل (CRO)، کمپین‌های گوگل ادز و آنالیز پیشرفته رفتار کاربر.',
-  defaultKeywords: 'پرفورمنس مارکتینگ, CRO, دیجیتال مارکتینگ, گوگل ادز, امید عدلی, بهینه‌سازی نرخ تبدیل',
-  faviconUrl: '/favicon.ico',
-  ogImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80',
-  canonicalBaseUrl: 'https://omidadli01.site',
-  robotsTxt: 'User-agent: *\nAllow: /\nSitemap: https://omidadli01.site/sitemap.xml',
-};
+export const defaultGlobalSeo: GlobalSeoConfig = { ...sharedGlobalSeoDefaults };
 
 export const defaultNavigationMenu: NavigationMenuItem[] = [
   { id: 'nav-1', label: 'صفحه اصلی', pageSlug: 'home', order: 1, isHidden: false },
@@ -238,6 +230,8 @@ interface ContentContextType {
   loginAdmin: (username: string, password?: string) => Promise<boolean>;
   /** 'cloud' when the Cloudflare D1 API is live, otherwise local-only mode. */
   persistence: 'local' | 'cloud';
+  /** True once the mount probe finished (cloud content adopted, or confirmed local-only). */
+  contentReady: boolean;
   logoutAdmin: () => void;
   updateField: (path: string, newValue: any) => void;
   addItem: (arrayPath: string, templateItem?: any) => void;
@@ -284,6 +278,21 @@ export interface EditModalConfig {
   value?: any;
   extraProps?: any;
 }
+
+
+/**
+ * Write the content snapshot to localStorage without ever throwing: Safari private
+ * mode and a full quota (large media libraries) raise on setItem, and several
+ * callers run inside React state updaters where an exception would take the
+ * admin panel down. Cloud persistence is independent of this cache.
+ */
+const persistLocal = (state: unknown): void => {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('Local content cache not saved (storage full or unavailable):', e);
+  }
+};
 
 const ContentContext = createContext<ContentContextType | undefined>(undefined);
 
@@ -350,37 +359,64 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // ---------- Cloud (Cloudflare D1) persistence ----------
   const [persistence, setPersistence] = useState<'local' | 'cloud'>('local');
+  const [contentReady, setContentReady] = useState(false);
   const cloudReady = useRef(false);
+  /** Version stamp of the content this tab last read from / saved to the cloud (optimistic concurrency). */
+  const remoteUpdatedAt = useRef<string | null>(null);
+  /** Serialized snapshot of what the cloud currently holds — lets us skip no-op saves. */
+  const lastSyncedJson = useRef<string | null>(null);
+
+  /** Merge a cloud payload over the defaults so partial/older payloads can't blank out fields. */
+  const mergeRemote = (r: any): ContentState => ({
+    ...defaultContentState,
+    ...r,
+    PERSONAL_INFO: { ...defaultContentState.PERSONAL_INFO, ...(r.PERSONAL_INFO || {}) },
+    GLOBAL_SEO: { ...defaultGlobalSeo, ...(r.GLOBAL_SEO || {}) },
+    AI_TOOLS_CONFIG: {
+      ...initialData.AI_TOOLS_CONFIG,
+      ...(r.AI_TOOLS_CONFIG || {}),
+      channels: { ...initialData.AI_TOOLS_CONFIG.channels, ...(r.AI_TOOLS_CONFIG?.channels || {}) },
+      tools: { ...initialData.AI_TOOLS_CONFIG.tools, ...(r.AI_TOOLS_CONFIG?.tools || {}) },
+    },
+  });
+
+  /** Pull the latest cloud content into this tab. Returns true when the cloud had content. */
+  const adoptRemote = async (): Promise<boolean> => {
+    const remote = await api.getContent();
+    if (!remote?.data) return false;
+    const merged = mergeRemote(remote.data);
+    remoteUpdatedAt.current = remote.updatedAt || null;
+    lastSyncedJson.current = JSON.stringify(merged);
+    setData(merged);
+    return true;
+  };
 
   // On mount: detect API, pull remote content, restore admin session from token.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const hasApi = await api.probe();
-      if (!hasApi || cancelled) return;
+      if (cancelled) return;
+      if (!hasApi) {
+        setContentReady(true);
+        return;
+      }
       setPersistence('cloud');
       const remote = await api.getContent();
       if (!cancelled && remote?.data) {
-        const r = remote.data;
-        setData({
-          ...defaultContentState,
-          ...r,
-          // Deep-merge critical objects so partial/older cloud payloads can't blank out fields.
-          PERSONAL_INFO: { ...defaultContentState.PERSONAL_INFO, ...(r.PERSONAL_INFO || {}) },
-          GLOBAL_SEO: { ...defaultGlobalSeo, ...(r.GLOBAL_SEO || {}) },
-          AI_TOOLS_CONFIG: {
-            ...initialData.AI_TOOLS_CONFIG,
-            ...(r.AI_TOOLS_CONFIG || {}),
-            channels: { ...initialData.AI_TOOLS_CONFIG.channels, ...(r.AI_TOOLS_CONFIG?.channels || {}) },
-            tools: { ...initialData.AI_TOOLS_CONFIG.tools, ...(r.AI_TOOLS_CONFIG?.tools || {}) },
-          },
-        });
+        const merged = mergeRemote(remote.data);
+        remoteUpdatedAt.current = remote.updatedAt || null;
+        lastSyncedJson.current = JSON.stringify(merged);
+        setData(merged);
+      } else if (!cancelled) {
+        remoteUpdatedAt.current = remote?.updatedAt || '';
       }
       if (!cancelled && api.getToken()) {
         const ok = await api.verify();
         if (!cancelled) setIsAdmin(ok);
       }
       cloudReady.current = true;
+      if (!cancelled) setContentReady(true);
     })();
     return () => {
       cancelled = true;
@@ -388,12 +424,32 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   // Debounced push of every content change to D1 (only while logged in).
+  // The save is conditional on the version this tab last saw: if the site was
+  // edited elsewhere in the meantime (Claude MCP, another tab, the Git sync) the
+  // API answers 409 → we reload the latest version instead of overwriting it.
   useEffect(() => {
     if (persistence !== 'cloud' || !cloudReady.current || !isAdmin) return;
-    const t = setTimeout(() => {
-      api.saveContent(data).then((res) => {
-        if (!res.ok) console.warn('Cloud save failed:', res.error);
-      });
+    const t = setTimeout(async () => {
+      const json = JSON.stringify(data);
+      if (json === lastSyncedJson.current) return; // nothing new to save
+      const res = await api.saveContent(data, remoteUpdatedAt.current);
+      if (res.ok) {
+        remoteUpdatedAt.current = res.updatedAt || remoteUpdatedAt.current;
+        lastSyncedJson.current = json;
+        return;
+      }
+      if (res.conflict) {
+        console.warn('Cloud save skipped: content changed elsewhere — reloading the latest version.');
+        remoteUpdatedAt.current = res.updatedAt || ''; // resync the stamp even if the reload below finds no content
+        await adoptRemote();
+        window.dispatchEvent(
+          new CustomEvent('nd:content-conflict', {
+            detail: { message: 'محتوا هم‌زمان از جای دیگری (مثلاً کلاد یا تب دیگر) تغییر کرده بود؛ آخرین نسخه بارگذاری شد. لطفاً آخرین تغییرت را دوباره اعمال کن.' },
+          })
+        );
+        return;
+      }
+      console.warn('Cloud save failed:', res.error);
     }, 1200);
     return () => clearTimeout(t);
   }, [data, persistence, isAdmin]);
@@ -410,7 +466,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setData((prev) => {
       const updatedLogs = [newEntry, ...(prev.AUDIT_LOGS || [])].slice(0, 50);
       const updated = { ...prev, AUDIT_LOGS: updatedLogs };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
   };
@@ -418,7 +474,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Save changes to localStorage
   const saveChanges = () => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      persistLocal(data);
       setHasUnsavedChanges(false);
       logActivity('ذخیره تغییرات', 'تغییرات محتوا در مرورگر ذخیره شد.');
     } catch (e) {
@@ -430,7 +486,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateField = (path: string, newValue: any) => {
     setData((prev) => {
       const updated = setByPath(prev, path, newValue);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     setHasUnsavedChanges(false);
@@ -444,7 +500,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const defaultItem = templateItem || createDefaultItemForPath(arrayPath);
       const updatedArray = [defaultItem, ...currentArray];
       const updated = setByPath(prev, arrayPath, updatedArray);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('افزودن آیتم جدید', `آیتم به بخش ${arrayPath} اضافه شد.`);
@@ -456,7 +512,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const currentArray = getByPath(prev, arrayPath) || [];
       const updatedArray = currentArray.filter((_: any, i: number) => i !== index);
       const updated = setByPath(prev, arrayPath, updatedArray);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('حذف آیتم', `آیتم شماره ${index + 1} از بخش ${arrayPath} حذف گردید.`);
@@ -472,7 +528,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const [moved] = currentArray.splice(fromIndex, 1);
       currentArray.splice(toIndex, 0, moved);
       const updated = setByPath(prev, arrayPath, currentArray);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('تغییر ترتیب', `ترتیب آیتم‌ها در ${arrayPath} جابجا شد.`);
@@ -499,9 +555,17 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (persistence === 'cloud') {
       const res = await api.login(username, password || '');
       if (res.ok) {
+        // Never push this tab's (possibly stale) state over the live content on
+        // login: adopt the latest cloud version first; only seed when the cloud is empty.
+        const hadRemote = await adoptRemote().catch(() => false);
+        if (!hadRemote) {
+          const seeded = await api.saveContent(data, remoteUpdatedAt.current ?? '');
+          if (seeded.ok) {
+            remoteUpdatedAt.current = seeded.updatedAt || null;
+            lastSyncedJson.current = JSON.stringify(data);
+          }
+        }
         setIsAdmin(true);
-        // Seed/backup: push the current (remote-merged) state once after login.
-        api.saveContent(data).catch(() => {});
         logActivity('ورود موفق', `کاربر «${username}» از طریق سرویس ابری وارد پیشخوان شد.`);
         return true;
       }
@@ -542,7 +606,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (parsed && typeof parsed === 'object') {
         const merged = { ...defaultContentState, ...parsed };
         setData(merged);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
+        persistLocal(merged);
         setHasUnsavedChanges(false);
         logActivity('بازیابی بکاپ JSON', 'محتوا و تنظیمات از فایل بکاپ خارجی وارد گردید.');
         return true;
@@ -566,7 +630,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       currentArray.splice(index + 1, 0, cloned);
       const updated = setByPath(prev, arrayPath, currentArray);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('شبیه‌سازی آیتم', `آیتم شماره ${index + 1} از ${arrayPath} تکثیر شد.`);
@@ -589,7 +653,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         PAGE_SECTIONS: { ...prev.PAGE_SECTIONS, [pageKey]: updatedSections }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('شبیه‌سازی سکشن', `سکشن ${sectionId} در برگه ${pageKey} کپی شد.`);
@@ -617,7 +681,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         NAVIGATION_MENU: [...prev.NAVIGATION_MENU, newNavItem],
         PAGE_SECTIONS: { ...prev.PAGE_SECTIONS, [newSlug]: pageSections }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('شبیه‌سازی برگه', `برگه ${pageSlug} با موفقیت شبیه‌سازی شد.`);
@@ -642,7 +706,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         PAGE_SECTIONS: { ...prev.PAGE_SECTIONS, [pageKey]: updatedSections }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('تغییر استایل سکشن', `استایل و چیدمان سکشن ${sectionId} به‌روزرسانی گردید.`);
@@ -659,7 +723,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setData((prev) => {
       const history = [newSnap, ...(prev.VERSION_HISTORY || [])].slice(0, 20); // Keep last 20 snapshots
       const updated = { ...prev, VERSION_HISTORY: history };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('ایجاد نقطه بازگشت', `نسخه پشتیبان "${snapshotLabel}" ایجاد شد.`);
@@ -670,7 +734,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (snap && snap.data) {
       setData((prev) => {
         const restored = { ...snap.data, VERSION_HISTORY: prev.VERSION_HISTORY };
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(restored));
+        persistLocal(restored);
         return restored;
       });
       logActivity('بازگردانی به نسخه قبل', `اطلاعات سایت به نسخه "${snap.label}" بازگردانده شد.`);
@@ -681,7 +745,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setData((prev) => {
       const filtered = (prev.VERSION_HISTORY || []).filter((s) => s.id !== snapshotId);
       const updated = { ...prev, VERSION_HISTORY: filtered };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
   };
@@ -699,7 +763,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setData((prev) => {
       const updatedMedia = [newItem, ...(prev.MEDIA_LIBRARY || [])];
       const updated = { ...prev, MEDIA_LIBRARY: updatedMedia };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('افزودن تصویر به رسانه', `تصویر "${newItem.title}" به کتابخانه اضافه شد.`);
@@ -709,7 +773,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setData((prev) => {
       const updatedMedia = (prev.MEDIA_LIBRARY || []).filter((m) => m.id !== id);
       const updated = { ...prev, MEDIA_LIBRARY: updatedMedia };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('حذف تصویر از رسانه', 'تصویر از کتابخانه رسانه حذف شد.');
@@ -725,7 +789,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         PAGE_SECTIONS: { ...prev.PAGE_SECTIONS, [pageKey]: updatedSections }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('تغییر نمایش سکشن', `وضعیت نمایش سکشن ${sectionId} در برگه ${pageKey} تغییر کرد.`);
@@ -743,7 +807,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         PAGE_SECTIONS: { ...prev.PAGE_SECTIONS, [pageKey]: currentSections }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('تغییر ترتیب سکشن‌ها', `ترتیب سکشن‌های برگه ${pageKey} بروزرسانی شد.`);
@@ -762,7 +826,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         PAGE_SECTIONS: { ...prev.PAGE_SECTIONS, [pageKey]: [...currentSections, newSection] }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('افزودن سکشن به برگه', `سکشن "${label}" به برگه ${pageKey} اضافه شد.`);
@@ -775,7 +839,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         PAGE_SECTIONS: { ...prev.PAGE_SECTIONS, [pageKey]: currentSections.filter((s) => s.id !== sectionId) }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('حذف سکشن از برگه', `سکشن ${sectionId} از برگه ${pageKey} حذف گردید.`);
@@ -788,7 +852,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         PAGE_SEO: { ...prev.PAGE_SEO, [pageKey]: { ...currentSeo, ...seo } }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('ویرایش سئوی برگه', `تنظیمات سئوی برگه ${pageKey} تغییر کرد.`);
@@ -800,7 +864,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         GLOBAL_SEO: { ...prev.GLOBAL_SEO, ...seo }
       };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('ویرایش سئوی عمومی', 'تنظیمات کلی سئوی سایت به‌روزرسانی شد.');
@@ -809,7 +873,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateNavMenu = (menu: NavigationMenuItem[]) => {
     setData((prev) => {
       const updated = { ...prev, NAVIGATION_MENU: menu };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('ویرایش منوی ناوبری', 'آیتم‌ها و لینک‌های منوی بالای سایت به روز شد.');
@@ -817,9 +881,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const generateSitemapXml = () => {
     const baseUrl = (data.GLOBAL_SEO.canonicalBaseUrl || 'https://omidadli01.site').replace(/\/$/, '');
-    // The site is hash-routed (no server paths), so sitemap URLs must carry
-    // the route in the hash or they all resolve to the home page.
-    const pageUrl = (hashPath: string) => `${baseUrl}/#${hashPath}`;
+    // Real paths (path-based router + Cloudflare Pages SPA fallback).
+    const pageUrl = (path: string) => `${baseUrl}/${path}`;
     const pages = [
       { url: `${baseUrl}/`, priority: '1.0' },
       { url: pageUrl('services'), priority: '0.8' },
@@ -847,11 +910,11 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       )
       .join('\n');
 
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemap.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
   };
 
   const generateRobotsTxt = () => {
-    return data.GLOBAL_SEO.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: https://omidadli01.site/sitemap.xml';
+    return data.GLOBAL_SEO.robotsTxt || defaultGlobalSeo.robotsTxt;
   };
 
   const addBlogComment = async (comment: { postId: string; authorName: string; authorEmail: string; content: string }): Promise<{ ok: boolean; error?: string }> => {
@@ -874,7 +937,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setData((prev) => {
       const updatedComments = [newComment, ...(prev.BLOG_COMMENTS || [])];
       const updated = { ...prev, BLOG_COMMENTS: updatedComments };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('دیدگاه جدید', `دیدگاه از طرف ${comment.authorName} ثبت و در صف تایید قرار گرفت.`);
@@ -894,7 +957,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return c;
       });
       const updated = { ...prev, BLOG_COMMENTS: updatedComments };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('تغییر وضعیت دیدگاه', `وضعیت تایید دیدگاه ${commentId} تغییر کرد.`);
@@ -907,7 +970,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setData((prev) => {
       const updatedComments = (prev.BLOG_COMMENTS || []).filter((c) => c.id !== commentId);
       const updated = { ...prev, BLOG_COMMENTS: updatedComments };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('حذف دیدگاه', `دیدگاه ${commentId} به‌طور کامل حذف شد.`);
@@ -925,7 +988,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return c;
       });
       const updated = { ...prev, BLOG_COMMENTS: updatedComments };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      persistLocal(updated);
       return updated;
     });
     logActivity('پاسخ به دیدگاه', `پاسخ به دیدگاه ${commentId} ثبت شد.`);
@@ -963,6 +1026,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         loginAdmin,
         logoutAdmin,
         persistence,
+        contentReady,
         updateField,
         addItem,
         removeItem,

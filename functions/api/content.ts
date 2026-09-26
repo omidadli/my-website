@@ -1,4 +1,4 @@
-import { Env, requireAuth, json, unauthorized, MAX_CONTENT_BYTES } from './_shared';
+import { Env, requireAuth, json, unauthorized, MAX_CONTENT_BYTES, CONTENT_TOO_LARGE_MESSAGE, ensureCoreTables, ensureCoreTablesSafe } from './_shared';
 
 /** Cloud comments (D1 `comments` table) are the source of truth for visitor submissions. */
 const fetchCloudComments = async (env: Env, forAdmin: boolean) => {
@@ -24,7 +24,14 @@ const fetchCloudComments = async (env: Env, forAdmin: boolean) => {
 
 /**
  * GET /api/content  → public read of the whole content state (cached 30s at edge).
- * PUT /api/content  → admin-only full save ({ data: ContentState }).
+ * PUT /api/content  → admin-only full save ({ data: ContentState, baseUpdatedAt? }).
+ *
+ * Optimistic concurrency: a client that read the content at `updatedAt = X` may
+ * send `baseUpdatedAt: X`. If the stored content changed since then the save is
+ * rejected with 409 { code: 'conflict', updatedAt } so the client re-reads and
+ * re-applies its change instead of silently overwriting someone else's edit
+ * (admin panel vs. Claude MCP vs. the Git sync). Clients that omit the field
+ * keep the previous last-writer-wins behaviour.
  */
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
@@ -46,7 +53,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       },
     });
   } catch (e) {
-    return json({ ok: false, error: 'خطا در خواندن محتوا از دیتابیس.' }, { status: 500 });
+    // Most likely a brand-new database without the `content` table yet: create the
+    // schema and answer "no content" so the site falls back to its built-in defaults.
+    try {
+      await ensureCoreTables(env);
+      return json({ ok: true, data: null, updatedAt: null });
+    } catch {
+      return json({ ok: false, error: 'خطا در خواندن محتوا از دیتابیس.' }, { status: 500 });
+    }
   }
 };
 
@@ -55,8 +69,9 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   if (!user) return unauthorized();
 
   const raw = await request.text();
-  if (raw.length > MAX_CONTENT_BYTES) {
-    return json({ ok: false, error: 'حجم محتوا بیش از حد مجاز (۵ مگابایت) است.' }, { status: 413 });
+  // Persian text is 2 bytes per character in UTF-8 — measure bytes, not string length.
+  if (raw.length > MAX_CONTENT_BYTES || new TextEncoder().encode(raw).byteLength > MAX_CONTENT_BYTES) {
+    return json({ ok: false, error: CONTENT_TOO_LARGE_MESSAGE }, { status: 413 });
   }
   let payload: any;
   try {
@@ -74,11 +89,28 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
     data.BLOG_COMMENTS = data.BLOG_COMMENTS.filter((c: any) => !String(c?.id || '').startsWith('c-'));
   }
 
+  await ensureCoreTablesSafe(env);
+
+  if (typeof payload?.baseUpdatedAt === 'string') {
+    const cur = await env.DB.prepare(`SELECT updated_at FROM content WHERE id = 1`).first<{ updated_at: string }>();
+    const current = cur?.updated_at || '';
+    if (current !== payload.baseUpdatedAt) {
+      return json(
+        { ok: false, code: 'conflict', error: 'محتوا از زمانی که آن را خوانده‌اید تغییر کرده است؛ دوباره بخوانید و تغییر را اعمال کنید.', updatedAt: current || null },
+        { status: 409 }
+      );
+    }
+  }
+
   const now = new Date().toISOString();
+  const serialized = JSON.stringify(data);
+  if (new TextEncoder().encode(serialized).byteLength > MAX_CONTENT_BYTES) {
+    return json({ ok: false, error: CONTENT_TOO_LARGE_MESSAGE }, { status: 413 });
+  }
   await env.DB.prepare(
     `INSERT INTO content (id, data, updated_at) VALUES (1, ?1, ?2)
      ON CONFLICT(id) DO UPDATE SET data = ?1, updated_at = ?2`
-  ).bind(JSON.stringify(data), now).run();
+  ).bind(serialized, now).run();
 
   return json({ ok: true, updatedAt: now });
 };

@@ -8,12 +8,15 @@
  * Transport: stdio (works with Claude Desktop and Claude Code).
  *
  * Required environment variables:
- *   SITE_URL         base URL of the site   (e.g. https://my-website.pages.dev)
+ *   SITE_URL         base URL of the site   (e.g. https://omidadli01.site)
  *   ADMIN_USERNAME   admin username
  *   ADMIN_PASSWORD   admin password
  *
  * See mcp/README.md for the Claude Desktop config snippet.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -21,10 +24,56 @@ import { SiteClient, setByPath, getByPath } from '../scripts/site-client.mjs';
 
 const client = new SiteClient();
 
+// The versioned copy of the content (same defaults the site renders when its
+// database is still empty). Used to seed the first write on a fresh site.
+const SEED_FILE = resolve(dirname(fileURLToPath(import.meta.url)), '../content/site-content.json');
+
 const ok = (obj) => ({ content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2) }] });
 const fail = (msg) => ({ isError: true, content: [{ type: 'text', text: `❌ ${msg}` }] });
 const truncate = (str, max = 12000) =>
   str.length <= max ? str : `${str.slice(0, max)}\n\n…[truncated ${str.length - max} chars — narrow the request with a "section" or "path" argument]`;
+
+const isEmptyContent = (c) => !c || typeof c !== 'object' || Object.keys(c).length === 0;
+
+const EMPTY_HINT =
+  'The live site has no saved content yet (GET /api/content → data: null), so it is rendering its built-in defaults. ' +
+  'Any write tool (set_field, replace_section, set_plan_price, …) will seed the live database from content/site-content.json ' +
+  'in the repo first and then apply your change.';
+
+/**
+ * Load the live content. When the live DB has never been saved (fresh site),
+ * writes would otherwise be refused/crash — so for writes we fall back to the
+ * repo's content/site-content.json as the base document.
+ */
+async function loadContent({ seedIfEmpty = false } = {}) {
+  const live = await client.getContent();
+  if (!isEmptyContent(live)) return { content: live, seeded: false };
+  if (!seedIfEmpty) return { content: null, seeded: false };
+  return { content: readSeed(), seeded: true };
+}
+
+/** Base document for the first write on a fresh site (content/site-content.json). */
+function readSeed() {
+  let seed;
+  try {
+    seed = JSON.parse(readFileSync(SEED_FILE, 'utf8'));
+  } catch (e) {
+    throw new Error(`Live content is empty and the seed file could not be read (${SEED_FILE}): ${e.message}. Run "npm run content:import" in the repo once, then retry.`);
+  }
+  if (isEmptyContent(seed)) throw new Error(`Seed file ${SEED_FILE} is empty — run "npm run content:gen" in the repo first.`);
+  return seed;
+}
+
+/**
+ * Read → mutate → write helper shared by every write tool. Conditional save:
+ * if the content changes on the site between our read and our write (admin
+ * panel, CI sync, another Claude session) the API answers 409 and the client
+ * re-reads and re-applies the mutation — nobody's edit is silently lost.
+ */
+async function updateContent(mutate) {
+  const r = await client.updateContent((content) => { mutate(content); }, { fallback: readSeed });
+  return { savedAt: r.updatedAt, ...(r.seeded ? { seededFromGit: true, note: 'Live content was empty; seeded it from content/site-content.json before applying this change.' } : {}) };
+}
 
 const server = new McpServer({ name: 'omidadli-site-mcp', version: '1.0.0' });
 
@@ -39,8 +88,15 @@ server.registerTool(
   async () => {
     try {
       await client.login();
-      const content = await client.getContent();
-      return ok({ ok: true, siteUrl: client.baseUrl, authenticated: true, sections: content ? Object.keys(content).length : 0 });
+      const { content } = await loadContent();
+      const empty = isEmptyContent(content);
+      return ok({
+        ok: true,
+        siteUrl: client.baseUrl,
+        authenticated: true,
+        sections: empty ? 0 : Object.keys(content).length,
+        ...(empty ? { contentEmpty: true, hint: EMPTY_HINT } : {}),
+      });
     } catch (e) {
       return fail(`Could not connect/authenticate to ${client.baseUrl}: ${e.message}`);
     }
@@ -59,8 +115,8 @@ server.registerTool(
   },
   async ({ section }) => {
     try {
-      const content = await client.getContent();
-      if (!content) return fail('The site returned empty content.');
+      const { content } = await loadContent();
+      if (isEmptyContent(content)) return ok({ sections: [], contentEmpty: true, hint: EMPTY_HINT });
       if (!section) return ok({ sections: Object.keys(content) });
       if (!(section in content)) return fail(`Unknown section "${section}". Available: ${Object.keys(content).join(', ')}`);
       return ok(truncate(JSON.stringify(content[section], null, 2)));
@@ -79,7 +135,8 @@ server.registerTool(
   },
   async ({ path }) => {
     try {
-      const content = await client.getContent();
+      const { content } = await loadContent();
+      if (isEmptyContent(content)) return fail(`No value at "${path}" — ${EMPTY_HINT}`);
       const value = getByPath(content, path);
       if (value === undefined) return fail(`No value found at path "${path}".`);
       return ok(truncate(JSON.stringify(value, null, 2)));
@@ -102,11 +159,8 @@ server.registerTool(
   },
   async ({ path, value }) => {
     try {
-      const content = await client.getContent();
-      if (!content) return fail('The site returned empty content; refusing to write.');
-      setByPath(content, path, value);
-      const r = await client.putContent(content);
-      return ok({ ok: true, path, savedAt: r.updatedAt });
+      const r = await updateContent((content) => setByPath(content, path, value));
+      return ok({ ok: true, path, ...r });
     } catch (e) {
       return fail(e.message);
     }
@@ -125,11 +179,8 @@ server.registerTool(
   },
   async ({ section, value }) => {
     try {
-      const content = await client.getContent();
-      if (!content) return fail('The site returned empty content; refusing to write.');
-      content[section] = value;
-      const r = await client.putContent(content);
-      return ok({ ok: true, section, savedAt: r.updatedAt });
+      const r = await updateContent((content) => { content[section] = value; });
+      return ok({ ok: true, section, ...r });
     } catch (e) {
       return fail(e.message);
     }
@@ -146,10 +197,13 @@ server.registerTool(
   },
   async () => {
     try {
-      const content = await client.getContent();
+      // Fall back to the Git copy for a read-only summary when the live DB is empty
+      // (that is exactly what the site renders in that state).
+      const { content, seeded } = await loadContent({ seedIfEmpty: true });
       const cfg = content?.AI_TOOLS_CONFIG || {};
       const tools = cfg.tools || {};
       return ok({
+        ...(seeded ? { contentEmpty: true, source: 'content/site-content.json (live DB is empty)' } : {}),
         enabled: cfg.enabled !== false,
         freeTrialCount: cfg.freeTrialCount ?? 3,
         socialProof: cfg.socialProof || '',
@@ -174,10 +228,8 @@ server.registerTool(
   },
   async ({ toolId, enabled }) => {
     try {
-      const content = await client.getContent();
-      setByPath(content, `AI_TOOLS_CONFIG.tools.${toolId}.enabled`, enabled);
-      const r = await client.putContent(content);
-      return ok({ ok: true, toolId, enabled, savedAt: r.updatedAt });
+      const r = await updateContent((content) => setByPath(content, `AI_TOOLS_CONFIG.tools.${toolId}.enabled`, enabled));
+      return ok({ ok: true, toolId, enabled, ...r });
     } catch (e) {
       return fail(e.message);
     }
@@ -197,10 +249,8 @@ server.registerTool(
   },
   async ({ toolId, planId, price }) => {
     try {
-      const content = await client.getContent();
-      setByPath(content, `AI_TOOLS_CONFIG.tools.${toolId}.planPrices.${planId}`, price);
-      const r = await client.putContent(content);
-      return ok({ ok: true, toolId, planId, price, savedAt: r.updatedAt });
+      const r = await updateContent((content) => setByPath(content, `AI_TOOLS_CONFIG.tools.${toolId}.planPrices.${planId}`, price));
+      return ok({ ok: true, toolId, planId, price, ...r });
     } catch (e) {
       return fail(e.message);
     }
@@ -216,10 +266,8 @@ server.registerTool(
   },
   async ({ count }) => {
     try {
-      const content = await client.getContent();
-      setByPath(content, 'AI_TOOLS_CONFIG.freeTrialCount', count);
-      const r = await client.putContent(content);
-      return ok({ ok: true, freeTrialCount: count, savedAt: r.updatedAt });
+      const r = await updateContent((content) => setByPath(content, 'AI_TOOLS_CONFIG.freeTrialCount', count));
+      return ok({ ok: true, freeTrialCount: count, ...r });
     } catch (e) {
       return fail(e.message);
     }

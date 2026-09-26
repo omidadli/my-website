@@ -1,4 +1,4 @@
-import { Env, createToken, verifyToken, getBearer, safeEqual, json, unauthorized, getClientIp } from './_shared';
+import { Env, createToken, verifyToken, getBearer, safeEqual, json, unauthorized, getClientIp, ensureCoreTablesSafe } from './_shared';
 
 const WINDOW_MINUTES = 15;
 const MAX_FAILURES = 8;
@@ -9,6 +9,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const ip = getClientIp(request);
+  await ensureCoreTablesSafe(env);
 
   // Rate limit: too many failed attempts from this IP recently → lock out temporarily.
   try {

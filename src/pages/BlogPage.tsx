@@ -6,6 +6,7 @@ import { PageHero } from '../components/nd/Kit';
 import { Search, Sparkles, Flame, ChevronLeft, Mail, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePreservedState } from '../utils/statePreserver';
+import { linkProps, postPath } from '../utils/router';
 
 interface BlogPageProps {
   theme: Theme;
@@ -69,11 +70,11 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
 
       {/* Featured */}
       {featured && category === 'all' && !query && (
-        <motion.button
+        <motion.a
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          onClick={() => onSelectPost(featured.id)}
+          {...linkProps(postPath(featured), () => onSelectPost(featured.id))}
           className={`${isDark ? 'nd-stage nd-hairline-top' : 'nd-panel'} w-full rounded-[var(--nd-radius-panel)] p-6 sm:p-10 text-right grid grid-cols-1 md:grid-cols-2 gap-8 items-center cursor-pointer group`}
         >
           <div className="space-y-4">
@@ -92,7 +93,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
           <div className={`rounded-[var(--nd-radius-card)] overflow-hidden aspect-[16/10] border ${isDark ? 'border-white/12' : 'border-white/60'} shadow-md`}>
             <img src={featured.coverImage} alt={featured.title} className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700" referrerPolicy="no-referrer" />
           </div>
-        </motion.button>
+        </motion.a>
       )}
 
       {/* Grid */}
@@ -109,13 +110,13 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {rest.map((post, idx) => (
-              <motion.button
+              <motion.a
                 key={post.id}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-40px' }}
                 transition={{ duration: 0.5, delay: (idx % 3) * 0.07, ease: [0.22, 1, 0.36, 1] }}
-                onClick={() => onSelectPost(post.id)}
+                {...linkProps(postPath(post), () => onSelectPost(post.id))}
                 className="nd-card nd-card-hover overflow-hidden text-right flex flex-col group cursor-pointer"
               >
                 <div className={`aspect-[16/9] overflow-hidden border-b ${isDark ? 'border-white/10' : 'border-[color:var(--nd-line)]'}`}>
@@ -133,7 +134,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ theme, onNavigate, onSelectP
                     <ChevronLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
                   </span>
                 </div>
-              </motion.button>
+              </motion.a>
             ))}
           </div>
         )}

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { MaskLines, Magnetic } from '../components/motion/Cinematic';
+import { linkProps, postPath } from '../utils/router';
 
 interface HomePageProps {
   theme: Theme;
@@ -1018,19 +1019,19 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                     </span>
                     <h3 className="nd-h2 text-xl sm:text-2xl">چیزهایی که اخیراً از داده‌ها یاد گرفتم</h3>
                   </div>
-                  <button onClick={() => (onSelectPost ? onSelectPost('') : onNavigate('blog'))} className="nd-btn nd-btn-ghost px-5 py-2.5 text-xs font-extrabold shrink-0">
+                  <a {...linkProps('/blog', () => onNavigate('blog'))} className="nd-btn nd-btn-ghost px-5 py-2.5 text-xs font-extrabold shrink-0">
                     <span>همه‌ی نوشت‌ها</span>
                     <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
+                  </a>
                 </div>
                 {posts.map((post: any, idx: number) => (
-                  <motion.button
+                  <motion.a
                     key={post.id || idx}
                     initial={{ opacity: 0, y: 16 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: '-40px' }}
                     transition={{ duration: 0.5, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
-                    onClick={() => (onSelectPost ? onSelectPost(post.id) : onNavigate('blog'))}
+                    {...linkProps(postPath(post), () => (onSelectPost ? onSelectPost(post.id) : onNavigate('blog')))}
                     className="nd-card nd-card-hover p-5 flex items-center gap-4 text-right cursor-pointer group"
                   >
                     <IconBadge3D iconName={post.imageIcon} theme={theme} size="sm" glowColor={(['purple', 'blue', 'emerald'] as const)[idx % 3]} floating={false} />
@@ -1042,7 +1043,7 @@ export const HomePage: React.FC<HomePageProps> = ({ theme, onNavigate, onSelectC
                       <span className="nd-chip">{post.date}</span>
                       <span className="text-[10px] font-bold text-[color:var(--nd-faint)]">{post.readTime}</span>
                     </span>
-                  </motion.button>
+                  </motion.a>
                 ))}
               </div>
             </div>

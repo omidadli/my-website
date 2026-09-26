@@ -11,6 +11,7 @@ import { usePreservedState } from '../../utils/statePreserver';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { chatStorage, StoredChatMsg } from '../../utils/chatStorage';
 import { keyboardAudio } from '../../utils/keyboardAudio';
+import { isPlainLeftClick, legacyHashToPath, navigate } from '../../utils/router';
 
 interface AssistantPanelProps {
   theme: Theme;
@@ -25,17 +26,26 @@ interface ChatMsg {
 
 /**
  * Render model text with clickable markdown links — the AI cites article
- * sources as `[عنوان](#/blog/…)`. Hash hrefs navigate the SPA through the
- * global hashchange listener in App.tsx, no router needed.
+ * sources as `[عنوان](/blog/…)`. Site paths navigate the SPA in place
+ * (older transcripts may still contain `#/blog/…` links; those are upgraded).
  */
 const renderAnswer = (text: string) => {
   const parts = String(text).split(/(\[[^\]]+\]\([^)\s]+\))/g);
   return parts.map((p, i) => {
     const m = p.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
     if (!m) return <React.Fragment key={i}>{p}</React.Fragment>;
-    const href = /^(#|https?:\/\/)/.test(m[2]) ? m[2] : `#${m[2]}`;
+    const raw = m[2];
+    const external = /^https?:\/\//i.test(raw);
+    const href = external ? raw : raw.startsWith('#') ? legacyHashToPath(raw) || raw : raw.startsWith('/') ? raw : `/${raw}`;
+    const internal = !external && href.startsWith('/');
     return (
-      <a key={i} href={href} className="break-words font-extrabold underline decoration-2 underline-offset-2">
+      <a
+        key={i}
+        href={href}
+        {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+        onClick={internal ? (e) => { if (isPlainLeftClick(e)) { e.preventDefault(); navigate(href); } } : undefined}
+        className="break-words font-extrabold underline decoration-2 underline-offset-2"
+      >
         {m[1]}
       </a>
     );
@@ -119,7 +129,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ theme, open, onC
   const clearChatHistory = useCallback(() => {
     chatStorage.clearMessages();
     setMessages(cfg?.greeting ? [{ role: 'model', content: cfg.greeting }] : []);
-    mascotAct('greet');
+    mascotAct('wave');
   }, [cfg?.greeting, setMessages]);
 
   // Web Speech API Integration
